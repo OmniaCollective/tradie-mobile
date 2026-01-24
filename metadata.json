@@ -1,0 +1,9 @@
+
+{
+  "name": "FIXER - Solo Trade Automation",
+  "description": "An automation-first industrial platform for solo tradespeople to manage quotes, jobs, and invoices with near-zero manual effort.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
