@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "production": {
+      "distribution": "store",
+      "ios": {
+        "buildConfiguration": "Release",
+        "autoIncrement": true
+      },
+      "env": {
+        "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_dbnKauWGlcUaRmZBmgzKMAHMYtN",
+        "EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY": "test_aFuNgBwRPiJFLjDMQNNscxaQoEW"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6758908408"
+      }
+    }
+  }
+}

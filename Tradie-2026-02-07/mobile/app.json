@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Tradie",
+    "slug": "tradie",
+    "scheme": "tradie",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./src/assets/Tradie_App_Store_1024x1024_1.jpg",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vibecode.tradie.5sttp4",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Tradie uses your camera to take photos of job sites and completed work for quotes and invoices.",
+        "NSCalendarsUsageDescription": "Tradie syncs your scheduled jobs to your calendar so you never miss an appointment.",
+        "NSContactsUsageDescription": "Tradie accesses your contacts to quickly add customer details when creating bookings.",
+        "NSPhotoLibraryUsageDescription": "Tradie accesses your photo library to attach photos of job sites and completed work.",
+        "NSLocationWhenInUseUsageDescription": "Tradie uses your location to calculate travel distance for job quotes.",
+        "NSMicrophoneUsageDescription": "Tradie uses your microphone for audio recording when documenting job sites.",
+        "NSPhotoLibraryAddUsageDescription": "Tradie saves photos of completed jobs to your photo library."
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "44490c71-b755-47b8-bbe1-1936189cc28b"
+      }
+    },
+    "owner": "builtbyomnia"
+  }
+}
