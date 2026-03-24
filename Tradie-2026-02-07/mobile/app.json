@@ -3,7 +3,7 @@
     "name": "Tradie",
     "slug": "tradie",
     "scheme": "tradie",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./src/assets/Tradie_App_Store_1024x1024_1.jpg",
@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.vibecode.tradie.5sttp4",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Tradie uses your camera to take photos of job sites and completed work for quotes and invoices.",

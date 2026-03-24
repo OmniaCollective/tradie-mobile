@@ -8,9 +8,11 @@ import {
   Linking,
   Share,
   Image,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Phone,
@@ -26,10 +28,12 @@ import {
   Bell,
   CalendarPlus,
   AlertCircle,
+  Receipt,
+  Plus,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useTradeStore, JobStatus } from '@/lib/store';
+import { useTradeStore, useJobExpenses, JobStatus, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
 import {
   scheduleJobReminder,
@@ -86,9 +90,19 @@ export default function JobDetailScreen() {
   const [partQty, setPartQty] = useState('');
   const [partCost, setPartCost] = useState('');
   const [photoTab, setPhotoTab] = useState<'before' | 'during' | 'after'>('before');
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    return tomorrow;
+  });
+  const [schedulePickerMode, setSchedulePickerMode] = useState<'date' | 'time'>('date');
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const job = getJob(id);
   const customer = job ? getCustomer(job.customerId) : null;
+  const jobExpenses = useJobExpenses(id);
 
   if (!job || !customer) {
     return (
@@ -168,18 +182,23 @@ export default function JobDetailScreen() {
   };
 
   const handleCompleteJob = async () => {
+    setShowCompletionModal(true);
+  };
+
+  const confirmCompleteJob = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateJob(job.id, {
       status: 'COMPLETED',
       completedAt: new Date().toISOString(),
     });
+    setShowCompletionModal(false);
   };
 
   const handleCreateInvoice = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const invoiceId = createInvoice(job.id);
     if (invoiceId) {
-      router.push('/(tabs)/invoices');
+      router.push('/(tabs)/finances');
     }
   };
 
@@ -188,13 +207,18 @@ export default function JobDetailScreen() {
     updateJob(job.id, { status: 'APPROVED' });
   };
 
-  const handleScheduleJob = async () => {
-    // For now, schedule for tomorrow at 10am
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const scheduledDate = tomorrow.toISOString().split('T')[0];
-    const scheduledTime = '10:00';
+  const handleScheduleJob = () => {
+    setShowSchedulePicker(true);
+    setSchedulePickerMode('date');
+  };
 
+  const confirmScheduleJob = async () => {
+    const scheduledDate = scheduleDate.toISOString().split('T')[0];
+    const hours = scheduleDate.getHours().toString().padStart(2, '0');
+    const minutes = scheduleDate.getMinutes().toString().padStart(2, '0');
+    const scheduledTime = `${hours}:${minutes}`;
+
+    setShowSchedulePicker(false);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateJob(job.id, {
       status: 'SCHEDULED',
@@ -215,7 +239,7 @@ export default function JobDetailScreen() {
       job.id,
       customer.name,
       jobLabel,
-      tomorrow,
+      scheduleDate,
       scheduledTime
     );
 
@@ -445,10 +469,12 @@ export default function JobDetailScreen() {
                   <Text className="text-slate-300">£{job.quote.emergencySurcharge.toFixed(2)}</Text>
                 </View>
               )}
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500">VAT</Text>
-                <Text className="text-slate-300">£{job.quote.vat.toFixed(2)}</Text>
-              </View>
+              {job.quote.vat > 0 && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500">VAT</Text>
+                  <Text className="text-slate-300">£{job.quote.vat.toFixed(2)}</Text>
+                </View>
+              )}
               <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between">
                 <Text className="text-white font-bold">Total</Text>
                 <Text className="text-[#14B8A6] font-bold text-xl">
@@ -456,6 +482,57 @@ export default function JobDetailScreen() {
                 </Text>
               </View>
             </View>
+          </Animated.View>
+        )}
+
+        {/* Job Profitability — show on completed+ jobs with a quote */}
+        {job.quote && ['COMPLETED', 'INVOICED', 'PAID'].includes(job.status) && (
+          <Animated.View
+            entering={FadeInDown.delay(525).duration(400)}
+            className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
+          >
+            <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Job Profit</Text>
+            {(() => {
+              const quoteTotal = job.quote!.total - job.quote!.vat; // ex-VAT revenue
+              const partsTotal = (job.parts ?? []).reduce((s, p) => s + p.quantity * p.unitCost, 0);
+              const expensesTotal = jobExpenses.reduce((s, e) => s + e.amount, 0);
+              const totalCosts = partsTotal + expensesTotal;
+              const profit = quoteTotal - totalCosts;
+              const margin = quoteTotal > 0 ? (profit / quoteTotal) * 100 : 0;
+              const isPositive = profit >= 0;
+
+              return (
+                <View className="bg-[#0F172A] rounded-xl p-3">
+                  <View className="flex-row justify-between mb-2">
+                    <Text className="text-slate-500 text-sm">Revenue (ex-VAT)</Text>
+                    <Text className="text-slate-300 text-sm">£{quoteTotal.toFixed(2)}</Text>
+                  </View>
+                  {partsTotal > 0 && (
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="text-slate-500 text-sm">Parts ({(job.parts ?? []).length})</Text>
+                      <Text className="text-slate-300 text-sm">−£{partsTotal.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {expensesTotal > 0 && (
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="text-slate-500 text-sm">Expenses ({jobExpenses.length})</Text>
+                      <Text className="text-slate-300 text-sm">−£{expensesTotal.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between items-center">
+                    <View>
+                      <Text className="text-white font-bold">Profit</Text>
+                      {quoteTotal > 0 && (
+                        <Text className="text-slate-500 text-xs">{margin.toFixed(0)}% margin</Text>
+                      )}
+                    </View>
+                    <Text className={`font-bold text-xl ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                      {isPositive ? '' : '−'}£{Math.abs(profit).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
           </Animated.View>
         )}
 
@@ -675,6 +752,51 @@ export default function JobDetailScreen() {
           </Pressable>
         </Animated.View>
 
+        {/* Linked Expenses */}
+        <Animated.View
+          entering={FadeInDown.delay(725).duration(400)}
+          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-6"
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-slate-400 text-xs uppercase tracking-wide">Expenses</Text>
+            <Pressable
+              onPress={() => router.push(`/add-expense?jobId=${job.id}`)}
+              className="flex-row items-center active:opacity-70"
+            >
+              <Plus size={14} color={TURQUOISE} />
+              <Text className="text-[#14B8A6] font-medium text-sm ml-1">Add</Text>
+            </Pressable>
+          </View>
+
+          {jobExpenses.length === 0 ? (
+            <Pressable
+              onPress={() => router.push(`/add-expense?jobId=${job.id}`)}
+              className="bg-[#0F172A] rounded-xl py-4 items-center active:opacity-80"
+            >
+              <Receipt size={20} color="#64748B" />
+              <Text className="text-slate-500 text-sm mt-1">No expenses linked</Text>
+            </Pressable>
+          ) : (
+            <View className="bg-[#0F172A] rounded-xl p-3">
+              {jobExpenses.map((expense, i) => (
+                <View key={expense.id} className={`flex-row items-center justify-between ${i < jobExpenses.length - 1 ? 'mb-2 pb-2 border-b border-[#334155]' : ''}`}>
+                  <View className="flex-1 mr-2">
+                    <Text className="text-white text-sm">{expense.description}</Text>
+                    <Text className="text-slate-500 text-xs">{EXPENSE_CATEGORY_LABELS[expense.category]}</Text>
+                  </View>
+                  <Text className="text-slate-300 text-sm font-medium">£{expense.amount.toFixed(2)}</Text>
+                </View>
+              ))}
+              <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between">
+                <Text className="text-slate-400 text-sm">Total</Text>
+                <Text className="text-white font-semibold">
+                  £{jobExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+
         {/* Action Buttons */}
         <Animated.View entering={FadeInDown.delay(750).duration(400)} className="gap-3">
           {/* Quote expiry warning and followup */}
@@ -774,6 +896,162 @@ export default function JobDetailScreen() {
         </Animated.View>
       </View>
     </ScrollView>
+
+      {/* Schedule Picker Modal */}
+      {showSchedulePicker && (
+        <Pressable
+          onPress={() => setShowSchedulePicker(false)}
+          className="absolute inset-0 bg-black/60 justify-end"
+        >
+          <Pressable onPress={() => {}} className="bg-[#1E293B] rounded-t-2xl border-t border-[#334155] p-4 pb-8">
+            <Text className="text-white font-bold text-base mb-4 text-center">Schedule Job</Text>
+
+            <View className="flex-row bg-[#0F172A] rounded-xl p-1 mb-4">
+              <Pressable
+                onPress={() => setSchedulePickerMode('date')}
+                className={`flex-1 py-2.5 rounded-lg ${schedulePickerMode === 'date' ? 'bg-[#14B8A6]' : ''}`}
+              >
+                <Text className={`text-center font-semibold text-sm ${schedulePickerMode === 'date' ? 'text-white' : 'text-slate-400'}`}>
+                  Date
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setSchedulePickerMode('time')}
+                className={`flex-1 py-2.5 rounded-lg ${schedulePickerMode === 'time' ? 'bg-[#14B8A6]' : ''}`}
+              >
+                <Text className={`text-center font-semibold text-sm ${schedulePickerMode === 'time' ? 'text-white' : 'text-slate-400'}`}>
+                  Time
+                </Text>
+              </Pressable>
+            </View>
+
+            <View className="bg-[#0F172A] rounded-xl mb-4 overflow-hidden">
+              <DateTimePicker
+                value={scheduleDate}
+                mode={schedulePickerMode}
+                display="spinner"
+                minimumDate={new Date()}
+                onChange={(_, d) => {
+                  if (d) setScheduleDate(d);
+                }}
+                themeVariant="dark"
+                accentColor={TURQUOISE}
+                minuteInterval={15}
+              />
+            </View>
+
+            <View className="bg-[#0F172A] rounded-xl p-3 mb-4">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  <Calendar size={16} color={TURQUOISE} />
+                  <Text className="text-slate-300 text-sm ml-2">
+                    {scheduleDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </Text>
+                </View>
+                <View className="flex-row items-center">
+                  <Clock size={16} color={TURQUOISE} />
+                  <Text className="text-slate-300 text-sm ml-2">
+                    {formatTime(`${scheduleDate.getHours().toString().padStart(2, '0')}:${scheduleDate.getMinutes().toString().padStart(2, '0')}`)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={confirmScheduleJob}
+              className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
+            >
+              <Calendar size={18} color="#FFF" />
+              <Text className="text-white font-bold ml-2">Confirm Schedule</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowSchedulePicker(false)}
+              className="mt-3 p-3 active:opacity-70"
+            >
+              <Text className="text-slate-400 font-medium text-center">Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      )}
+
+      {/* Completion Summary Modal */}
+      {showCompletionModal && (
+        <Pressable
+          onPress={() => setShowCompletionModal(false)}
+          className="absolute inset-0 bg-black/60 justify-end"
+        >
+          <Pressable onPress={() => {}} className="bg-[#1E293B] rounded-t-2xl border-t border-[#334155] p-4 pb-8">
+            <View className="items-center mb-4">
+              <View className="w-16 h-16 rounded-full bg-[#22C55E]/20 items-center justify-center mb-3">
+                <Check size={32} color="#22C55E" />
+              </View>
+              <Text className="text-white font-bold text-lg">Complete Job?</Text>
+              <Text className="text-slate-400 text-sm mt-1">Review the summary before completing</Text>
+            </View>
+
+            <View className="bg-[#0F172A] rounded-xl p-4 mb-4">
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-slate-500 text-sm">Job</Text>
+                <Text className="text-white text-sm font-medium">{getJobTypeLabel(settings.trade, job.type)}</Text>
+              </View>
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-slate-500 text-sm">Customer</Text>
+                <Text className="text-white text-sm font-medium">{customer.name}</Text>
+              </View>
+              {job.scheduledDate && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 text-sm">Scheduled</Text>
+                  <Text className="text-slate-300 text-sm">{formatDate(job.scheduledDate)}</Text>
+                </View>
+              )}
+              {job.quote && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 text-sm">Quote</Text>
+                  <Text className="text-[#14B8A6] text-sm font-bold">£{job.quote.total.toFixed(2)}</Text>
+                </View>
+              )}
+              {(job.parts ?? []).length > 0 && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 text-sm">Parts ({(job.parts ?? []).length})</Text>
+                  <Text className="text-slate-300 text-sm">
+                    £{(job.parts ?? []).reduce((s, p) => s + p.quantity * p.unitCost, 0).toFixed(2)}
+                  </Text>
+                </View>
+              )}
+              {jobExpenses.length > 0 && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 text-sm">Expenses ({jobExpenses.length})</Text>
+                  <Text className="text-slate-300 text-sm">
+                    £{jobExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}
+                  </Text>
+                </View>
+              )}
+              {(job.photos ?? []).length > 0 && (
+                <View className="flex-row justify-between">
+                  <Text className="text-slate-500 text-sm">Photos</Text>
+                  <Text className="text-slate-300 text-sm">{(job.photos ?? []).length}</Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable
+              onPress={confirmCompleteJob}
+              className="bg-[#22C55E] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
+            >
+              <Check size={18} color="#FFF" />
+              <Text className="text-white font-bold ml-2">Mark Complete</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowCompletionModal(false)}
+              className="mt-3 p-3 active:opacity-70"
+            >
+              <Text className="text-slate-400 font-medium text-center">Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      )}
 
       {modal && (
         <ConfirmModal

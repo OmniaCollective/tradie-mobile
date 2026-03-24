@@ -31,6 +31,8 @@ import {
   CheckCircle,
   ExternalLink,
   AlertCircle,
+  Database,
+  Trash2,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -53,9 +55,15 @@ export default function SettingsScreen() {
   const settings = useSettings();
   const pricingPresets = usePricingPresets();
   const jobs = useJobs();
-  const { updateSettings, updatePricingPreset, getCustomer } = useTradeStore();
+  const { updateSettings, updatePricingPreset, getCustomer, loadSampleData, clearAllData } = useTradeStore();
 
   const [showPricing, setShowPricing] = useState(false);
+  const [showBusiness, setShowBusiness] = useState(true);
+  const [showRates, setShowRates] = useState(false);
+  const [showTax, setShowTax] = useState(false);
+  const [showServiceArea, setShowServiceArea] = useState(false);
+  const [showWorkingHours, setShowWorkingHours] = useState(false);
+  const [showAutomation, setShowAutomation] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [calendarEnabled, setCalendarEnabled] = useState(false);
   const [dailyRemindersEnabled, setDailyRemindersEnabled] = useState(false);
@@ -66,6 +74,7 @@ export default function SettingsScreen() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(true);
   const [modal, setModal] = useState<{ title: string; message: string; variant?: 'default' | 'success' | 'error' | 'warning' } | null>(null);
+  const [dataModal, setDataModal] = useState<'load' | 'clear' | null>(null);
 
   // Generate a consistent user ID for this device
   const getUserId = () => {
@@ -203,7 +212,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleUpdateSetting = (key: keyof typeof settings, value: string | number) => {
+  const handleUpdateSetting = (key: keyof typeof settings, value: string | number | boolean) => {
     updateSettings({ [key]: value });
   };
 
@@ -386,10 +395,20 @@ export default function SettingsScreen() {
 
           {/* Business Details */}
           <Animated.View entering={FadeInDown.delay(100).duration(400)} className="mb-6">
-            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-              Business Details
-            </Text>
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
+            <Pressable
+              onPress={() => setShowBusiness(!showBusiness)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Business Details
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showBusiness ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showBusiness && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center mb-2">
                   <Building size={16} color="#64748B" />
@@ -463,15 +482,25 @@ export default function SettingsScreen() {
                   autoCapitalize="characters"
                 />
               </View>
-            </View>
+            </View>}
           </Animated.View>
 
           {/* Rates */}
           <Animated.View entering={FadeInDown.delay(200).duration(400)} className="mb-6">
-            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-              Rates
-            </Text>
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
+            <Pressable
+              onPress={() => setShowRates(!showRates)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Rates
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showRates ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showRates && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center justify-between">
                   <View>
@@ -544,7 +573,7 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              <View className="p-4 border-b border-[#334155]">
+              <View className="p-4">
                 <View className="flex-row items-center justify-between">
                   <View>
                     <Text className="text-white font-medium">Travel Rate</Text>
@@ -562,24 +591,206 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              <View className="p-4">
+            </View>}
+          </Animated.View>
+
+          {/* Tax & Finance */}
+          <Animated.View entering={FadeInDown.delay(250).duration(400)} className="mb-6">
+            <Pressable
+              onPress={() => setShowTax(!showTax)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Tax & Finance
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showTax ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showTax && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
+              {/* VAT Registered */}
+              <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center justify-between">
                   <View>
-                    <Text className="text-white font-medium">VAT Rate</Text>
-                    <Text className="text-slate-500 text-xs">Percentage</Text>
+                    <Text className="text-white font-medium">VAT Registered</Text>
+                    <Text className="text-slate-500 text-xs">Are you registered for VAT?</Text>
+                  </View>
+                  <Switch
+                    value={settings.vatRegistered}
+                    onValueChange={(v) => handleUpdateSetting('vatRegistered', v)}
+                    trackColor={{ false: '#334155', true: '#14B8A6' }}
+                    thumbColor="#FFF"
+                  />
+                </View>
+              </View>
+
+              {/* VAT Details — only when registered */}
+              {settings.vatRegistered && (
+                <>
+                  <View className="p-4 border-b border-[#334155]">
+                    <View className="flex-row items-center justify-between">
+                      <View>
+                        <Text className="text-white font-medium">VAT Number</Text>
+                        <Text className="text-slate-500 text-xs">Your VAT registration number</Text>
+                      </View>
+                      <TextInput
+                        className="text-white text-base bg-[#0F172A] rounded-xl px-3 py-2 w-36 text-right"
+                        value={settings.vatNumber}
+                        onChangeText={(v) => handleUpdateSetting('vatNumber', v)}
+                        placeholder="GB 123 4567 89"
+                        placeholderTextColor="#475569"
+                      />
+                    </View>
+                  </View>
+
+                  <View className="p-4 border-b border-[#334155]">
+                    <View className="flex-row items-center justify-between">
+                      <View>
+                        <Text className="text-white font-medium">VAT Rate</Text>
+                        <Text className="text-slate-500 text-xs">Standard rate</Text>
+                      </View>
+                      <View className="flex-row items-center bg-[#0F172A] rounded-xl px-3 py-2">
+                        <TextInput
+                          className="text-white text-base w-12 text-right"
+                          value={settings.vatRate.toString()}
+                          onChangeText={(v) => handleUpdateSetting('vatRate', parseFloat(v) || 0)}
+                          keyboardType="numeric"
+                        />
+                        <Text className="text-slate-400 ml-1">%</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View className="p-4 border-b border-[#334155]">
+                    <Text className="text-white font-medium mb-2">VAT Scheme</Text>
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        onPress={() => handleUpdateSetting('vatScheme', 'standard')}
+                        className={`flex-1 rounded-lg p-3 items-center border ${
+                          settings.vatScheme === 'standard' ? 'border-[#14B8A6] bg-[#14B8A6]/10' : 'border-[#334155]'
+                        }`}
+                      >
+                        <Text className={`text-sm font-medium ${
+                          settings.vatScheme === 'standard' ? 'text-[#14B8A6]' : 'text-slate-500'
+                        }`}>Standard</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleUpdateSetting('vatScheme', 'flat_rate')}
+                        className={`flex-1 rounded-lg p-3 items-center border ${
+                          settings.vatScheme === 'flat_rate' ? 'border-[#14B8A6] bg-[#14B8A6]/10' : 'border-[#334155]'
+                        }`}
+                      >
+                        <Text className={`text-sm font-medium ${
+                          settings.vatScheme === 'flat_rate' ? 'text-[#14B8A6]' : 'text-slate-500'
+                        }`}>Flat Rate</Text>
+                      </Pressable>
+                    </View>
+                    {settings.vatScheme === 'flat_rate' && (
+                      <View className="flex-row items-center justify-between mt-3">
+                        <Text className="text-slate-400 text-sm">Flat rate percentage</Text>
+                        <View className="flex-row items-center bg-[#0F172A] rounded-xl px-3 py-2">
+                          <TextInput
+                            className="text-white text-base w-12 text-right"
+                            value={settings.vatFlatRatePercent.toString()}
+                            onChangeText={(v) => handleUpdateSetting('vatFlatRatePercent', parseFloat(v) || 0)}
+                            keyboardType="numeric"
+                          />
+                          <Text className="text-slate-400 ml-1">%</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* CIS */}
+              <View className="p-4 border-b border-[#334155]">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-white font-medium">CIS Registered</Text>
+                    <Text className="text-slate-500 text-xs">Construction Industry Scheme</Text>
+                  </View>
+                  <Switch
+                    value={settings.cisRegistered}
+                    onValueChange={(v) => handleUpdateSetting('cisRegistered', v)}
+                    trackColor={{ false: '#334155', true: '#14B8A6' }}
+                    thumbColor="#FFF"
+                  />
+                </View>
+              </View>
+
+              {/* Personal Allowance */}
+              <View className="p-4 border-b border-[#334155]">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-white font-medium">Personal Allowance</Text>
+                    <Text className="text-slate-500 text-xs">Tax-free amount (£12,570)</Text>
                   </View>
                   <View className="flex-row items-center bg-[#0F172A] rounded-xl px-3 py-2">
+                    <Text className="text-slate-400 mr-1">£</Text>
                     <TextInput
-                      className="text-white text-base w-16 text-right"
-                      value={settings.vatRate.toString()}
-                      onChangeText={(v) => handleUpdateSetting('vatRate', parseFloat(v) || 0)}
+                      className="text-white text-base w-20 text-right"
+                      value={settings.personalAllowance.toString()}
+                      onChangeText={(v) => handleUpdateSetting('personalAllowance', parseFloat(v) || 0)}
                       keyboardType="numeric"
                     />
-                    <Text className="text-slate-400 ml-1">%</Text>
                   </View>
                 </View>
               </View>
-            </View>
+
+              {/* Only Income Source */}
+              <View className="p-4 border-b border-[#334155]">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-white font-medium">Only Income Source</Text>
+                    <Text className="text-slate-500 text-xs">Is this your only income?</Text>
+                  </View>
+                  <Switch
+                    value={settings.onlyIncomeSource}
+                    onValueChange={(v) => handleUpdateSetting('onlyIncomeSource', v)}
+                    trackColor={{ false: '#334155', true: '#14B8A6' }}
+                    thumbColor="#FFF"
+                  />
+                </View>
+              </View>
+
+              {/* Other Income — only when not only source */}
+              {!settings.onlyIncomeSource && (
+                <View className="p-4 border-b border-[#334155]">
+                  <View className="flex-row items-center justify-between">
+                    <View>
+                      <Text className="text-white font-medium">Other Annual Income</Text>
+                      <Text className="text-slate-500 text-xs">PAYE salary or other income</Text>
+                    </View>
+                    <View className="flex-row items-center bg-[#0F172A] rounded-xl px-3 py-2">
+                      <Text className="text-slate-400 mr-1">£</Text>
+                      <TextInput
+                        className="text-white text-base w-20 text-right"
+                        value={settings.otherAnnualIncome.toString()}
+                        onChangeText={(v) => handleUpdateSetting('otherAnnualIncome', parseFloat(v) || 0)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Mileage Rate — HMRC fixed */}
+              <View className="p-4">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-white font-medium">Mileage Rate</Text>
+                    <Text className="text-slate-500 text-xs">HMRC approved rates</Text>
+                  </View>
+                  <View>
+                    <Text className="text-slate-300 text-sm text-right">45p/mile (first 10k)</Text>
+                    <Text className="text-slate-500 text-xs text-right">25p/mile (after 10k)</Text>
+                  </View>
+                </View>
+              </View>
+            </View>}
           </Animated.View>
 
           {/* Job Pricing */}
@@ -629,10 +840,20 @@ export default function SettingsScreen() {
 
           {/* Service Area */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)} className="mb-6">
-            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-              Service Area
-            </Text>
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
+            <Pressable
+              onPress={() => setShowServiceArea(!showServiceArea)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Service Area
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showServiceArea ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showServiceArea && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center">
                   <Map size={20} color={TURQUOISE} />
@@ -653,15 +874,25 @@ export default function SettingsScreen() {
                   <Text className="text-slate-400 ml-1">mi</Text>
                 </View>
               </View>
-            </View>
+            </View>}
           </Animated.View>
 
           {/* Working Hours */}
           <Animated.View entering={FadeInDown.delay(500).duration(400)} className="mb-6">
-            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-              Working Hours
-            </Text>
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
+            <Pressable
+              onPress={() => setShowWorkingHours(!showWorkingHours)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Working Hours
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showWorkingHours ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showWorkingHours && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center">
                   <Clock size={20} color={TURQUOISE} />
@@ -693,15 +924,25 @@ export default function SettingsScreen() {
                   />
                 </View>
               </View>
-            </View>
+            </View>}
           </Animated.View>
 
           {/* Automation */}
           <Animated.View entering={FadeInDown.delay(550).duration(400)} className="mb-6">
-            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-              Automation
-            </Text>
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
+            <Pressable
+              onPress={() => setShowAutomation(!showAutomation)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className="text-slate-400 text-sm font-semibold uppercase tracking-wide">
+                Automation
+              </Text>
+              <ChevronRight
+                size={20}
+                color="#64748B"
+                style={{ transform: [{ rotate: showAutomation ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {showAutomation && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
               {/* Calendar Sync */}
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center justify-between">
@@ -748,7 +989,7 @@ export default function SettingsScreen() {
                   />
                 </View>
               </View>
-            </View>
+            </View>}
           </Animated.View>
 
           {/* Subscription Management */}
@@ -797,6 +1038,35 @@ export default function SettingsScreen() {
             </View>
           </Animated.View>
 
+          {/* Data */}
+          <Animated.View entering={FadeInDown.delay(625).duration(400)} className="mb-6">
+            <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
+              Data
+            </Text>
+            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
+              <Pressable
+                onPress={() => setDataModal('load')}
+                className="p-4 flex-row items-center justify-between border-b border-[#334155] active:opacity-80"
+              >
+                <View className="flex-row items-center gap-3">
+                  <Database size={18} color={TURQUOISE} />
+                  <Text className="text-white font-medium">Load Sample Data</Text>
+                </View>
+                <ChevronRight size={18} color="#64748B" />
+              </Pressable>
+              <Pressable
+                onPress={() => setDataModal('clear')}
+                className="p-4 flex-row items-center justify-between active:opacity-80"
+              >
+                <View className="flex-row items-center gap-3">
+                  <Trash2 size={18} color="#EF4444" />
+                  <Text className="text-red-400 font-medium">Clear All Data</Text>
+                </View>
+                <ChevronRight size={18} color="#64748B" />
+              </Pressable>
+            </View>
+          </Animated.View>
+
           {/* App Info */}
           <Animated.View entering={FadeInDown.delay(650).duration(400)}>
             <View className="items-center py-6">
@@ -818,6 +1088,38 @@ export default function SettingsScreen() {
           onDismiss={() => setModal(null)}
         />
       )}
+
+      <ConfirmModal
+        visible={dataModal === 'load'}
+        title="Load Sample Data"
+        message="This will replace all current jobs, invoices, expenses, and todos with demo data. Your settings will not change."
+        variant="warning"
+        confirmText="Load Data"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          loadSampleData();
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setModal({ title: 'Sample Data Loaded', message: 'Demo jobs, invoices, expenses, and todos have been added.', variant: 'success' });
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setDataModal(null)}
+      />
+
+      <ConfirmModal
+        visible={dataModal === 'clear'}
+        title="Clear All Data"
+        message="This will permanently delete all jobs, customers, invoices, expenses, and todos. Your settings will not change. This cannot be undone."
+        variant="error"
+        confirmText="Delete Everything"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          clearAllData();
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          setModal({ title: 'Data Cleared', message: 'All jobs, invoices, expenses, and todos have been removed.', variant: 'success' });
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setDataModal(null)}
+      />
     </>
   );
 }

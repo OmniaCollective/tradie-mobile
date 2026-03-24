@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,12 @@ import {
   Wrench,
   AlertCircle,
   Calendar,
+  PiggyBank,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useTradeStore, useJobs, useTodos } from '@/lib/store';
+import { useTradeStore, useJobs, useTodos, useInvoices, useExpenses, useSettings } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
+import { calculateTaxEstimate } from '@/lib/taxEstimator';
 import { FAB } from '@/components/FAB';
 
 const TURQUOISE = '#14B8A6';
@@ -30,7 +32,10 @@ export default function DashboardScreen() {
   const router = useRouter();
   const jobs = useJobs();
   const todos = useTodos();
-  const { addTodo, toggleTodo, deleteTodo, updateJob, getCustomer, settings } = useTradeStore();
+  const invoices = useInvoices();
+  const expenses = useExpenses();
+  const settings = useSettings();
+  const { addTodo, toggleTodo, deleteTodo, updateJob, getCustomer } = useTradeStore();
 
   const [newTodoText, setNewTodoText] = useState('');
 
@@ -48,6 +53,20 @@ export default function DashboardScreen() {
       return dateA.localeCompare(dateB);
     })
     .slice(0, 3);
+
+  // Count ALL upcoming jobs in the next 7 days (rolling window, not calendar week)
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+  const next7DaysStr = next7Days.toISOString().split('T')[0];
+  const next7DaysJobCount = jobs.filter(
+    (j) => j.status === 'SCHEDULED' && j.scheduledDate && j.scheduledDate >= today && j.scheduledDate <= next7DaysStr
+  ).length;
+
+  // Tax estimate for Set Aside card
+  const taxEstimate = useMemo(
+    () => calculateTaxEstimate(invoices, expenses, settings),
+    [invoices, expenses, settings],
+  );
 
   // Get pending quotes (QUOTED status waiting for customer approval)
   const pendingQuotes = jobs.filter((j) => j.status === 'QUOTED');
@@ -109,7 +128,7 @@ export default function DashboardScreen() {
 
   return (
     <View className="flex-1">
-    <ScrollView className="flex-1 bg-[#0F172A]">
+    <ScrollView className="flex-1 bg-[#0F172A]" keyboardShouldPersistTaps="handled">
       <View className="px-4 pb-8">
         {/* Spacer for top */}
         <View className="mb-2" />
@@ -263,11 +282,18 @@ export default function DashboardScreen() {
                     <Text className="text-slate-400 text-sm">
                       {getCustomerName(job.customerId)}
                     </Text>
-                    {job.quote && (
-                      <Text className="text-[#14B8A6] font-bold mt-1">
-                        £{job.quote.total.toFixed(2)}
-                      </Text>
-                    )}
+                    <View className="flex-row items-center mt-1">
+                      {job.quote && (
+                        <Text className="text-[#14B8A6] font-bold">
+                          £{job.quote.total.toFixed(2)}
+                        </Text>
+                      )}
+                      {job.quote?.validUntil && new Date(job.quote.validUntil) < new Date() && (
+                        <View className="bg-[#EF4444]/20 rounded-full px-2 py-0.5 ml-2">
+                          <Text className="text-[#EF4444] text-[10px] font-semibold">Expired</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <ChevronRight size={20} color="#64748B" />
                 </Pressable>
@@ -277,7 +303,7 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {/* To-Do List */}
-        <Animated.View entering={FadeInDown.delay(500).duration(400)} className="mb-6">
+        <View className="mb-6">
           <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
             To-Do
           </Text>
@@ -293,6 +319,7 @@ export default function DashboardScreen() {
                 onChangeText={setNewTodoText}
                 onSubmitEditing={handleAddTodo}
                 returnKeyType="done"
+                blurOnSubmit={false}
               />
               <Pressable
                 onPress={handleAddTodo}
@@ -343,23 +370,60 @@ export default function DashboardScreen() {
               ))
             )}
           </View>
-        </Animated.View>
+        </View>
+
+        {/* Set Aside Card */}
+        {taxEstimate.monthlySetAside > 0 && (
+          <Animated.View entering={FadeInDown.delay(550).duration(400)} className="mb-6">
+            <Pressable
+              onPress={() => router.push('/(tabs)/finances')}
+              className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 active:opacity-80"
+            >
+              <View className="flex-row items-center mb-3">
+                <View className="w-10 h-10 rounded-full bg-[#F59E0B]/20 items-center justify-center mr-3">
+                  <PiggyBank size={20} color="#F59E0B" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-slate-400 text-xs uppercase tracking-wide">Set Aside for Tax</Text>
+                </View>
+                <ChevronRight size={18} color="#64748B" />
+              </View>
+              <View className="flex-row items-end justify-between">
+                <View>
+                  <Text className="text-white font-bold text-2xl">
+                    £{taxEstimate.monthlySetAside.toFixed(0)}
+                  </Text>
+                  <Text className="text-slate-500 text-xs">per month</Text>
+                </View>
+                <View className="items-end">
+                  <Text className="text-slate-300 font-semibold">
+                    £{taxEstimate.taxOwed.toFixed(0)}
+                  </Text>
+                  <Text className="text-slate-500 text-xs">estimated tax</Text>
+                </View>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
 
         {/* Quick Stats */}
         <Animated.View entering={FadeInDown.delay(600).duration(400)} className="flex-row gap-3">
           <Pressable
-            onPress={() => router.push('/(tabs)/invoices')}
+            onPress={() => router.push('/(tabs)/finances')}
             className="flex-1 bg-[#1E293B] rounded-2xl border border-[#334155] p-4 active:opacity-80"
           >
             <Text className="text-slate-400 text-xs mb-1">Unpaid</Text>
             <Text className="text-white font-bold text-2xl">{unpaidCount}</Text>
             <Text className="text-slate-500 text-xs">invoices</Text>
           </Pressable>
-          <View className="flex-1 bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
-            <Text className="text-slate-400 text-xs mb-1">This Week</Text>
-            <Text className="text-white font-bold text-2xl">{upcomingJobs.length}</Text>
+          <Pressable
+            onPress={() => router.push('/(tabs)/calendar')}
+            className="flex-1 bg-[#1E293B] rounded-2xl border border-[#334155] p-4 active:opacity-80"
+          >
+            <Text className="text-slate-400 text-xs mb-1">Next 7 Days</Text>
+            <Text className="text-white font-bold text-2xl">{next7DaysJobCount}</Text>
             <Text className="text-slate-500 text-xs">jobs booked</Text>
-          </View>
+          </Pressable>
         </Animated.View>
       </View>
 

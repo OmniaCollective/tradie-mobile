@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import { Invoice, Job, Customer, BusinessSettings } from './store';
+import { Invoice, Job, Customer, BusinessSettings, Expense, EXPENSE_CATEGORY_LABELS } from './store';
 import { getJobTypeLabel } from './trades';
 
 // ── Date range presets ──────────────────────────────────────────────
@@ -39,7 +39,7 @@ export const getDateRange = (preset: DatePreset): DateRange | null => {
 
   if (preset === 'tax_year') {
     // UK tax year: Apr 6 - Apr 5
-    const year = now.getMonth() >= 3 && now.getDate() >= 6
+    const year = (now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6)
       ? now.getFullYear()
       : now.getFullYear() - 1;
     return {
@@ -116,6 +116,154 @@ export const exportCsv = async (
 
   const csv = [header, ...rows].join('\n');
   const path = `${FileSystem.cacheDirectory}tradie-invoices.csv`;
+  await FileSystem.writeAsStringAsync(path, csv, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  await Sharing.shareAsync(path, { mimeType: 'text/csv' });
+};
+
+// ── Expenses CSV Export ──────────────────────────────────────────────
+
+interface ExpenseCsvContext {
+  expenses: Expense[];
+  dateRange: DateRange | null;
+}
+
+export const exportExpensesCsv = async (ctx: ExpenseCsvContext): Promise<void> => {
+  let filtered = ctx.expenses;
+
+  if (ctx.dateRange) {
+    filtered = filtered.filter((exp) => {
+      return exp.date >= ctx.dateRange!.from && exp.date <= ctx.dateRange!.to;
+    });
+  }
+
+  const header = [
+    'Date', 'Category', 'Description', 'Amount', 'Miles', 'Business Use %', 'Receipt',
+  ].join(',');
+
+  const rows = filtered
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((exp) => [
+      escCsv(exp.date),
+      escCsv(EXPENSE_CATEGORY_LABELS[exp.category]),
+      escCsv(exp.description),
+      exp.amount.toFixed(2),
+      exp.miles?.toString() ?? '',
+      exp.businessUsePercent?.toString() ?? '',
+      exp.receiptUri ? 'Yes' : 'No',
+    ].join(','));
+
+  const totalRow = `,,Total,${filtered.reduce((s, e) => s + e.amount, 0).toFixed(2)},,,`;
+  const csv = [header, ...rows, '', totalRow].join('\n');
+  const path = `${FileSystem.cacheDirectory}tradie-expenses.csv`;
+  await FileSystem.writeAsStringAsync(path, csv, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  await Sharing.shareAsync(path, { mimeType: 'text/csv' });
+};
+
+// ── Full Tax Summary CSV ────────────────────────────────────────────
+
+interface TaxSummaryCsvContext {
+  invoices: Invoice[];
+  expenses: Expense[];
+  getJob: (id: string) => Job | undefined;
+  getCustomer: (id: string) => Customer | undefined;
+  settings: BusinessSettings;
+  taxEstimate: {
+    grossIncome: number;
+    totalExpenses: number;
+    taxableProfit: number;
+    incomeTax: number;
+    class4NI: number;
+    totalTax: number;
+    cisDeductions: number;
+    taxOwed: number;
+  };
+  dateRange: DateRange | null;
+}
+
+export const exportTaxSummaryCsv = async (ctx: TaxSummaryCsvContext): Promise<void> => {
+  const { taxEstimate: t } = ctx;
+
+  // Summary section
+  const summary = [
+    'Tax Summary',
+    '',
+    `Gross Income,£${t.grossIncome.toFixed(2)}`,
+    `Total Expenses,£${t.totalExpenses.toFixed(2)}`,
+    `Taxable Profit,£${t.taxableProfit.toFixed(2)}`,
+    '',
+    `Income Tax,£${t.incomeTax.toFixed(2)}`,
+    `Class 4 NI,£${t.class4NI.toFixed(2)}`,
+    `Total Tax,£${t.totalTax.toFixed(2)}`,
+    `CIS Deductions,£${t.cisDeductions.toFixed(2)}`,
+    `Tax Owed,£${t.taxOwed.toFixed(2)}`,
+    '',
+    '',
+  ];
+
+  // Income section
+  let filteredInvoices = ctx.invoices.filter((inv) => inv.status === 'paid');
+  if (ctx.dateRange) {
+    filteredInvoices = filteredInvoices.filter((inv) => {
+      const d = (inv.paidAt || inv.createdAt).split('T')[0];
+      return d >= ctx.dateRange!.from && d <= ctx.dateRange!.to;
+    });
+  }
+
+  const incomeHeader = 'INCOME';
+  const incomeColumns = 'Date,Customer,Job Type,Labour,Materials,Travel,Emergency,VAT,Total,CIS Deducted';
+  const incomeRows = filteredInvoices.map((inv) => {
+    const job = ctx.getJob(inv.jobId);
+    const customer = ctx.getCustomer(inv.customerId);
+    return [
+      escCsv((inv.paidAt || inv.createdAt).split('T')[0]),
+      escCsv(customer?.name ?? ''),
+      escCsv(job ? getJobTypeLabel(ctx.settings.trade, job.type) : ''),
+      inv.quote.labour.toFixed(2),
+      inv.quote.materials.toFixed(2),
+      inv.quote.travel.toFixed(2),
+      inv.quote.emergencySurcharge.toFixed(2),
+      inv.quote.vat.toFixed(2),
+      inv.quote.total.toFixed(2),
+      (inv.cisDeductionAmount || 0).toFixed(2),
+    ].join(',');
+  });
+
+  // Expenses section
+  let filteredExpenses = ctx.expenses;
+  if (ctx.dateRange) {
+    filteredExpenses = filteredExpenses.filter((exp) => {
+      return exp.date >= ctx.dateRange!.from && exp.date <= ctx.dateRange!.to;
+    });
+  }
+
+  const expenseHeader = 'EXPENSES';
+  const expenseColumns = 'Date,Category,Description,Amount';
+  const expenseRows = filteredExpenses
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((exp) => [
+      escCsv(exp.date),
+      escCsv(EXPENSE_CATEGORY_LABELS[exp.category]),
+      escCsv(exp.description),
+      exp.amount.toFixed(2),
+    ].join(','));
+
+  const csv = [
+    ...summary,
+    incomeHeader,
+    incomeColumns,
+    ...incomeRows,
+    '',
+    '',
+    expenseHeader,
+    expenseColumns,
+    ...expenseRows,
+  ].join('\n');
+
+  const path = `${FileSystem.cacheDirectory}tradie-tax-summary.csv`;
   await FileSystem.writeAsStringAsync(path, csv, {
     encoding: FileSystem.EncodingType.UTF8,
   });
@@ -205,7 +353,7 @@ export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
       ${lineItem('Materials', q.materials)}
       ${lineItem('Travel', q.travel)}
       ${lineItem('Emergency Surcharge', q.emergencySurcharge)}
-      ${lineItem(`VAT (${settings.vatRate}%)`, q.vat)}
+      ${q.vat > 0 ? lineItem(`VAT (${settings.vatRate}%)`, q.vat) : ''}
       <tr class="total-row">
         <td style="border-top:2px solid #14B8A6;padding-top:12px">Total</td>
         <td class="total-amount" style="text-align:right;border-top:2px solid #14B8A6;padding-top:12px">£${q.total.toFixed(2)}</td>

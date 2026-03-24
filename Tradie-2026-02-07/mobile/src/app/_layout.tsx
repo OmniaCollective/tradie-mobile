@@ -115,6 +115,13 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="add-expense"
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="paywall"
           options={{
             presentation: 'modal',

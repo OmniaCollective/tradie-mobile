@@ -89,6 +89,47 @@ export interface Invoice {
   stripePaymentLink?: string;
   sentAt?: string;
   paidAt?: string;
+  cisDeducted?: boolean;
+  cisDeductionAmount?: number;
+  createdAt: string;
+}
+
+export type ExpenseCategory =
+  | 'tools_equipment'
+  | 'materials'
+  | 'vehicle_mileage'
+  | 'subcontractor'
+  | 'insurance'
+  | 'phone_internet'
+  | 'workwear_ppe'
+  | 'training'
+  | 'home_office'
+  | 'other';
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  tools_equipment: 'Tools & Equipment',
+  materials: 'Materials & Supplies',
+  vehicle_mileage: 'Vehicle / Mileage',
+  subcontractor: 'Subcontractor',
+  insurance: 'Insurance',
+  phone_internet: 'Phone & Internet',
+  workwear_ppe: 'Workwear & PPE',
+  training: 'Training',
+  home_office: 'Use of Home',
+  other: 'Other',
+};
+
+export interface Expense {
+  id: string;
+  amount: number;
+  description: string;
+  category: ExpenseCategory;
+  date: string; // ISO date
+  receiptUri?: string;
+  miles?: number; // for vehicle_mileage category
+  businessUsePercent?: number; // for phone_internet
+  vatAmount?: number; // VAT included in this expense (for input VAT tracking)
+  jobId?: string; // link to a specific job
   createdAt: string;
 }
 
@@ -115,7 +156,15 @@ export interface BusinessSettings {
   emergencyMultiplier: number;
   travelRatePerMile: number;
   serviceRadiusMiles: number;
+  vatRegistered: boolean;
   vatRate: number;
+  vatScheme: 'standard' | 'flat_rate';
+  vatFlatRatePercent: number;
+  vatNumber: string;
+  personalAllowance: number;
+  onlyIncomeSource: boolean;
+  otherAnnualIncome: number;
+  cisRegistered: boolean;
   workingHours: {
     start: string;
     end: string;
@@ -162,7 +211,15 @@ const defaultSettings: BusinessSettings = {
   emergencyMultiplier: 2,
   travelRatePerMile: 0.50,
   serviceRadiusMiles: 25,
+  vatRegistered: false,
   vatRate: 20,
+  vatScheme: 'standard',
+  vatFlatRatePercent: 14.5,
+  vatNumber: '',
+  personalAllowance: 12570,
+  onlyIncomeSource: true,
+  otherAnnualIncome: 0,
+  cisRegistered: false,
   workingHours: {
     start: '08:00',
     end: '18:00',
@@ -176,6 +233,7 @@ interface TradeStore {
   jobs: Job[];
   customers: Customer[];
   invoices: Invoice[];
+  expenses: Expense[];
   todos: TodoItem[];
   settings: BusinessSettings;
   pricingPresets: PricingPreset[];
@@ -183,6 +241,10 @@ interface TradeStore {
   // Usage tracking
   bookingLinksSentThisMonth: number;
   usageTrackingMonth: string; // Format: "YYYY-MM"
+
+  // Tax set-aside tracking
+  taxSetAsideTotal: number; // Cumulative amount user has set aside this tax year
+  taxSetAsideTaxYear: string; // Format: "YYYY" (April start year)
 
   // Job actions
   addJob: (job: Omit<Job, 'id' | 'createdAt'>) => string;
@@ -209,6 +271,12 @@ interface TradeStore {
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
   getInvoice: (id: string) => Invoice | undefined;
 
+  // Expense actions
+  addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => string;
+  updateExpense: (id: string, updates: Partial<Expense>) => void;
+  deleteExpense: (id: string) => void;
+  getExpense: (id: string) => Expense | undefined;
+
   // Todo actions
   addTodo: (text: string, isVoiceNote?: boolean, voiceUri?: string) => void;
   toggleTodo: (id: string) => void;
@@ -221,6 +289,13 @@ interface TradeStore {
 
   // Usage tracking actions
   incrementBookingLinksSent: () => void;
+
+  // Tax set-aside actions
+  addTaxSetAside: (amount: number) => void;
+
+  // Demo data actions
+  loadSampleData: () => void;
+  clearAllData: () => void;
 
   // Quote calculation
   calculateQuote: (jobType: JobType, urgency: Urgency, distanceMiles?: number, additionalMaterials?: number, explicitPartsTotal?: number) => Quote;
@@ -236,6 +311,7 @@ export const useTradeStore = create<TradeStore>()(
       jobs: [],
       customers: [],
       invoices: [],
+      expenses: [],
       todos: [],
       settings: defaultSettings,
       pricingPresets: defaultPricingPresets,
@@ -243,6 +319,14 @@ export const useTradeStore = create<TradeStore>()(
       // Usage tracking
       bookingLinksSentThisMonth: 0,
       usageTrackingMonth: new Date().toISOString().slice(0, 7), // "YYYY-MM"
+
+      // Tax set-aside tracking
+      taxSetAsideTotal: 0,
+      taxSetAsideTaxYear: (() => {
+        const now = new Date();
+        return ((now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6)
+          ? now.getFullYear() : now.getFullYear() - 1).toString();
+      })(),
 
       // Job actions
       addJob: (jobData) => {
@@ -354,6 +438,7 @@ export const useTradeStore = create<TradeStore>()(
         const job = get().jobs.find((j) => j.id === jobId);
         if (!job || !job.quote) return null;
 
+        const { settings } = get();
         const id = generateId();
         const invoice: Invoice = {
           id,
@@ -361,6 +446,11 @@ export const useTradeStore = create<TradeStore>()(
           customerId: job.customerId,
           quote: job.quote,
           status: 'pending',
+          // Auto-apply CIS deduction if CIS registered (default 20%)
+          cisDeducted: settings.cisRegistered || undefined,
+          cisDeductionAmount: settings.cisRegistered
+            ? Math.round(job.quote.total * 0.2 * 100) / 100
+            : undefined,
           createdAt: new Date().toISOString(),
         };
 
@@ -383,6 +473,34 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       getInvoice: (id) => get().invoices.find((inv) => inv.id === id),
+
+      // Expense actions
+      addExpense: (expenseData) => {
+        const id = generateId();
+        const expense: Expense = {
+          ...expenseData,
+          id,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({ expenses: [...state.expenses, expense] }));
+        return id;
+      },
+
+      updateExpense: (id, updates) => {
+        set((state) => ({
+          expenses: state.expenses.map((exp) =>
+            exp.id === id ? { ...exp, ...updates } : exp
+          ),
+        }));
+      },
+
+      deleteExpense: (id) => {
+        set((state) => ({
+          expenses: state.expenses.filter((exp) => exp.id !== id),
+        }));
+      },
+
+      getExpense: (id) => get().expenses.find((exp) => exp.id === id),
 
       // Todo actions
       addTodo: (text, isVoiceNote = false, voiceUri) => {
@@ -456,6 +574,51 @@ export const useTradeStore = create<TradeStore>()(
         });
       },
 
+      // Tax set-aside actions
+      addTaxSetAside: (amount) => {
+        const now = new Date();
+        const currentTaxYear = ((now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6)
+          ? now.getFullYear() : now.getFullYear() - 1).toString();
+
+        set((state) => {
+          // Reset if new tax year
+          if (state.taxSetAsideTaxYear !== currentTaxYear) {
+            return {
+              taxSetAsideTotal: amount,
+              taxSetAsideTaxYear: currentTaxYear,
+            };
+          }
+          return {
+            taxSetAsideTotal: Math.round((state.taxSetAsideTotal + amount) * 100) / 100,
+          };
+        });
+      },
+
+      // Demo data actions
+      loadSampleData: () => {
+        const { generateSampleData } = require('./sampleData');
+        const data = generateSampleData();
+        set({
+          customers: data.customers,
+          jobs: data.jobs,
+          invoices: data.invoices,
+          expenses: data.expenses,
+          todos: data.todos,
+          taxSetAsideTotal: data.taxSetAsideTotal,
+        });
+      },
+
+      clearAllData: () => {
+        set({
+          jobs: [],
+          customers: [],
+          invoices: [],
+          expenses: [],
+          todos: [],
+          taxSetAsideTotal: 0,
+        });
+      },
+
       // Quote calculation
       calculateQuote: (jobType, urgency, distanceMiles = 5, additionalMaterials = 0, explicitPartsTotal) => {
         const { settings, pricingPresets } = get();
@@ -487,8 +650,8 @@ export const useTradeStore = create<TradeStore>()(
         // Subtotal before VAT
         const subtotal = labour + materials + travel + emergencySurcharge;
 
-        // VAT
-        const vat = subtotal * (settings.vatRate / 100);
+        // VAT — only apply if VAT registered
+        const vat = settings.vatRegistered ? subtotal * (settings.vatRate / 100) : 0;
 
         // Total
         const total = subtotal + vat;
@@ -509,7 +672,7 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 2,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persisted: any, version: number) => {
         if (version === 0) {
@@ -537,6 +700,23 @@ export const useTradeStore = create<TradeStore>()(
               ...p,
               type: migrateType(p.type),
             }));
+          }
+        }
+        if (version < 3) {
+          // Ensure expenses array exists
+          if (!persisted.expenses) {
+            persisted.expenses = [];
+          }
+          // Ensure new tax settings exist
+          if (persisted.settings) {
+            if (persisted.settings.vatRegistered === undefined) persisted.settings.vatRegistered = false;
+            if (persisted.settings.vatScheme === undefined) persisted.settings.vatScheme = 'standard';
+            if (persisted.settings.vatFlatRatePercent === undefined) persisted.settings.vatFlatRatePercent = 14.5;
+            if (persisted.settings.vatNumber === undefined) persisted.settings.vatNumber = '';
+            if (persisted.settings.personalAllowance === undefined) persisted.settings.personalAllowance = 12570;
+            if (persisted.settings.onlyIncomeSource === undefined) persisted.settings.onlyIncomeSource = true;
+            if (persisted.settings.otherAnnualIncome === undefined) persisted.settings.otherAnnualIncome = 0;
+            if (persisted.settings.cisRegistered === undefined) persisted.settings.cisRegistered = false;
           }
         }
         if (version < 2) {
@@ -568,6 +748,9 @@ import { useShallow } from 'zustand/react/shallow';
 export const useJobs = () => useTradeStore(useShallow((s) => s.jobs));
 export const useCustomers = () => useTradeStore(useShallow((s) => s.customers));
 export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
+export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
 export const useSettings = () => useTradeStore(useShallow((s) => s.settings));
 export const usePricingPresets = () => useTradeStore(useShallow((s) => s.pricingPresets));
+export const useJobExpenses = (jobId: string) =>
+  useTradeStore(useShallow((s) => s.expenses.filter((e) => e.jobId === jobId)));

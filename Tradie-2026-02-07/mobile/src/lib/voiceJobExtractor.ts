@@ -3,7 +3,6 @@ import { Trade } from './trades';
 import { PricingPreset } from './store';
 
 const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY;
-const GROK_API_KEY = process.env.EXPO_PUBLIC_VIBECODE_GROK_API_KEY;
 
 export interface ExtractedJobData {
   customerName?: string;
@@ -55,15 +54,15 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
 }
 
 /**
- * Extract structured job details from a transcription using Grok (xAI).
+ * Extract structured job details from a transcription using Groq (Llama).
  */
 export async function extractJobDetails(
   transcription: string,
   tradeType: Trade,
   jobTypes: PricingPreset[]
 ): Promise<ExtractedJobData> {
-  if (!GROK_API_KEY) {
-    throw new Error('Grok API key not configured');
+  if (!GROQ_API_KEY) {
+    throw new Error('Groq API key not configured');
   }
 
   const jobTypeLabels = jobTypes.map((j) => j.label).join(', ');
@@ -96,14 +95,14 @@ Rules:
 - For jobType, match to the closest available job type label. Use exact label text.
 - Use null for any field not mentioned.`;
 
-  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GROK_API_KEY}`,
+      Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'grok-3-mini',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: 'You extract structured data from text. Always respond with valid JSON only.' },
         { role: 'user', content: prompt },
@@ -121,7 +120,7 @@ Rules:
   const content = data.choices?.[0]?.message?.content?.trim();
 
   if (!content) {
-    throw new Error('No response from Grok');
+    throw new Error('No response from Groq');
   }
 
   // Parse JSON — handle potential markdown code blocks
@@ -151,7 +150,7 @@ Rules:
 /**
  * Full pipeline: transcribe audio then extract job details.
  * Step 1: Groq Whisper (audio → text) — fast, free
- * Step 2: Grok xAI (text → structured job data) — smart extraction
+ * Step 2: Groq Llama (text → structured job data) — smart extraction
  */
 export async function processVoiceNote(
   audioUri: string,

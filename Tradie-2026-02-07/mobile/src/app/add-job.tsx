@@ -24,7 +24,6 @@ import {
   Square,
   Loader,
   ChevronDown,
-  Send,
   Keyboard,
 } from 'lucide-react-native';
 import Animated, {
@@ -38,7 +37,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import * as SMS from 'expo-sms';
+
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Audio } from 'expo-av';
 import { useTradeStore, useCustomers, usePricingPresets, JobType, Urgency, Customer } from '@/lib/store';
@@ -61,7 +60,7 @@ export default function AddJobScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
   const customers = useCustomers();
   const pricingPresets = usePricingPresets();
-  const { addJob, addCustomer, calculateQuote, settings, incrementBookingLinksSent } = useTradeStore();
+  const { addJob, addCustomer, calculateQuote, settings } = useTradeStore();
 
   const [mode, setMode] = useState<ScreenMode>('voice');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -240,37 +239,6 @@ export default function AddJobScreen() {
       });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      const businessName = settings.businessName || 'TRADIE';
-      const ownerName = settings.ownerName || businessName;
-      const contactPhone = settings.phone || '';
-      const scheduleText = hasDate && scheduledDate
-        ? `Scheduled for ${formatDateStr(scheduledDate)} at ${formatTimeStr(scheduledTime)}`
-        : "I'll confirm a date and time with you shortly";
-      const addressText = customerAddress.trim()
-        ? ` at ${customerAddress.trim()}${customerPostcode.trim() ? ', ' + customerPostcode.trim() : ''}`
-        : '';
-      const quoteTotal = quote ? `\u00A3${quote.total.toFixed(2)}` : 'TBC';
-
-      const smsMessage = [
-        `Hi ${customerName.trim()},`, '',
-        `Thanks for getting in touch with ${businessName}!`, '',
-        `Here's your quote for ${jobTypeLabel}${addressText}:`,
-        `Quote: ${quoteTotal}`, '',
-        `${scheduleText}.`, '',
-        `To confirm your booking, reply YES or call me on ${contactPhone}.`, '',
-        `Thanks,`, ownerName,
-      ].join('\n');
-
-      const smsAvailable = await SMS.isAvailableAsync();
-      if (smsAvailable && customerPhone.trim()) {
-        try {
-          await SMS.sendSMSAsync([customerPhone.trim()], smsMessage);
-          incrementBookingLinksSent();
-        } catch {
-          // User cancelled SMS — job is still saved
-        }
-      }
       router.back();
     } catch (error) {
       console.error('Save error:', error);
@@ -279,7 +247,7 @@ export default function AddJobScreen() {
   }, [
     selectedJobType, customerName, customerPhone, customerAddress, customerPostcode,
     matchedCustomer, addCustomer, addJob, hasDate, scheduledDate, scheduledTime,
-    description, urgency, quote, jobTypeLabel, settings, router, incrementBookingLinksSent,
+    description, urgency, quote, router,
   ]);
 
   const formatDateStr = (date: Date) =>
@@ -662,10 +630,12 @@ export default function AddJobScreen() {
                     <Text className="text-slate-300 text-sm">{'\u00A3'}{quote.emergencySurcharge.toFixed(2)}</Text>
                   </View>
                 )}
-                <View className="flex-row justify-between mb-1">
-                  <Text className="text-slate-500 text-sm">VAT</Text>
-                  <Text className="text-slate-300 text-sm">{'\u00A3'}{quote.vat.toFixed(2)}</Text>
-                </View>
+                {quote.vat > 0 && (
+                  <View className="flex-row justify-between mb-1">
+                    <Text className="text-slate-500 text-sm">VAT</Text>
+                    <Text className="text-slate-300 text-sm">{'\u00A3'}{quote.vat.toFixed(2)}</Text>
+                  </View>
+                )}
                 <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between">
                   <Text className="text-white font-bold">Total</Text>
                   <Text className="text-[#14B8A6] font-bold text-xl">{'\u00A3'}{quote.total.toFixed(2)}</Text>
@@ -683,9 +653,9 @@ export default function AddJobScreen() {
           >
             {saving
               ? <Loader size={20} color={canSave ? '#FFF' : '#64748B'} />
-              : <Send size={20} color={canSave ? '#FFF' : '#64748B'} />}
+              : <Check size={20} color={canSave ? '#FFF' : '#64748B'} />}
             <Text className={`font-bold text-base ml-2 ${canSave && !saving ? 'text-white' : 'text-slate-500'}`}>
-              {saving ? 'Saving...' : 'Save & Send Quote'}
+              {saving ? 'Saving...' : 'Save Job'}
             </Text>
           </Pressable>
         </Animated.View>
