@@ -9,12 +9,6 @@
       "ios": {
         "buildConfiguration": "Release",
         "autoIncrement": true
-      },
-      "env": {
-        "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_dbnKauWGlcUaRmZBmgzKMAHMYtN",
-        "EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY": "test_aFuNgBwRPiJFLjDMQNNscxaQoEW",
-        "EXPO_PUBLIC_GROQ_API_KEY": "REPLACE_WITH_GROQ_KEY",
-        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://unmixed-maximum.vibecode.run"
       }
     }
   },
