@@ -5,11 +5,10 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Switch,
   ActivityIndicator,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -24,7 +23,6 @@ import {
   ChevronRight,
   Save,
   Crown,
-  Sparkles,
   Calendar,
   Bell,
   CreditCard,
@@ -47,8 +45,8 @@ import { getJobTypeLabel } from '@/lib/trades';
 import { scheduleReminderCheck } from '@/lib/customerReminders';
 import { connectApi } from '@/lib/paymentsApi';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { TURQUOISE, GREEN, AMBER, BORDER, SLATE_500, SLATE_600, RED, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -74,7 +72,8 @@ export default function SettingsScreen() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(true);
   const [modal, setModal] = useState<{ title: string; message: string; variant?: 'default' | 'success' | 'error' | 'warning' } | null>(null);
-  const [dataModal, setDataModal] = useState<'load' | 'clear' | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmText: string; variant: 'default' | 'success' | 'error' | 'warning'; onConfirm: () => void } | null>(null);
+  const [simpleAlert, setSimpleAlert] = useState<string | null>(null);
 
   // Generate a consistent user ID for this device
   const getUserId = () => {
@@ -106,7 +105,7 @@ export default function SettingsScreen() {
         setPaymentStatus('unavailable');
       }
     } catch (error) {
-      console.error('Error checking payment setup:', error);
+      if (__DEV__) console.error('Error checking payment setup:', error);
       setPaymentStatus('unavailable');
     } finally {
       setCheckingPayment(false);
@@ -186,7 +185,7 @@ export default function SettingsScreen() {
         setModal({ title: 'Error', message: result.error || 'Failed to start payment setup', variant: 'error' });
       }
     } catch (error) {
-      console.error('Error setting up payments:', error);
+      if (__DEV__) console.error('Error setting up payments:', error);
       setModal({ title: 'Error', message: 'Failed to start payment setup. Please try again.', variant: 'error' });
     } finally {
       setPaymentLoading(false);
@@ -205,7 +204,7 @@ export default function SettingsScreen() {
         setModal({ title: 'Error', message: 'Failed to open dashboard', variant: 'error' });
       }
     } catch (error) {
-      console.error('Error opening dashboard:', error);
+      if (__DEV__) console.error('Error opening dashboard:', error);
       setModal({ title: 'Error', message: 'Failed to open dashboard', variant: 'error' });
     } finally {
       setPaymentLoading(false);
@@ -221,11 +220,11 @@ export default function SettingsScreen() {
   };
 
   return (<>
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
-    >
-      <ScrollView className="flex-1 bg-[#0F172A]">
+      <ScrollView
+        className="flex-1 bg-[#0F172A]"
+        automaticallyAdjustKeyboardInsets={true}
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="px-4 pb-8">
           {/* Pro Upgrade Banner */}
           {!isPro && (
@@ -236,18 +235,17 @@ export default function SettingsScreen() {
               >
                 <View className="flex-row items-center">
                   <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center mr-4">
-                    <Crown size={24} color="#FFF" fill="#FFF" />
+                    <Crown size={24} color={WHITE} fill={WHITE} />
                   </View>
                   <View className="flex-1">
                     <View className="flex-row items-center">
                       <Text className="text-white font-bold text-lg">Upgrade to Pro</Text>
-                      <Sparkles size={16} color="#FCD34D" className="ml-2" />
                     </View>
                     <Text className="text-white/80 text-sm">
                       Unlimited bookings, analytics & more
                     </Text>
                   </View>
-                  <ChevronRight size={20} color="#FFF" />
+                  <ChevronRight size={20} color={WHITE} />
                 </View>
               </Pressable>
             </Animated.View>
@@ -259,7 +257,7 @@ export default function SettingsScreen() {
               <View className="bg-[#14B8A6]/20 border border-[#14B8A6] rounded-2xl p-4">
                 <View className="flex-row items-center">
                   <View className="w-10 h-10 rounded-full bg-[#14B8A6] items-center justify-center mr-3">
-                    <Crown size={20} color="#FFF" fill="#FFF" />
+                    <Crown size={20} color={WHITE} fill={WHITE} />
                   </View>
                   <View>
                     <Text className="text-[#14B8A6] font-bold">TRADIE Pro</Text>
@@ -285,7 +283,7 @@ export default function SettingsScreen() {
                 <View className="p-4">
                   <View className="flex-row items-center mb-4">
                     <View className="w-12 h-12 rounded-full bg-[#22C55E]/20 items-center justify-center">
-                      <CheckCircle size={24} color="#22C55E" />
+                      <CheckCircle size={24} color={GREEN} />
                     </View>
                     <View className="ml-3 flex-1">
                       <Text className="text-white font-bold">Payments Active</Text>
@@ -298,10 +296,10 @@ export default function SettingsScreen() {
                     className="bg-[#334155] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
                   >
                     {paymentLoading ? (
-                      <ActivityIndicator color="#FFF" size="small" />
+                      <ActivityIndicator color={WHITE} size="small" />
                     ) : (
                       <>
-                        <ExternalLink size={18} color="#FFF" />
+                        <ExternalLink size={18} color={WHITE} />
                         <Text className="text-white font-medium ml-2">View Stripe Dashboard</Text>
                       </>
                     )}
@@ -311,7 +309,7 @@ export default function SettingsScreen() {
                 <View className="p-4">
                   <View className="flex-row items-center mb-4">
                     <View className="w-12 h-12 rounded-full bg-[#F59E0B]/20 items-center justify-center">
-                      <AlertCircle size={24} color="#F59E0B" />
+                      <AlertCircle size={24} color={AMBER} />
                     </View>
                     <View className="ml-3 flex-1">
                       <Text className="text-white font-bold">Setup Incomplete</Text>
@@ -324,10 +322,10 @@ export default function SettingsScreen() {
                     className="bg-[#F59E0B] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
                   >
                     {paymentLoading ? (
-                      <ActivityIndicator color="#FFF" size="small" />
+                      <ActivityIndicator color={WHITE} size="small" />
                     ) : (
                       <>
-                        <CreditCard size={18} color="#FFF" />
+                        <CreditCard size={18} color={WHITE} />
                         <Text className="text-white font-bold ml-2">Continue Setup</Text>
                       </>
                     )}
@@ -343,7 +341,7 @@ export default function SettingsScreen() {
                 <View className="p-4">
                   <View className="flex-row items-center mb-3">
                     <View className="w-12 h-12 rounded-full bg-[#64748B]/20 items-center justify-center">
-                      <CreditCard size={24} color="#64748B" />
+                      <CreditCard size={24} color={SLATE_500} />
                     </View>
                     <View className="ml-3 flex-1">
                       <Text className="text-white font-bold">Payments Unavailable</Text>
@@ -377,10 +375,10 @@ export default function SettingsScreen() {
                     className="bg-[#14B8A6] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
                   >
                     {paymentLoading ? (
-                      <ActivityIndicator color="#FFF" size="small" />
+                      <ActivityIndicator color={WHITE} size="small" />
                     ) : (
                       <>
-                        <CreditCard size={18} color="#FFF" />
+                        <CreditCard size={18} color={WHITE} />
                         <Text className="text-white font-bold ml-2">Connect Bank Account</Text>
                       </>
                     )}
@@ -404,14 +402,14 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showBusiness ? '90deg' : '0deg' }] }}
               />
             </Pressable>
             {showBusiness && <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center mb-2">
-                  <Building size={16} color="#64748B" />
+                  <Building size={16} color={SLATE_500} />
                   <Text className="text-slate-400 text-xs ml-2">Business Name</Text>
                 </View>
                 <TextInput
@@ -419,13 +417,13 @@ export default function SettingsScreen() {
                   value={settings.businessName}
                   onChangeText={(v) => handleUpdateSetting('businessName', v)}
                   placeholder="Your Business Name"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                 />
               </View>
 
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center mb-2">
-                  <User size={16} color="#64748B" />
+                  <User size={16} color={SLATE_500} />
                   <Text className="text-slate-400 text-xs ml-2">Your Name</Text>
                 </View>
                 <TextInput
@@ -433,13 +431,13 @@ export default function SettingsScreen() {
                   value={settings.ownerName}
                   onChangeText={(v) => handleUpdateSetting('ownerName', v)}
                   placeholder="Your Name"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                 />
               </View>
 
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center mb-2">
-                  <Phone size={16} color="#64748B" />
+                  <Phone size={16} color={SLATE_500} />
                   <Text className="text-slate-400 text-xs ml-2">Phone</Text>
                 </View>
                 <TextInput
@@ -447,14 +445,14 @@ export default function SettingsScreen() {
                   value={settings.phone}
                   onChangeText={(v) => handleUpdateSetting('phone', v)}
                   placeholder="07700 000000"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                   keyboardType="phone-pad"
                 />
               </View>
 
               <View className="p-4 border-b border-[#334155]">
                 <View className="flex-row items-center mb-2">
-                  <Mail size={16} color="#64748B" />
+                  <Mail size={16} color={SLATE_500} />
                   <Text className="text-slate-400 text-xs ml-2">Email</Text>
                 </View>
                 <TextInput
@@ -462,7 +460,7 @@ export default function SettingsScreen() {
                   value={settings.email}
                   onChangeText={(v) => handleUpdateSetting('email', v)}
                   placeholder="you@example.com"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -470,7 +468,7 @@ export default function SettingsScreen() {
 
               <View className="p-4">
                 <View className="flex-row items-center mb-2">
-                  <MapPin size={16} color="#64748B" />
+                  <MapPin size={16} color={SLATE_500} />
                   <Text className="text-slate-400 text-xs ml-2">Base Postcode</Text>
                 </View>
                 <TextInput
@@ -478,7 +476,7 @@ export default function SettingsScreen() {
                   value={settings.postcode}
                   onChangeText={(v) => handleUpdateSetting('postcode', v.toUpperCase())}
                   placeholder="SW1A 1AA"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                   autoCapitalize="characters"
                 />
               </View>
@@ -496,7 +494,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showRates ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -605,7 +603,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showTax ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -620,8 +618,8 @@ export default function SettingsScreen() {
                   <Switch
                     value={settings.vatRegistered}
                     onValueChange={(v) => handleUpdateSetting('vatRegistered', v)}
-                    trackColor={{ false: '#334155', true: '#14B8A6' }}
-                    thumbColor="#FFF"
+                    trackColor={{ false: BORDER, true: TURQUOISE }}
+                    thumbColor={WHITE}
                   />
                 </View>
               </View>
@@ -640,7 +638,7 @@ export default function SettingsScreen() {
                         value={settings.vatNumber}
                         onChangeText={(v) => handleUpdateSetting('vatNumber', v)}
                         placeholder="GB 123 4567 89"
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={SLATE_600}
                       />
                     </View>
                   </View>
@@ -715,11 +713,31 @@ export default function SettingsScreen() {
                   <Switch
                     value={settings.cisRegistered}
                     onValueChange={(v) => handleUpdateSetting('cisRegistered', v)}
-                    trackColor={{ false: '#334155', true: '#14B8A6' }}
-                    thumbColor="#FFF"
+                    trackColor={{ false: BORDER, true: TURQUOISE }}
+                    thumbColor={WHITE}
                   />
                 </View>
               </View>
+
+              {settings.cisRegistered && (
+                <View className="p-4 border-b border-[#334155]">
+                  <View className="flex-row items-center justify-between">
+                    <View>
+                      <Text className="text-white font-medium">CIS Deduction Rate</Text>
+                      <Text className="text-slate-500 text-xs">Standard 20%, verified 30%</Text>
+                    </View>
+                    <View className="flex-row items-center bg-[#0F172A] rounded-xl px-3 py-2">
+                      <TextInput
+                        className="text-white text-base w-12 text-right"
+                        value={(settings.cisRate ?? 20).toString()}
+                        onChangeText={(v) => handleUpdateSetting('cisRate', parseFloat(v) || 0)}
+                        keyboardType="numeric"
+                      />
+                      <Text className="text-slate-400 ml-1">%</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
 
               {/* Personal Allowance */}
               <View className="p-4 border-b border-[#334155]">
@@ -750,8 +768,8 @@ export default function SettingsScreen() {
                   <Switch
                     value={settings.onlyIncomeSource}
                     onValueChange={(v) => handleUpdateSetting('onlyIncomeSource', v)}
-                    trackColor={{ false: '#334155', true: '#14B8A6' }}
-                    thumbColor="#FFF"
+                    trackColor={{ false: BORDER, true: TURQUOISE }}
+                    thumbColor={WHITE}
                   />
                 </View>
               </View>
@@ -804,7 +822,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showPricing ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -849,7 +867,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showServiceArea ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -888,7 +906,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showWorkingHours ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -908,7 +926,7 @@ export default function SettingsScreen() {
                       })
                     }
                     placeholder="08:00"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={SLATE_500}
                   />
                   <Text className="text-slate-400 mx-2">to</Text>
                   <TextInput
@@ -920,7 +938,7 @@ export default function SettingsScreen() {
                       })
                     }
                     placeholder="18:00"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={SLATE_500}
                   />
                 </View>
               </View>
@@ -938,7 +956,7 @@ export default function SettingsScreen() {
               </Text>
               <ChevronRight
                 size={20}
-                color="#64748B"
+                color={SLATE_500}
                 style={{ transform: [{ rotate: showAutomation ? '90deg' : '0deg' }] }}
               />
             </Pressable>
@@ -960,8 +978,8 @@ export default function SettingsScreen() {
                   <Switch
                     value={calendarEnabled}
                     onValueChange={handleCalendarToggle}
-                    trackColor={{ false: '#334155', true: '#14B8A6' }}
-                    thumbColor="#FFF"
+                    trackColor={{ false: BORDER, true: TURQUOISE }}
+                    thumbColor={WHITE}
                     disabled={syncing}
                   />
                 </View>
@@ -972,7 +990,7 @@ export default function SettingsScreen() {
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center flex-1 mr-4">
                     <View className="w-10 h-10 rounded-full bg-[#F59E0B]/20 items-center justify-center">
-                      <Bell size={20} color="#F59E0B" />
+                      <Bell size={20} color={AMBER} />
                     </View>
                     <View className="ml-3 flex-1">
                       <Text className="text-white font-medium">Daily Reminders</Text>
@@ -984,8 +1002,8 @@ export default function SettingsScreen() {
                   <Switch
                     value={dailyRemindersEnabled}
                     onValueChange={handleDailyRemindersToggle}
-                    trackColor={{ false: '#334155', true: '#F59E0B' }}
-                    thumbColor="#FFF"
+                    trackColor={{ false: BORDER, true: AMBER }}
+                    thumbColor={WHITE}
                   />
                 </View>
               </View>
@@ -1009,7 +1027,7 @@ export default function SettingsScreen() {
                     </View>
                     <Text className="text-white font-medium ml-3">Manage Subscription</Text>
                   </View>
-                  <ChevronRight size={18} color="#64748B" />
+                  <ChevronRight size={18} color={SLATE_500} />
                 </Pressable>
               </View>
             </Animated.View>
@@ -1026,14 +1044,14 @@ export default function SettingsScreen() {
                 className="p-4 flex-row items-center justify-between border-b border-[#334155] active:opacity-80"
               >
                 <Text className="text-white font-medium">Privacy Policy</Text>
-                <ChevronRight size={18} color="#64748B" />
+                <ChevronRight size={18} color={SLATE_500} />
               </Pressable>
               <Pressable
                 onPress={() => Linking.openURL('https://builtbyomnia.com/tradie/terms-of-service')}
                 className="p-4 flex-row items-center justify-between active:opacity-80"
               >
                 <Text className="text-white font-medium">Terms of Service</Text>
-                <ChevronRight size={18} color="#64748B" />
+                <ChevronRight size={18} color={SLATE_500} />
               </Pressable>
             </View>
           </Animated.View>
@@ -1045,24 +1063,30 @@ export default function SettingsScreen() {
             </Text>
             <View className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden">
               <Pressable
-                onPress={() => setDataModal('load')}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setTimeout(() => { loadSampleData(); setSimpleAlert('Sample data loaded'); }, 100);
+                }}
                 className="p-4 flex-row items-center justify-between border-b border-[#334155] active:opacity-80"
               >
                 <View className="flex-row items-center gap-3">
                   <Database size={18} color={TURQUOISE} />
                   <Text className="text-white font-medium">Load Sample Data</Text>
                 </View>
-                <ChevronRight size={18} color="#64748B" />
+                <ChevronRight size={18} color={SLATE_500} />
               </Pressable>
               <Pressable
-                onPress={() => setDataModal('clear')}
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setTimeout(() => { clearAllData(); setSimpleAlert('All data cleared'); }, 100);
+                }}
                 className="p-4 flex-row items-center justify-between active:opacity-80"
               >
                 <View className="flex-row items-center gap-3">
-                  <Trash2 size={18} color="#EF4444" />
+                  <Trash2 size={18} color={RED} />
                   <Text className="text-red-400 font-medium">Clear All Data</Text>
                 </View>
-                <ChevronRight size={18} color="#64748B" />
+                <ChevronRight size={18} color={SLATE_500} />
               </Pressable>
             </View>
           </Animated.View>
@@ -1071,13 +1095,12 @@ export default function SettingsScreen() {
           <Animated.View entering={FadeInDown.delay(650).duration(400)}>
             <View className="items-center py-6">
               <Text className="text-[#14B8A6] font-bold text-2xl">TRADIE</Text>
-              <Text className="text-slate-500 text-sm mt-1">v1.0.2</Text>
+              <Text className="text-slate-500 text-sm mt-1">v1.5.0</Text>
               <Text className="text-slate-600 text-xs mt-1">paul@builtbyomnia.com</Text>
             </View>
           </Animated.View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
 
       {modal && (
         <ConfirmModal
@@ -1089,37 +1112,31 @@ export default function SettingsScreen() {
         />
       )}
 
-      <ConfirmModal
-        visible={dataModal === 'load'}
-        title="Load Sample Data"
-        message="This will replace all current jobs, invoices, expenses, and todos with demo data. Your settings will not change."
-        variant="warning"
-        confirmText="Load Data"
-        cancelText="Cancel"
-        onConfirm={async () => {
-          loadSampleData();
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setModal({ title: 'Sample Data Loaded', message: 'Demo jobs, invoices, expenses, and todos have been added.', variant: 'success' });
-        }}
-        onCancel={() => {}}
-        onDismiss={() => setDataModal(null)}
-      />
+      {confirm && (
+        <ConfirmModal
+          visible={!!confirm}
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText="Cancel"
+          variant={confirm.variant}
+          onConfirm={confirm.onConfirm}
+          onCancel={() => {}}
+          onDismiss={() => setConfirm(null)}
+        />
+      )}
 
-      <ConfirmModal
-        visible={dataModal === 'clear'}
-        title="Clear All Data"
-        message="This will permanently delete all jobs, customers, invoices, expenses, and todos. Your settings will not change. This cannot be undone."
-        variant="error"
-        confirmText="Delete Everything"
-        cancelText="Cancel"
-        onConfirm={async () => {
-          clearAllData();
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          setModal({ title: 'Data Cleared', message: 'All jobs, invoices, expenses, and todos have been removed.', variant: 'success' });
-        }}
-        onCancel={() => {}}
-        onDismiss={() => setDataModal(null)}
-      />
+      <Modal visible={!!simpleAlert} transparent animationType="fade" onRequestClose={() => setSimpleAlert(null)}>
+        <View className="flex-1 justify-center items-center bg-black/50">
+          <View className="bg-[#1E293B] rounded-2xl px-6 py-5 mx-8 border border-[#334155]">
+            <Text className="text-white font-semibold text-base text-center mb-4">{simpleAlert}</Text>
+            <Pressable onPress={() => setSimpleAlert(null)} className="bg-[#334155] rounded-xl py-3 items-center active:opacity-70">
+              <Text className="text-white font-medium">OK</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
     </>
   );
 }

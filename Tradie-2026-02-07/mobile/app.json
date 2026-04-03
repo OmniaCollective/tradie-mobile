@@ -3,11 +3,10 @@
     "name": "Tradie",
     "slug": "tradie",
     "scheme": "tradie",
-    "version": "1.2.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "icon": "./src/assets/Tradie_App_Store_1024x1024_1.jpg",
-    "newArchEnabled": true,
+    "icon": "./src/assets/Tradie_App_Store_1024x1024_1.png",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.vibecode.tradie.5sttp4",
@@ -23,11 +22,26 @@
         "NSPhotoLibraryAddUsageDescription": "Tradie saves photos of completed jobs to your photo library."
       }
     },
-    "android": {
-      "edgeToEdgeEnabled": true
-    },
+    "android": {},
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-asset",
+      "expo-build-properties",
+      "expo-font",
+      "expo-image",
+      "expo-mail-composer",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-sqlite",
+      "expo-video",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
