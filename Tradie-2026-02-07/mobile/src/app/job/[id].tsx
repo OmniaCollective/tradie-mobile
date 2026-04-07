@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Receipt,
   Plus,
+  Share2,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -50,8 +51,10 @@ import {
   isQuoteExpiringSoon,
 } from '@/lib/customerReminders';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { formatDateFull, formatTime } from '@/lib/dates';
+import { exportQuotePdf } from '@/lib/invoiceExport';
+import { TURQUOISE, GREEN, EMERALD, AMBER, ORANGE, BLUE, PURPLE, SLATE_500, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 const statusLabels: Record<JobStatus, string> = {
   REQUESTED: 'Requested',
@@ -65,14 +68,14 @@ const statusLabels: Record<JobStatus, string> = {
 };
 
 const statusColors: Record<JobStatus, string> = {
-  REQUESTED: '#F59E0B',
-  QUOTED: '#8B5CF6',
-  APPROVED: '#10B981',
-  SCHEDULED: '#3B82F6',
+  REQUESTED: AMBER,
+  QUOTED: PURPLE,
+  APPROVED: EMERALD,
+  SCHEDULED: BLUE,
   IN_PROGRESS: TURQUOISE,
-  COMPLETED: '#22C55E',
-  INVOICED: '#F97316',
-  PAID: '#10B981',
+  COMPLETED: GREEN,
+  INVOICED: ORANGE,
+  PAID: EMERALD,
 };
 
 export default function JobDetailScreen() {
@@ -114,23 +117,6 @@ export default function JobDetailScreen() {
 
   const statusColor = statusColors[job.status];
 
-  const formatTime = (time?: string) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-  };
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'Not scheduled';
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
-  };
 
   const handleAddPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -277,7 +263,7 @@ export default function JobDetailScreen() {
         setModal({ title: 'Error', message: 'Could not sync to calendar. Please try again.', variant: 'error' });
       }
     } catch (error) {
-      console.error('Calendar sync error:', error);
+      if (__DEV__) console.error('Calendar sync error:', error);
       setModal({ title: 'Error', message: 'Could not sync to calendar.', variant: 'error' });
     }
 
@@ -315,6 +301,16 @@ export default function JobDetailScreen() {
     }
 
     setSendingReminder(false);
+  };
+
+  const handleShareQuote = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await exportQuotePdf({ job, customer, settings });
+    } catch (error) {
+      if (__DEV__) console.error('Quote PDF error:', error);
+      setModal({ title: 'Error', message: 'Could not generate quote PDF.', variant: 'error' });
+    }
   };
 
   const handleSendQuoteFollowup = async () => {
@@ -385,7 +381,7 @@ export default function JobDetailScreen() {
             <View className="flex-1">
               <Text className="text-white font-bold text-lg">{customer.name}</Text>
               <View className="flex-row items-center mt-1">
-                <MapPin size={14} color="#64748B" />
+                <MapPin size={14} color={SLATE_500} />
                 <Text className="text-slate-500 text-sm ml-1">
                   {customer.address}, {customer.postcode}
                 </Text>
@@ -431,9 +427,9 @@ export default function JobDetailScreen() {
                 <Calendar size={20} color={TURQUOISE} />
               </View>
               <View>
-                <Text className="text-white font-semibold">{formatDate(job.scheduledDate)}</Text>
+                <Text className="text-white font-semibold">{formatDateFull(job.scheduledDate)}</Text>
                 <View className="flex-row items-center mt-1">
-                  <Clock size={14} color="#64748B" />
+                  <Clock size={14} color={SLATE_500} />
                   <Text className="text-slate-400 text-sm ml-1">
                     {formatTime(job.scheduledTime)}
                   </Text>
@@ -482,6 +478,14 @@ export default function JobDetailScreen() {
                 </Text>
               </View>
             </View>
+            <Pressable
+              onPress={handleShareQuote}
+              className="mt-3 rounded-xl py-3 flex-row items-center justify-center gap-2 active:opacity-80"
+              style={{ backgroundColor: TURQUOISE }}
+            >
+              <Share2 size={16} color={WHITE} />
+              <Text className="text-white font-semibold">Share Quote PDF</Text>
+            </Pressable>
           </Animated.View>
         )}
 
@@ -578,7 +582,7 @@ export default function JobDetailScreen() {
                 value={partName}
                 onChangeText={setPartName}
                 placeholder="Part name"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={SLATE_500}
                 className="text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5 mb-2"
               />
               <View className="flex-row gap-2 mb-3">
@@ -586,7 +590,7 @@ export default function JobDetailScreen() {
                   value={partQty}
                   onChangeText={setPartQty}
                   placeholder="Qty"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                   keyboardType="numeric"
                   className="flex-1 text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5"
                 />
@@ -594,7 +598,7 @@ export default function JobDetailScreen() {
                   value={partCost}
                   onChangeText={setPartCost}
                   placeholder="Unit cost (£)"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={SLATE_500}
                   keyboardType="decimal-pad"
                   className="flex-1 text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5"
                 />
@@ -652,7 +656,7 @@ export default function JobDetailScreen() {
                 onChangeText={setNotesText}
                 multiline
                 placeholder="Add notes..."
-                placeholderTextColor="#64748B"
+                placeholderTextColor={SLATE_500}
                 className="text-white text-base min-h-[80px]"
                 style={{ textAlignVertical: 'top' }}
                 autoFocus
@@ -773,7 +777,7 @@ export default function JobDetailScreen() {
               onPress={() => router.push(`/add-expense?jobId=${job.id}`)}
               className="bg-[#0F172A] rounded-xl py-4 items-center active:opacity-80"
             >
-              <Receipt size={20} color="#64748B" />
+              <Receipt size={20} color={SLATE_500} />
               <Text className="text-slate-500 text-sm mt-1">No expenses linked</Text>
             </Pressable>
           ) : (
@@ -802,7 +806,7 @@ export default function JobDetailScreen() {
           {/* Quote expiry warning and followup */}
           {job.status === 'QUOTED' && isQuoteExpiringSoon(job) && (
             <View className="bg-[#F59E0B]/20 rounded-xl p-3 flex-row items-center mb-1">
-              <AlertCircle size={18} color="#F59E0B" />
+              <AlertCircle size={18} color={AMBER} />
               <Text className="text-[#F59E0B] ml-2 flex-1">Quote expires soon</Text>
               <Pressable
                 onPress={handleSendQuoteFollowup}
@@ -822,7 +826,7 @@ export default function JobDetailScreen() {
                 onPress={handleApproveQuote}
                 className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
               >
-                <Check size={20} color="#FFF" />
+                <Check size={20} color={WHITE} />
                 <Text className="text-white font-bold ml-2">Approve Quote</Text>
               </Pressable>
             </>
@@ -833,7 +837,7 @@ export default function JobDetailScreen() {
               onPress={handleScheduleJob}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <Calendar size={20} color="#FFF" />
+              <Calendar size={20} color={WHITE} />
               <Text className="text-white font-bold ml-2">Schedule Job</Text>
             </Pressable>
           )}
@@ -844,7 +848,7 @@ export default function JobDetailScreen() {
                 onPress={handleStartJob}
                 className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
               >
-                <Play size={20} color="#FFF" />
+                <Play size={20} color={WHITE} />
                 <Text className="text-white font-bold ml-2">Start Job</Text>
               </Pressable>
 
@@ -879,7 +883,7 @@ export default function JobDetailScreen() {
               onPress={handleCompleteJob}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <Check size={20} color="#FFF" />
+              <Check size={20} color={WHITE} />
               <Text className="text-white font-bold ml-2">Mark Complete</Text>
             </Pressable>
           )}
@@ -889,7 +893,7 @@ export default function JobDetailScreen() {
               onPress={handleCreateInvoice}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <FileText size={20} color="#FFF" />
+              <FileText size={20} color={WHITE} />
               <Text className="text-white font-bold ml-2">Create Invoice</Text>
             </Pressable>
           )}
@@ -961,7 +965,7 @@ export default function JobDetailScreen() {
               onPress={confirmScheduleJob}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <Calendar size={18} color="#FFF" />
+              <Calendar size={18} color={WHITE} />
               <Text className="text-white font-bold ml-2">Confirm Schedule</Text>
             </Pressable>
 
@@ -984,7 +988,7 @@ export default function JobDetailScreen() {
           <Pressable onPress={() => {}} className="bg-[#1E293B] rounded-t-2xl border-t border-[#334155] p-4 pb-8">
             <View className="items-center mb-4">
               <View className="w-16 h-16 rounded-full bg-[#22C55E]/20 items-center justify-center mb-3">
-                <Check size={32} color="#22C55E" />
+                <Check size={32} color={GREEN} />
               </View>
               <Text className="text-white font-bold text-lg">Complete Job?</Text>
               <Text className="text-slate-400 text-sm mt-1">Review the summary before completing</Text>
@@ -1002,7 +1006,7 @@ export default function JobDetailScreen() {
               {job.scheduledDate && (
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-slate-500 text-sm">Scheduled</Text>
-                  <Text className="text-slate-300 text-sm">{formatDate(job.scheduledDate)}</Text>
+                  <Text className="text-slate-300 text-sm">{formatDateFull(job.scheduledDate)}</Text>
                 </View>
               )}
               {job.quote && (
@@ -1039,7 +1043,7 @@ export default function JobDetailScreen() {
               onPress={confirmCompleteJob}
               className="bg-[#22C55E] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <Check size={18} color="#FFF" />
+              <Check size={18} color={WHITE} />
               <Text className="text-white font-bold ml-2">Mark Complete</Text>
             </Pressable>
 

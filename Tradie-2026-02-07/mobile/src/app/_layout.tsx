@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import { DARK_BG, TURQUOISE, TEXT_PRIMARY } from '@/lib/theme';
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
@@ -22,7 +23,6 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-const DARK_BG = '#0F172A';
 
 const TradieDarkTheme = {
   ...DarkTheme,
@@ -30,7 +30,7 @@ const TradieDarkTheme = {
     ...DarkTheme.colors,
     background: DARK_BG,
     card: DARK_BG,
-    primary: '#14B8A6',
+    primary: TURQUOISE,
   },
 };
 
@@ -42,13 +42,13 @@ function RootLayoutNav() {
     // Register for push notifications
     registerForPushNotificationsAsync().then((token) => {
       if (token) {
-        console.log('[Notifications] Push token registered:', token);
+        if (__DEV__) console.log('[Notifications] Push token registered:', token);
       }
     });
 
     // Handle notification received while app is in foreground
     notificationListener.current = addNotificationReceivedListener((notification) => {
-      console.log('[Notifications] Received:', notification.request.content.title);
+      if (__DEV__) console.log('[Notifications] Received:', notification.request.content.title);
     });
 
     // Handle notification responses (when user taps notification)
@@ -64,12 +64,8 @@ function RootLayoutNav() {
     });
 
     return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,8 +92,9 @@ function RootLayoutNav() {
           options={{
             headerShown: true,
             headerTitle: 'Job Details',
+            headerBackTitle: 'Back',
             headerStyle: { backgroundColor: DARK_BG },
-            headerTintColor: '#F8FAFC',
+            headerTintColor: TEXT_PRIMARY,
             headerShadowVisible: false,
           }}
         />
@@ -134,6 +131,10 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
