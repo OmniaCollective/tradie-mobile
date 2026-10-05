@@ -9,6 +9,7 @@ import * as SMS from 'expo-sms';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Job, Customer, BusinessSettings } from './store';
+import { formatTime, formatDateFull } from './dates';
 
 const SENT_REMINDERS_KEY = 'tradie-sent-reminders';
 const QUOTE_FOLLOWUPS_KEY = 'tradie-quote-followups';
@@ -62,27 +63,6 @@ async function saveQuoteFollowups(followups: QuoteFollowup[]): Promise<void> {
   await AsyncStorage.setItem(QUOTE_FOLLOWUPS_KEY, JSON.stringify(followups));
 }
 
-/**
- * Format time for display (e.g., "10:00 AM")
- */
-function formatTime(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number);
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-}
-
-/**
- * Format date for display (e.g., "Monday, 15 January")
- */
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
 
 /**
  * Send SMS reminder to customer (opens SMS app with pre-filled message)
@@ -96,7 +76,7 @@ export async function sendCustomerReminder(
 ): Promise<boolean> {
   const isAvailable = await SMS.isAvailableAsync();
   if (!isAvailable) {
-    console.log('[Reminders] SMS not available');
+    if (__DEV__) console.log('[Reminders] SMS not available');
     return false;
   }
 
@@ -107,12 +87,12 @@ export async function sendCustomerReminder(
   );
 
   if (alreadySent) {
-    console.log('[Reminders] Reminder already sent for job:', job.id);
+    if (__DEV__) console.log('[Reminders] Reminder already sent for job:', job.id);
     return false;
   }
 
   const formattedTime = job.scheduledTime ? formatTime(job.scheduledTime) : 'your scheduled time';
-  const formattedDate = job.scheduledDate ? formatDate(job.scheduledDate) : 'your scheduled date';
+  const formattedDate = job.scheduledDate ? formatDateFull(job.scheduledDate) : 'your scheduled date';
 
   let message: string;
 
@@ -132,13 +112,13 @@ export async function sendCustomerReminder(
         { jobId: job.id, type: reminderType, sentAt: new Date().toISOString() },
       ];
       await saveSentReminders(updatedReminders);
-      console.log('[Reminders] Sent', reminderType, 'reminder for job:', job.id);
+      if (__DEV__) console.log('[Reminders] Sent', reminderType, 'reminder for job:', job.id);
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error('[Reminders] Error sending SMS:', error);
+    if (__DEV__) console.error('[Reminders] Error sending SMS:', error);
     return false;
   }
 }
@@ -154,7 +134,7 @@ export async function sendQuoteFollowup(
 ): Promise<boolean> {
   const isAvailable = await SMS.isAvailableAsync();
   if (!isAvailable) {
-    console.log('[Reminders] SMS not available');
+    if (__DEV__) console.log('[Reminders] SMS not available');
     return false;
   }
 
@@ -163,7 +143,7 @@ export async function sendQuoteFollowup(
   const alreadySent = followups.some((f) => f.jobId === job.id);
 
   if (alreadySent) {
-    console.log('[Reminders] Quote followup already sent for job:', job.id);
+    if (__DEV__) console.log('[Reminders] Quote followup already sent for job:', job.id);
     return false;
   }
 
@@ -181,13 +161,13 @@ export async function sendQuoteFollowup(
         { jobId: job.id, sentAt: new Date().toISOString() },
       ];
       await saveQuoteFollowups(updatedFollowups);
-      console.log('[Reminders] Sent quote followup for job:', job.id);
+      if (__DEV__) console.log('[Reminders] Sent quote followup for job:', job.id);
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error('[Reminders] Error sending quote followup:', error);
+    if (__DEV__) console.error('[Reminders] Error sending quote followup:', error);
     return false;
   }
 }
@@ -281,7 +261,7 @@ export async function scheduleReminderCheck(): Promise<void> {
     },
   });
 
-  console.log('[Reminders] Scheduled daily reminder check');
+  if (__DEV__) console.log('[Reminders] Scheduled daily reminder check');
 }
 
 /**
@@ -314,10 +294,10 @@ export async function scheduleQuoteExpiryNotification(
       },
     });
 
-    console.log('[Reminders] Scheduled quote expiry notification:', notificationId);
+    if (__DEV__) console.log('[Reminders] Scheduled quote expiry notification:', notificationId);
     return notificationId;
   } catch (error) {
-    console.error('[Reminders] Error scheduling quote expiry notification:', error);
+    if (__DEV__) console.error('[Reminders] Error scheduling quote expiry notification:', error);
     return null;
   }
 }

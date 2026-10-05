@@ -1,8 +1,8 @@
 <stack>
-  Expo SDK 53, React Native 0.76.7, bun (not npm).
+  Expo SDK 55, React Native 0.83.2, React 19.2, npm (not bun).
   React Query for server/async state.
   NativeWind + Tailwind v3 for styling.
-  react-native-reanimated v3 for animations (preferred over Animated from react-native).
+  react-native-reanimated v4 for animations (preferred over Animated from react-native).
   react-native-gesture-handler for gestures.
   lucide-react-native for icons.
   All packages are pre-installed. DO NOT install new packages unless they are @expo-google-font packages or pure JavaScript helpers like lodash, dayjs, etc.
@@ -97,7 +97,7 @@
     High-impact animations: progress bars, button feedback, haptics.
     Depth via gradients and patterns, not flat solids.
     Install `@expo-google-fonts/{font-name}` for fonts (eg: `@expo-google-fonts/inter`)
-    Use zeego for context menus and dropdowns (native feel). Lookup the documentation on zeego.dev to see how to use it.
+    Use @react-native-menu/menu for context menus and dropdowns (native feel).
   </do>
 </design>
 
@@ -129,6 +129,35 @@
     Your react-native-reanimated and react-native-gesture-handler training may be outdated. Look up current docs before implementing.
   </outdated_knowledge>
 </mistakes>
+
+<code_quality>
+  <architecture>
+    Do not avoid improvements just because they weren't explicitly asked for. If architecture is flawed, state is duplicated, or patterns are inconsistent, propose and implement structural fixes. Ask: "What would a senior, experienced, perfectionist dev reject in code review?" Fix all of it.
+  </architecture>
+
+  <completion_gate>
+    You are FORBIDDEN from reporting a task as complete until you have:
+    - Run `npx tsc --noEmit` and fixed ALL type errors
+    - Run `npx expo-doctor` and resolved any failures
+    - Run `npx eslint . --quiet` (if configured) and fixed ALL errors
+    A task is not done until these pass clean. No exceptions.
+  </completion_gate>
+
+  <file_edits>
+    Before EVERY file edit, re-read the file. After editing, read it again to confirm the change applied correctly and didn't break surrounding code.
+  </file_edits>
+
+  <search_thoroughness>
+    You have grep, not an AST. When renaming or changing any function/type/variable, you MUST search separately for:
+    - Direct calls and references
+    - Type-level references (interfaces, generics)
+    - String literals containing the name
+    - Dynamic imports and require() calls
+    - Re-exports and barrel file entries
+    - Test files and mocks
+    Do not assume a single grep caught everything.
+  </search_thoroughness>
+</code_quality>
 
 <appstore>
   App Store builds and submissions are managed via EAS CLI.

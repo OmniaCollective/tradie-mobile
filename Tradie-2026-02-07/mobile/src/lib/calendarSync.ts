@@ -9,6 +9,7 @@ import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Job, Customer } from './store';
+import { TURQUOISE } from './theme';
 
 const CALENDAR_NAME = 'TRADIE Jobs';
 const CALENDAR_ID_KEY = 'tradie-calendar-id';
@@ -61,13 +62,13 @@ async function getOrCreateCalendar(): Promise<string | null> {
         : { isLocalAccount: true, name: CALENDAR_NAME, type: Calendar.SourceType.LOCAL };
 
     if (!defaultCalendarSource) {
-      console.log('[Calendar] No calendar source available');
+      if (__DEV__) console.log('[Calendar] No calendar source available');
       return null;
     }
 
     const calendarId = await Calendar.createCalendarAsync({
       title: CALENDAR_NAME,
-      color: '#14B8A6', // Turquoise
+      color: TURQUOISE,
       entityType: Calendar.EntityTypes.EVENT,
       sourceId: defaultCalendarSource.id,
       source: defaultCalendarSource,
@@ -77,11 +78,11 @@ async function getOrCreateCalendar(): Promise<string | null> {
     });
 
     await AsyncStorage.setItem(CALENDAR_ID_KEY, calendarId);
-    console.log('[Calendar] Created TRADIE calendar:', calendarId);
+    if (__DEV__) console.log('[Calendar] Created TRADIE calendar:', calendarId);
 
     return calendarId;
   } catch (error) {
-    console.error('[Calendar] Error getting/creating calendar:', error);
+    if (__DEV__) console.error('[Calendar] Error getting/creating calendar:', error);
     return null;
   }
 }
@@ -143,7 +144,7 @@ export async function syncJobToCalendar(
 
   const hasPermission = await hasCalendarPermissions();
   if (!hasPermission) {
-    console.log('[Calendar] No permission to sync');
+    if (__DEV__) console.log('[Calendar] No permission to sync');
     return false;
   }
 
@@ -196,7 +197,7 @@ export async function syncJobToCalendar(
         ],
       });
       eventId = existingSync.eventId;
-      console.log('[Calendar] Updated event:', eventId);
+      if (__DEV__) console.log('[Calendar] Updated event:', eventId);
     } else {
       // Create new event
       eventId = await Calendar.createEventAsync(calendarId, {
@@ -210,7 +211,7 @@ export async function syncJobToCalendar(
           { relativeOffset: -15 }, // 15 minutes before
         ],
       });
-      console.log('[Calendar] Created event:', eventId);
+      if (__DEV__) console.log('[Calendar] Created event:', eventId);
 
       // Save mapping
       const updatedSyncedEvents = [
@@ -222,7 +223,7 @@ export async function syncJobToCalendar(
 
     return true;
   } catch (error) {
-    console.error('[Calendar] Error syncing job:', error);
+    if (__DEV__) console.error('[Calendar] Error syncing job:', error);
     return false;
   }
 }
@@ -245,10 +246,10 @@ export async function removeJobFromCalendar(jobId: string): Promise<boolean> {
     const updatedSyncedEvents = syncedEvents.filter((e) => e.jobId !== jobId);
     await saveSyncedEvents(updatedSyncedEvents);
 
-    console.log('[Calendar] Removed event for job:', jobId);
+    if (__DEV__) console.log('[Calendar] Removed event for job:', jobId);
     return true;
   } catch (error) {
-    console.error('[Calendar] Error removing job:', error);
+    if (__DEV__) console.error('[Calendar] Error removing job:', error);
     return false;
   }
 }

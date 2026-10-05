@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Plus } from 'lucide-react-native';
+import { TURQUOISE, CARD_BG, SLATE_200, WHITE } from '@/lib/theme';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -72,14 +73,14 @@ export function FAB({ onPress, label }: FABProps) {
         <Animated.View
           style={[
             {
-              backgroundColor: '#1E293B',
+              backgroundColor: CARD_BG,
               borderRadius: 12,
               paddingHorizontal: 14,
               paddingVertical: 8,
               marginRight: 12,
               borderWidth: 1,
-              borderColor: '#14B8A6',
-              shadowColor: '#14B8A6',
+              borderColor: TURQUOISE,
+              shadowColor: TURQUOISE,
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.25,
               shadowRadius: 6,
@@ -87,7 +88,7 @@ export function FAB({ onPress, label }: FABProps) {
             labelStyle,
           ]}
         >
-          <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '600' }}>
+          <Text style={{ color: SLATE_200, fontSize: 13, fontWeight: '600' }}>
             {label}
           </Text>
         </Animated.View>
@@ -105,10 +106,10 @@ export function FAB({ onPress, label }: FABProps) {
             width: 56,
             height: 56,
             borderRadius: 28,
-            backgroundColor: '#14B8A6',
+            backgroundColor: TURQUOISE,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#14B8A6',
+            shadowColor: TURQUOISE,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.4,
             shadowRadius: 8,
@@ -117,7 +118,7 @@ export function FAB({ onPress, label }: FABProps) {
           animatedStyle,
         ]}
       >
-        <Plus size={28} color="#FFF" />
+        <Plus size={28} color={WHITE} />
       </AnimatedPressable>
     </View>
   );

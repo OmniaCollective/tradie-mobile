@@ -50,8 +50,9 @@ import {
   calculateRolling12MonthTurnover,
   TaxEstimate,
 } from '@/lib/taxEstimator';
+import { formatDateWithYear } from '@/lib/dates';
+import { TURQUOISE, GREEN, AMBER, PURPLE, BORDER, SLATE_500, SLATE_600, RED, TEXT_PRIMARY, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 type ViewMode = 'income' | 'expenses';
 type FilterType = 'all' | 'pending' | 'sent' | 'paid';
@@ -136,7 +137,7 @@ export default function FinancesScreen() {
           }
         }
       } catch (error) {
-        console.error('Error checking payment status:', error);
+        if (__DEV__) console.error('Error checking payment status:', error);
       }
     }
   }, [invoices, getCustomer, updateInvoice]);
@@ -221,7 +222,7 @@ export default function FinancesScreen() {
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      console.error('Error sending invoice:', error);
+      if (__DEV__) console.error('Error sending invoice:', error);
       setModal({ title: 'Error', message: 'Failed to create payment link. Please check your internet connection and try again.', variant: 'error' });
     } finally {
       setLoadingInvoiceId(null);
@@ -254,7 +255,7 @@ export default function FinancesScreen() {
         setModal({ title: 'Payment Pending', message: 'This invoice has not been paid yet.', variant: 'warning' });
       }
     } catch (error) {
-      console.error('Error checking payment:', error);
+      if (__DEV__) console.error('Error checking payment:', error);
       setModal({ title: 'Connection Error', message: 'Could not reach the payment server. Check your internet connection and try again.', variant: 'error' });
     } finally {
       setLoadingInvoiceId(null);
@@ -269,7 +270,7 @@ export default function FinancesScreen() {
     if (settings.cisRegistered) {
       setCisModal({ invoiceId, total: invoice.quote.total });
       setCisToggle(false);
-      setCisAmount((invoice.quote.total * 0.2).toFixed(2)); // Default 20% CIS
+      setCisAmount((invoice.quote.total * (settings.cisRate / 100)).toFixed(2));
       return;
     }
 
@@ -314,7 +315,7 @@ export default function FinancesScreen() {
         );
       }
     } catch (error) {
-      console.error('CSV export error:', error);
+      if (__DEV__) console.error('CSV export error:', error);
       setModal({ title: 'Export Failed', message: 'Could not export. Please try again.', variant: 'error' });
     } finally {
       setExporting(false);
@@ -330,7 +331,7 @@ export default function FinancesScreen() {
     try {
       await exportInvoicePdf({ invoice, job, customer, settings });
     } catch (error) {
-      console.error('PDF export error:', error);
+      if (__DEV__) console.error('PDF export error:', error);
       setModal({ title: 'Export Failed', message: 'Could not generate PDF. Please try again.', variant: 'error' });
     } finally {
       setLoadingInvoiceId(null);
@@ -342,21 +343,13 @@ export default function FinancesScreen() {
     deleteExpense(id);
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
 
   const getStatusColor = (status: Invoice['status']) => {
     switch (status) {
-      case 'pending': return '#F59E0B';
-      case 'sent': return '#8B5CF6';
-      case 'paid': return '#22C55E';
-      default: return '#64748B';
+      case 'pending': return AMBER;
+      case 'sent': return PURPLE;
+      case 'paid': return GREEN;
+      default: return SLATE_500;
     }
   };
 
@@ -396,7 +389,7 @@ export default function FinancesScreen() {
         >
           <View className="flex-1 bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
             <View className="flex-row items-center mb-2">
-              <AlertCircle size={16} color="#F59E0B" />
+              <AlertCircle size={16} color={AMBER} />
               <Text className="text-slate-400 text-xs ml-2">Outstanding</Text>
             </View>
             <Text className="text-white font-bold text-2xl">
@@ -405,7 +398,7 @@ export default function FinancesScreen() {
           </View>
           <View className="flex-1 bg-[#1E293B] rounded-2xl border border-[#334155] p-4">
             <View className="flex-row items-center mb-2">
-              <CheckCircle size={16} color="#22C55E" />
+              <CheckCircle size={16} color={GREEN} />
               <Text className="text-slate-400 text-xs ml-2">Collected</Text>
             </View>
             <Text className="text-white font-bold text-2xl">
@@ -429,7 +422,7 @@ export default function FinancesScreen() {
                   onPress={() => router.push('/(tabs)/settings')}
                   className="p-1 active:opacity-70"
                 >
-                  <Settings size={14} color="#64748B" />
+                  <Settings size={14} color={SLATE_500} />
                 </Pressable>
               </View>
               <View className="flex-row items-end justify-between mb-3">
@@ -525,7 +518,7 @@ export default function FinancesScreen() {
                         onChangeText={setSetAsideAmount}
                         keyboardType="decimal-pad"
                         placeholder={taxEstimate.monthlySetAside.toFixed(0)}
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={SLATE_600}
                         autoFocus
                       />
                     </View>
@@ -582,7 +575,7 @@ export default function FinancesScreen() {
                   className="h-full rounded-full"
                   style={{
                     width: `${vatThresholdPercent}%`,
-                    backgroundColor: vatThresholdPercent >= 90 ? '#EF4444' : vatThresholdPercent >= 75 ? '#F59E0B' : TURQUOISE,
+                    backgroundColor: vatThresholdPercent >= 90 ? RED : vatThresholdPercent >= 75 ? AMBER : TURQUOISE,
                   }}
                 />
               </View>
@@ -653,7 +646,7 @@ export default function FinancesScreen() {
             {/* Invoice List */}
             {filteredInvoices.length === 0 ? (
               <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-8 items-center">
-                <FileText size={40} color="#64748B" />
+                <FileText size={40} color={SLATE_500} />
                 <Text className="text-slate-500 mt-3">No invoices found</Text>
               </View>
             ) : (
@@ -675,7 +668,7 @@ export default function FinancesScreen() {
                               {customer?.name || 'Unknown'}
                             </Text>
                             <Text className="text-slate-500 text-xs mt-1">
-                              {formatDate(invoice.createdAt)}
+                              {formatDateWithYear(invoice.createdAt)}
                             </Text>
                           </View>
                           <View
@@ -732,7 +725,7 @@ export default function FinancesScreen() {
                           </View>
                           {invoice.cisDeducted && invoice.cisDeductionAmount && (
                             <View className="flex-row justify-between mt-2 pt-2 border-t border-[#334155]">
-                              <Text className="text-slate-500 text-sm">CIS deduction (20%)</Text>
+                              <Text className="text-slate-500 text-sm">CIS deduction ({settings.cisRate}%)</Text>
                               <Text className="text-[#F59E0B] text-sm font-medium">
                                 −£{invoice.cisDeductionAmount.toFixed(2)}
                               </Text>
@@ -749,10 +742,10 @@ export default function FinancesScreen() {
                             style={{ opacity: isLoading ? 0.6 : 1 }}
                           >
                             {isLoading ? (
-                              <ActivityIndicator color="#FFF" size="small" />
+                              <ActivityIndicator color={WHITE} size="small" />
                             ) : (
                               <>
-                                <Send size={18} color="#FFF" />
+                                <Send size={18} color={WHITE} />
                                 <Text className="text-white font-bold ml-2">Send Invoice</Text>
                               </>
                             )}
@@ -769,10 +762,10 @@ export default function FinancesScreen() {
                                 style={{ opacity: isLoading ? 0.6 : 1 }}
                               >
                                 {isLoading ? (
-                                  <ActivityIndicator color="#F8FAFC" size="small" />
+                                  <ActivityIndicator color={TEXT_PRIMARY} size="small" />
                                 ) : (
                                   <>
-                                    <Send size={16} color="#F8FAFC" />
+                                    <Send size={16} color={TEXT_PRIMARY} />
                                     <Text className="text-white font-medium ml-2">Resend</Text>
                                   </>
                                 )}
@@ -783,7 +776,7 @@ export default function FinancesScreen() {
                                 className="flex-1 bg-[#8B5CF6] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
                                 style={{ opacity: isLoading ? 0.6 : 1 }}
                               >
-                                <RefreshCw size={16} color="#FFF" />
+                                <RefreshCw size={16} color={WHITE} />
                                 <Text className="text-white font-bold ml-2">Check</Text>
                               </Pressable>
                             </View>
@@ -801,9 +794,9 @@ export default function FinancesScreen() {
                           <View className="items-center py-2 gap-2">
                             {invoice.paidAt && (
                               <View className="flex-row items-center">
-                                <CheckCircle size={16} color="#22C55E" />
+                                <CheckCircle size={16} color={GREEN} />
                                 <Text className="text-slate-400 text-sm ml-2">
-                                  Paid on {formatDate(invoice.paidAt)}
+                                  Paid on {formatDateWithYear(invoice.paidAt)}
                                 </Text>
                               </View>
                             )}
@@ -846,7 +839,7 @@ export default function FinancesScreen() {
                   onPress={() => router.push('/add-expense')}
                   className="bg-[#14B8A6] rounded-xl px-4 py-2.5 flex-row items-center active:opacity-80"
                 >
-                  <Plus size={16} color="#FFF" />
+                  <Plus size={16} color={WHITE} />
                   <Text className="text-white font-semibold text-sm ml-1.5">Add Expense</Text>
                 </Pressable>
               </View>
@@ -854,7 +847,7 @@ export default function FinancesScreen() {
 
             {sortedExpenses.length === 0 ? (
               <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-8 items-center">
-                <Receipt size={40} color="#64748B" />
+                <Receipt size={40} color={SLATE_500} />
                 <Text className="text-slate-500 mt-3">No expenses recorded</Text>
                 <Text className="text-slate-600 text-xs mt-1">Tap "Add Expense" to start tracking</Text>
               </View>
@@ -871,7 +864,7 @@ export default function FinancesScreen() {
                           {expense.description}
                         </Text>
                         <Text className="text-slate-500 text-xs mt-1">
-                          {formatDate(expense.date)}
+                          {formatDateWithYear(expense.date)}
                         </Text>
                       </View>
                       <Text className="text-white font-bold text-lg">
@@ -901,7 +894,7 @@ export default function FinancesScreen() {
                         onPress={() => handleDeleteExpense(expense.id)}
                         className="p-2 active:opacity-50"
                       >
-                        <Trash2 size={16} color="#EF4444" />
+                        <Trash2 size={16} color={RED} />
                       </Pressable>
                     </View>
                   </View>
@@ -928,8 +921,8 @@ export default function FinancesScreen() {
                 <Switch
                   value={cisToggle}
                   onValueChange={setCisToggle}
-                  trackColor={{ false: '#334155', true: '#14B8A6' }}
-                  thumbColor="#FFF"
+                  trackColor={{ false: BORDER, true: TURQUOISE }}
+                  thumbColor={WHITE}
                 />
               </View>
               {cisToggle && (
@@ -957,7 +950,7 @@ export default function FinancesScreen() {
               onPress={() => confirmMarkPaid(cisModal.invoiceId, cisToggle, parseFloat(cisAmount) || 0)}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <CheckCircle size={18} color="#FFF" />
+              <CheckCircle size={18} color={WHITE} />
               <Text className="text-white font-bold ml-2">Confirm Payment</Text>
             </Pressable>
 

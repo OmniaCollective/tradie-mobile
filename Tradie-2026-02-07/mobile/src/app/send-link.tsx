@@ -18,8 +18,8 @@ import { useTradeStore } from '@/lib/store';
 import { useProAccess } from '@/lib/useProAccess';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { TURQUOISE, SLATE_500, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 export default function SendLinkScreen() {
   const router = useRouter();
@@ -102,7 +102,7 @@ export default function SendLinkScreen() {
         setTimeout(() => router.back(), 1500);
       }
     } catch (error) {
-      console.error('SMS Error:', error);
+      if (__DEV__) console.error('SMS Error:', error);
       setModal({ title: 'Error', message: 'Failed to send SMS. Please try again.', variant: 'error' });
     }
     setSending(false);
@@ -140,7 +140,7 @@ export default function SendLinkScreen() {
         setTimeout(() => router.back(), 1500);
       }
     } catch (error) {
-      console.error('Email Error:', error);
+      if (__DEV__) console.error('Email Error:', error);
       setModal({ title: 'Error', message: 'Failed to send email. Please try again.', variant: 'error' });
     }
     setSending(false);
@@ -175,7 +175,7 @@ export default function SendLinkScreen() {
         router.back();
       }, 1500);
     } catch (error) {
-      console.error('Error sharing:', error);
+      if (__DEV__) console.error('Error sharing:', error);
     }
   };
 
@@ -208,7 +208,7 @@ export default function SendLinkScreen() {
             onPress={() => router.back()}
             className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center"
           >
-            <X size={20} color="#F8FAFC" />
+            <X size={20} color={WHITE} />
           </Pressable>
           <Text className="text-white font-bold text-lg">Send Booking Invite</Text>
           <View className="w-10" />
@@ -228,7 +228,7 @@ export default function SendLinkScreen() {
               value={customerName}
               onChangeText={setCustomerName}
               placeholder="Enter customer's name"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={SLATE_500}
               autoFocus
             />
           </View>
@@ -280,7 +280,7 @@ export default function SendLinkScreen() {
             >
               <MessageCircle
                 size={24}
-                color={contactMethod === 'sms' ? TURQUOISE : '#64748B'}
+                color={contactMethod === 'sms' ? TURQUOISE : SLATE_500}
               />
               <Text
                 className={`mt-2 font-medium ${
@@ -300,7 +300,7 @@ export default function SendLinkScreen() {
             >
               <Mail
                 size={24}
-                color={contactMethod === 'email' ? TURQUOISE : '#64748B'}
+                color={contactMethod === 'email' ? TURQUOISE : SLATE_500}
               />
               <Text
                 className={`mt-2 font-medium ${
@@ -323,7 +323,7 @@ export default function SendLinkScreen() {
                 value={contactValue}
                 onChangeText={setContactValue}
                 placeholder={contactMethod === 'sms' ? '07700 000000' : 'customer@email.com'}
-                placeholderTextColor="#64748B"
+                placeholderTextColor={SLATE_500}
                 keyboardType={contactMethod === 'sms' ? 'phone-pad' : 'email-address'}
                 autoCapitalize="none"
               />
@@ -346,7 +346,7 @@ export default function SendLinkScreen() {
                   onPress={() => router.push('/paywall')}
                   className="ml-2 flex-row items-center"
                 >
-                  <Crown size={14} color="#14B8A6" />
+                  <Crown size={14} color={TURQUOISE} />
                   <Text className="text-[#14B8A6] text-sm ml-1">Upgrade</Text>
                 </Pressable>
               )}
@@ -362,7 +362,7 @@ export default function SendLinkScreen() {
                 : 'bg-[#334155]'
             }`}
           >
-            <Send size={20} color={customerName.trim() && !sending ? '#FFF' : '#64748B'} />
+            <Send size={20} color={customerName.trim() && !sending ? WHITE : SLATE_500} />
             <Text
               className={`font-bold text-base ml-2 ${
                 customerName.trim() && !sending ? 'text-white' : 'text-slate-500'

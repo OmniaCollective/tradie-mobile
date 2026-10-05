@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TURQUOISE } from './theme';
 
 const PUSH_TOKEN_KEY = 'tradie-push-token';
 
@@ -31,7 +32,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
   // Check if we're on a physical device
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
+    if (__DEV__) console.log('Push notifications require a physical device');
     return null;
   }
 
@@ -46,7 +47,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Push notification permission not granted');
+    if (__DEV__) console.log('Push notification permission not granted');
     return null;
   }
 
@@ -60,9 +61,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     // Store the token locally
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
 
-    console.log('Push token:', token);
+    if (__DEV__) console.log('Push token:', token);
   } catch (error) {
-    console.error('Error getting push token:', error);
+    if (__DEV__) console.error('Error getting push token:', error);
     return null;
   }
 
@@ -72,7 +73,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       name: 'New Bookings',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#14B8A6',
+      lightColor: TURQUOISE,
       sound: 'default',
     });
 
@@ -131,10 +132,10 @@ export async function scheduleJobReminder(
       },
     });
 
-    console.log('Scheduled reminder:', notificationId);
+    if (__DEV__) console.log('Scheduled reminder:', notificationId);
     return notificationId;
   } catch (error) {
-    console.error('Error scheduling notification:', error);
+    if (__DEV__) console.error('Error scheduling notification:', error);
     return null;
   }
 }

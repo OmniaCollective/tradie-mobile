@@ -40,7 +40,7 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       return JSON.parse(stored);
     }
   } catch (error) {
-    console.error('Error getting subscription status:', error);
+    if (__DEV__) console.error('Error getting subscription status:', error);
   }
   return defaultStatus;
 }

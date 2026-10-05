@@ -30,8 +30,8 @@ import { useTradeStore, JobType, Urgency } from '@/lib/store';
 import { sendNewBookingNotification } from '@/lib/notifications';
 import { FREE_TIER_LIMITS } from '@/lib/useProAccess';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { TURQUOISE, AMBER, RED, SLATE_500, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 type Step = 'issue' | 'details' | 'confirm' | 'success' | 'limit_reached';
 
@@ -46,19 +46,19 @@ const urgencyOptions: Array<{ value: Urgency; label: string; description: string
     value: 'standard',
     label: 'Standard',
     description: 'Within a few days',
-    icon: <Clock size={20} color="#64748B" />,
+    icon: <Clock size={20} color={SLATE_500} />,
   },
   {
     value: 'urgent',
     label: 'Urgent',
     description: 'Within 24 hours (+50%)',
-    icon: <Zap size={20} color="#F59E0B" />,
+    icon: <Zap size={20} color={AMBER} />,
   },
   {
     value: 'emergency',
     label: 'Emergency',
     description: 'ASAP - same day (+100%)',
-    icon: <AlertTriangle size={20} color="#EF4444" />,
+    icon: <AlertTriangle size={20} color={RED} />,
   },
 ];
 
@@ -186,7 +186,7 @@ export default function CustomerBookingScreen() {
                     </View>
                     {selectedJob === option.type && (
                       <View className="w-6 h-6 rounded-full bg-[#14B8A6] items-center justify-center">
-                        <Check size={14} color="#FFF" />
+                        <Check size={14} color={WHITE} />
                       </View>
                     )}
                   </Pressable>
@@ -231,7 +231,7 @@ export default function CustomerBookingScreen() {
                     value={description}
                     onChangeText={setDescription}
                     placeholder="Describe your issue in more detail..."
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={SLATE_500}
                     multiline
                     textAlignVertical="top"
                   />
@@ -256,7 +256,7 @@ export default function CustomerBookingScreen() {
                   className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
                 >
                   <Text className="text-white font-bold">Continue</Text>
-                  <ChevronRight size={20} color="#FFF" />
+                  <ChevronRight size={20} color={WHITE} />
                 </Pressable>
               </Animated.View>
             )}
@@ -283,14 +283,14 @@ export default function CustomerBookingScreen() {
                     <Text className="text-slate-400 text-sm mb-2">Full Name</Text>
                     <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155]">
                       <View className="pl-4">
-                        <User size={18} color="#64748B" />
+                        <User size={18} color={SLATE_500} />
                       </View>
                       <TextInput
                         className="flex-1 p-4 text-white"
                         value={name}
                         onChangeText={setName}
                         placeholder="John Smith"
-                        placeholderTextColor="#64748B"
+                        placeholderTextColor={SLATE_500}
                       />
                     </View>
                   </View>
@@ -299,14 +299,14 @@ export default function CustomerBookingScreen() {
                     <Text className="text-slate-400 text-sm mb-2">Phone Number</Text>
                     <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155]">
                       <View className="pl-4">
-                        <Phone size={18} color="#64748B" />
+                        <Phone size={18} color={SLATE_500} />
                       </View>
                       <TextInput
                         className="flex-1 p-4 text-white"
                         value={phone}
                         onChangeText={setPhone}
                         placeholder="07700 000000"
-                        placeholderTextColor="#64748B"
+                        placeholderTextColor={SLATE_500}
                         keyboardType="phone-pad"
                       />
                     </View>
@@ -316,14 +316,14 @@ export default function CustomerBookingScreen() {
                     <Text className="text-slate-400 text-sm mb-2">Email (optional)</Text>
                     <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155]">
                       <View className="pl-4">
-                        <Mail size={18} color="#64748B" />
+                        <Mail size={18} color={SLATE_500} />
                       </View>
                       <TextInput
                         className="flex-1 p-4 text-white"
                         value={email}
                         onChangeText={setEmail}
                         placeholder="you@example.com"
-                        placeholderTextColor="#64748B"
+                        placeholderTextColor={SLATE_500}
                         keyboardType="email-address"
                         autoCapitalize="none"
                       />
@@ -334,14 +334,14 @@ export default function CustomerBookingScreen() {
                     <Text className="text-slate-400 text-sm mb-2">Address</Text>
                     <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155]">
                       <View className="pl-4">
-                        <MapPin size={18} color="#64748B" />
+                        <MapPin size={18} color={SLATE_500} />
                       </View>
                       <TextInput
                         className="flex-1 p-4 text-white"
                         value={address}
                         onChangeText={setAddress}
                         placeholder="123 Main Street"
-                        placeholderTextColor="#64748B"
+                        placeholderTextColor={SLATE_500}
                       />
                     </View>
                   </View>
@@ -353,7 +353,7 @@ export default function CustomerBookingScreen() {
                       value={postcode}
                       onChangeText={(v) => setPostcode(v.toUpperCase())}
                       placeholder="SW1A 1AA"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={SLATE_500}
                       autoCapitalize="characters"
                     />
                   </View>
@@ -375,7 +375,7 @@ export default function CustomerBookingScreen() {
                   }`}>
                     Review Booking
                   </Text>
-                  <ChevronRight size={20} color={name && phone && address && postcode ? '#FFF' : '#64748B'} />
+                  <ChevronRight size={20} color={name && phone && address && postcode ? WHITE : SLATE_500} />
                 </Pressable>
               </View>
             </Animated.View>
@@ -404,9 +404,9 @@ export default function CustomerBookingScreen() {
                 {urgency !== 'standard' && (
                   <View className="flex-row items-center mt-2">
                     {urgency === 'urgent' ? (
-                      <Zap size={14} color="#F59E0B" />
+                      <Zap size={14} color={AMBER} />
                     ) : (
-                      <AlertTriangle size={14} color="#EF4444" />
+                      <AlertTriangle size={14} color={RED} />
                     )}
                     <Text className={`ml-1 text-sm font-medium ${
                       urgency === 'urgent' ? 'text-[#F59E0B]' : 'text-[#EF4444]'
@@ -477,7 +477,7 @@ export default function CustomerBookingScreen() {
                 onPress={handleConfirmBooking}
                 className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
               >
-                <Check size={20} color="#FFF" />
+                <Check size={20} color={WHITE} />
                 <Text className="text-white font-bold ml-2">Confirm Booking</Text>
               </Pressable>
               <Text className="text-slate-500 text-xs text-center mt-3">
@@ -522,7 +522,7 @@ export default function CustomerBookingScreen() {
             className="flex-1 items-center justify-center"
           >
             <View className="w-24 h-24 rounded-full bg-[#EF4444]/20 items-center justify-center mb-6">
-              <XCircle size={48} color="#EF4444" />
+              <XCircle size={48} color={RED} />
             </View>
             <Text className="text-white font-bold text-2xl mb-2">Unavailable</Text>
             <Text className="text-slate-400 text-center px-8 mb-8">
@@ -548,7 +548,7 @@ export default function CustomerBookingScreen() {
             onPress={() => router.back()}
             className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center"
           >
-            <XCircle size={20} color="#64748B" />
+            <XCircle size={20} color={SLATE_500} />
           </Pressable>
           <View className="items-center">
             <Text className="text-[#14B8A6] font-bold text-2xl">TRADIE</Text>
@@ -572,7 +572,7 @@ export default function CustomerBookingScreen() {
                   }`}
                 >
                   {['issue', 'details', 'confirm'].indexOf(step) > index ? (
-                    <Check size={16} color="#FFF" />
+                    <Check size={16} color={WHITE} />
                   ) : (
                     <Text className="text-white font-bold text-sm">{index + 1}</Text>
                   )}

@@ -33,8 +33,8 @@ import {
 } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { TURQUOISE, DARK_BG, YELLOW, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 const PRO_FEATURES = [
   {
@@ -98,7 +98,7 @@ export default function PaywallScreen() {
         lifetime: availablePackages.find(p => p.identifier === '$rc_lifetime') || null,
       });
     } else if (!result.ok) {
-      console.log('Failed to load offerings:', result);
+      if (__DEV__) console.log('Failed to load offerings:', result);
     }
     setLoading(false);
   };
@@ -111,7 +111,7 @@ export default function PaywallScreen() {
         : packages.lifetime;
 
     if (!pkg) {
-      console.log('[Paywall] No package found for plan:', selectedPlan, 'packages:', {
+      if (__DEV__) console.log('[Paywall] No package found for plan:', selectedPlan, 'packages:', {
         monthly: !!packages.monthly,
         yearly: !!packages.yearly,
         lifetime: !!packages.lifetime,
@@ -188,7 +188,7 @@ export default function PaywallScreen() {
           onPress={() => router.back()}
           className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 items-center justify-center"
         >
-          <X size={20} color="#FFF" />
+          <X size={20} color={WHITE} />
         </Pressable>
 
         <ScrollView
@@ -267,12 +267,12 @@ export default function PaywallScreen() {
                       : 'border-slate-500'
                   }`}
                 >
-                  {selectedPlan === 'lifetime' && <Check size={14} color="#0F172A" />}
+                  {selectedPlan === 'lifetime' && <Check size={14} color={DARK_BG} />}
                 </View>
                 <View className="flex-1">
                   <View className="flex-row items-center">
                     <Text className="text-white font-bold text-lg">Lifetime</Text>
-                    <Infinity size={16} color="#FCD34D" className="ml-2" />
+                    <Infinity size={16} color={YELLOW} className="ml-2" />
                   </View>
                   <Text className="text-slate-400 text-sm">
                     Pay once, own forever
@@ -310,7 +310,7 @@ export default function PaywallScreen() {
                       : 'border-slate-500'
                   }`}
                 >
-                  {selectedPlan === 'yearly' && <Check size={14} color="#FFF" />}
+                  {selectedPlan === 'yearly' && <Check size={14} color={WHITE} />}
                 </View>
                 <View className="flex-1">
                   <Text className="text-white font-bold text-lg">Yearly</Text>
@@ -345,7 +345,7 @@ export default function PaywallScreen() {
                       : 'border-slate-500'
                   }`}
                 >
-                  {selectedPlan === 'monthly' && <Check size={14} color="#FFF" />}
+                  {selectedPlan === 'monthly' && <Check size={14} color={WHITE} />}
                 </View>
                 <View className="flex-1">
                   <Text className="text-white font-bold text-lg">Monthly</Text>
@@ -378,10 +378,10 @@ export default function PaywallScreen() {
                 style={{ paddingVertical: 18, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
               >
                 {purchasing ? (
-                  <ActivityIndicator color={selectedPlan === 'lifetime' ? '#0F172A' : '#FFF'} />
+                  <ActivityIndicator color={selectedPlan === 'lifetime' ? DARK_BG : WHITE} />
                 ) : (
                   <>
-                    <Zap size={20} color={selectedPlan === 'lifetime' ? '#0F172A' : '#FFF'} fill={selectedPlan === 'lifetime' ? '#0F172A' : '#FFF'} />
+                    <Zap size={20} color={selectedPlan === 'lifetime' ? DARK_BG : WHITE} fill={selectedPlan === 'lifetime' ? DARK_BG : WHITE} />
                     <Text className={`font-bold text-lg ml-2 ${selectedPlan === 'lifetime' ? 'text-[#0F172A]' : 'text-white'}`}>
                       {selectedPlan === 'lifetime'
                         ? 'Get Lifetime Access'

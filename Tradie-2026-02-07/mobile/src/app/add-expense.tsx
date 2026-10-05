@@ -20,7 +20,7 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   useTradeStore,
@@ -29,8 +29,9 @@ import {
   EXPENSE_CATEGORY_LABELS,
 } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
+import { formatDateObjLong } from '@/lib/dates';
+import { TURQUOISE, SLATE_500, SLATE_600, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 const CATEGORIES: ExpenseCategory[] = [
   'tools_equipment',
@@ -173,13 +174,11 @@ export default function AddExpenseScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (error) {
-      console.error('Save expense error:', error);
+      if (__DEV__) console.error('Save expense error:', error);
       setSaving(false);
     }
   };
 
-  const formatDateStr = (d: Date) =>
-    d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <KeyboardAvoidingView
@@ -192,7 +191,7 @@ export default function AddExpenseScreen() {
           onPress={() => router.back()}
           className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center"
         >
-          <X size={20} color="#F8FAFC" />
+          <X size={20} color={WHITE} />
         </Pressable>
         <Text className="text-white font-bold text-lg">Add Expense</Text>
         <View className="w-10" />
@@ -210,7 +209,7 @@ export default function AddExpenseScreen() {
               <Text className={`flex-1 text-base ${category ? 'text-white font-semibold' : 'text-slate-500'}`}>
                 {category ? EXPENSE_CATEGORY_LABELS[category] : 'Select category'}
               </Text>
-              <ChevronDown size={18} color="#64748B" />
+              <ChevronDown size={18} color={SLATE_500} />
             </Pressable>
 
             {showCategoryPicker && (
@@ -249,7 +248,7 @@ export default function AddExpenseScreen() {
                       <TextInput
                         className="flex-1 text-white text-2xl font-bold"
                         placeholder="0"
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={SLATE_600}
                         value={miles}
                         onChangeText={setMiles}
                         keyboardType="numeric"
@@ -276,7 +275,7 @@ export default function AddExpenseScreen() {
                       <TextInput
                         className="flex-1 text-white text-2xl font-bold"
                         placeholder="0.00"
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={SLATE_600}
                         value={amount}
                         onChangeText={setAmount}
                         keyboardType="decimal-pad"
@@ -320,7 +319,7 @@ export default function AddExpenseScreen() {
                       <TextInput
                         className="flex-1 text-white text-base"
                         placeholder="0.00 (optional)"
-                        placeholderTextColor="#475569"
+                        placeholderTextColor={SLATE_600}
                         value={vatAmount}
                         onChangeText={setVatAmount}
                         keyboardType="decimal-pad"
@@ -350,7 +349,7 @@ export default function AddExpenseScreen() {
                 <TextInput
                   className="text-white text-base"
                   placeholder="What was this for? (optional)"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={SLATE_600}
                   value={description}
                   onChangeText={setDescription}
                   multiline
@@ -364,7 +363,7 @@ export default function AddExpenseScreen() {
                   onPress={() => setShowDatePicker(!showDatePicker)}
                   className="p-4"
                 >
-                  <Text className="text-white text-base">{formatDateStr(date)}</Text>
+                  <Text className="text-white text-base">{formatDateObjLong(date)}</Text>
                 </Pressable>
                 {showDatePicker && (
                   <View className="border-t border-[#334155]">
@@ -421,13 +420,13 @@ export default function AddExpenseScreen() {
                         onPress={() => { setSelectedJobId(null); setShowJobPicker(false); }}
                         className="p-1"
                       >
-                        <X size={16} color="#64748B" />
+                        <X size={16} color={SLATE_500} />
                       </Pressable>
                     </View>
                   ) : (
                     <>
                       <Text className="flex-1 text-slate-500 text-base">None (general expense)</Text>
-                      <ChevronDown size={18} color="#64748B" />
+                      <ChevronDown size={18} color={SLATE_500} />
                     </>
                   )}
                 </Pressable>
@@ -489,7 +488,7 @@ export default function AddExpenseScreen() {
                       onPress={handleTakePhoto}
                       className="flex-1 bg-[#0F172A] rounded-xl py-3 flex-row items-center justify-center active:opacity-80"
                     >
-                      <Camera size={18} color="#64748B" />
+                      <Camera size={18} color={SLATE_500} />
                       <Text className="text-slate-400 text-sm ml-2">Take Photo</Text>
                     </Pressable>
                     <Pressable
@@ -510,7 +509,7 @@ export default function AddExpenseScreen() {
                   canSave && !saving ? 'bg-[#14B8A6] active:opacity-80' : 'bg-[#334155]'
                 }`}
               >
-                <Check size={20} color={canSave ? '#FFF' : '#64748B'} />
+                <Check size={20} color={canSave ? WHITE : SLATE_500} />
                 <Text className={`font-bold text-base ml-2 ${canSave && !saving ? 'text-white' : 'text-slate-500'}`}>
                   {saving ? 'Saving...' : 'Save Expense'}
                 </Text>

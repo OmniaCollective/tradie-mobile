@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Mic, Square, X, Loader } from 'lucide-react-native';
 import Animated, {
@@ -12,11 +12,11 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { processVoiceNote, ExtractedJobData } from '@/lib/voiceJobExtractor';
 import { useTradeStore, usePricingPresets } from '@/lib/store';
+import { TURQUOISE, CARD_BG, BORDER, RED, TEXT_PRIMARY, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'error';
 
@@ -31,7 +31,7 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
   const [statusText, setStatusText] = useState('Tap the mic to start recording');
   const [errorMessage, setErrorMessage] = useState('');
   const [transcription, setTranscription] = useState('');
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const trade = useTradeStore((s) => s.settings.trade);
   const pricingPresets = usePricingPresets();
 
@@ -66,46 +66,43 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
 
   const startRecording = useCallback(async () => {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         setErrorMessage('Microphone permission is required');
         setState('error');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      await recorder.prepareToRecordAsync();
+      recorder.record();
 
-      recordingRef.current = recording;
       setState('recording');
       setStatusText('Listening... tap to stop');
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      if (__DEV__) console.error('Failed to start recording:', error);
       setErrorMessage('Failed to start recording');
       setState('error');
     }
-  }, []);
+  }, [recorder]);
 
   const stopRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
+    if (!recorder.isRecording) return;
 
     setState('processing');
     setStatusText('Transcribing...');
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
 
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      const uri = recorder.uri;
 
       if (!uri) {
         throw new Error('No recording URI');
@@ -126,13 +123,13 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
         onComplete(extracted);
       }, 800);
     } catch (error) {
-      console.error('Voice processing error:', error);
+      if (__DEV__) console.error('Voice processing error:', error);
       setErrorMessage(
         error instanceof Error ? error.message : 'Failed to process voice note'
       );
       setState('error');
     }
-  }, [trade, pricingPresets, onComplete]);
+  }, [recorder, trade, pricingPresets, onComplete]);
 
   const handleMicPress = useCallback(() => {
     if (state === 'idle' || state === 'error') {
@@ -146,11 +143,11 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      if (recorder.isRecording) {
+        recorder.stop().catch(() => {});
       }
     };
-  }, []);
+  }, [recorder]);
 
   if (!visible) return null;
 
@@ -179,12 +176,12 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
           width: 40,
           height: 40,
           borderRadius: 20,
-          backgroundColor: '#1E293B',
+          backgroundColor: CARD_BG,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <X size={20} color="#F8FAFC" />
+        <X size={20} color={TEXT_PRIMARY} />
       </Pressable>
 
       <Animated.View entering={FadeInDown.duration(400)} className="items-center px-8">
@@ -198,7 +195,7 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
                   width: 120,
                   height: 120,
                   borderRadius: 60,
-                  backgroundColor: '#EF4444',
+                  backgroundColor: RED,
                 },
                 pulseStyle,
               ]}
@@ -211,18 +208,18 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
               width: 80,
               height: 80,
               borderRadius: 40,
-              backgroundColor: state === 'recording' ? '#EF4444' : state === 'error' ? '#334155' : '#14B8A6',
+              backgroundColor: state === 'recording' ? RED : state === 'error' ? BORDER : TURQUOISE,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: state === 'processing' ? 0.5 : 1,
             }}
           >
             {state === 'recording' ? (
-              <Square size={32} color="#FFF" fill="#FFF" />
+              <Square size={32} color={WHITE} fill="#FFF" />
             ) : state === 'processing' ? (
-              <Loader size={32} color="#FFF" />
+              <Loader size={32} color={WHITE} />
             ) : (
-              <Mic size={32} color="#FFF" />
+              <Mic size={32} color={WHITE} />
             )}
           </Pressable>
         </View>

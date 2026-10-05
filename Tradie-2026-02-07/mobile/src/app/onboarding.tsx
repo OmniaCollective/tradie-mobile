@@ -39,8 +39,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTradeStore } from '@/lib/store';
 import { Trade, tradeConfigs } from '@/lib/trades';
+import { TURQUOISE, SLATE_400, SLATE_500, SLATE_600, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 // Top trades shown as prominent cards
 const topTrades: Array<{ key: Trade; icon: React.ComponentType<{ size: number; color: string }> }> = [
@@ -137,11 +137,11 @@ function StepName({
         </Text>
 
         <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3 mb-8">
-          <User size={20} color="#64748B" />
+          <User size={20} color={SLATE_500} />
           <TextInput
             className="flex-1 text-white text-lg ml-3"
             placeholder="Your first name"
-            placeholderTextColor="#475569"
+            placeholderTextColor={SLATE_600}
             value={name}
             onChangeText={onChangeName}
             autoFocus
@@ -178,7 +178,7 @@ function StepName({
             >
               Continue
             </Text>
-            <ArrowRight size={20} color={name.trim().length > 0 ? '#FFF' : '#64748B'} />
+            <ArrowRight size={20} color={name.trim().length > 0 ? WHITE : SLATE_500} />
           </LinearGradient>
         </Pressable>
       </Animated.View>
@@ -243,7 +243,7 @@ function StepTrade({
                       isSelected ? 'bg-[#14B8A6]/20' : 'bg-[#0F172A]'
                     }`}
                   >
-                    <Icon size={20} color={isSelected ? TURQUOISE : '#94A3B8'} />
+                    <Icon size={20} color={isSelected ? TURQUOISE : SLATE_400} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-white font-semibold text-base">
@@ -255,11 +255,11 @@ function StepTrade({
                   </View>
                   {isSelected ? (
                     <View className="w-7 h-7 rounded-full bg-[#14B8A6] items-center justify-center">
-                      <Check size={14} color="#FFF" />
+                      <Check size={14} color={WHITE} />
                     </View>
                   ) : (
                     <View className="w-7 h-7 rounded-full bg-[#0F172A] items-center justify-center">
-                      <ChevronRight size={14} color="#64748B" />
+                      <ChevronRight size={14} color={SLATE_500} />
                     </View>
                   )}
                 </View>
@@ -317,7 +317,7 @@ function StepTrade({
                         isSelected ? 'bg-[#14B8A6]/20' : 'bg-[#0F172A]'
                       }`}
                     >
-                      <Icon size={20} color={isSelected ? TURQUOISE : '#94A3B8'} />
+                      <Icon size={20} color={isSelected ? TURQUOISE : SLATE_400} />
                     </View>
                     <View className="flex-1">
                       <Text className="text-white font-semibold text-base">
@@ -329,11 +329,11 @@ function StepTrade({
                     </View>
                     {isSelected ? (
                       <View className="w-7 h-7 rounded-full bg-[#14B8A6] items-center justify-center">
-                        <Check size={14} color="#FFF" />
+                        <Check size={14} color={WHITE} />
                       </View>
                     ) : (
                       <View className="w-7 h-7 rounded-full bg-[#0F172A] items-center justify-center">
-                        <ChevronRight size={14} color="#64748B" />
+                        <ChevronRight size={14} color={SLATE_500} />
                       </View>
                     )}
                   </View>
@@ -412,11 +412,11 @@ function StepBusiness({
       <Animated.View entering={FadeInDown.delay(100).duration(400)} className="mb-4">
         <Text className="text-slate-400 text-sm font-medium mb-2">Business name</Text>
         <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <Building size={18} color="#64748B" />
+          <Building size={18} color={SLATE_500} />
           <TextInput
             className="flex-1 text-white text-base ml-3"
             placeholder="e.g. Paul's Plumbing"
-            placeholderTextColor="#475569"
+            placeholderTextColor={SLATE_600}
             value={businessName}
             onChangeText={onChangeBusinessName}
             autoCapitalize="words"
@@ -428,11 +428,11 @@ function StepBusiness({
       <Animated.View entering={FadeInDown.delay(200).duration(400)} className="mb-4">
         <Text className="text-slate-400 text-sm font-medium mb-2">Phone number</Text>
         <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <Phone size={18} color="#64748B" />
+          <Phone size={18} color={SLATE_500} />
           <TextInput
             className="flex-1 text-white text-base ml-3"
             placeholder="07xxx xxxxxx"
-            placeholderTextColor="#475569"
+            placeholderTextColor={SLATE_600}
             value={phone}
             onChangeText={onChangePhone}
             keyboardType="phone-pad"
@@ -444,11 +444,11 @@ function StepBusiness({
       <Animated.View entering={FadeInDown.delay(300).duration(400)} className="mb-8">
         <Text className="text-slate-400 text-sm font-medium mb-2">Hourly rate</Text>
         <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <PoundSterling size={18} color="#64748B" />
+          <PoundSterling size={18} color={SLATE_500} />
           <TextInput
             className="flex-1 text-white text-base ml-3"
             placeholder="60"
-            placeholderTextColor="#475569"
+            placeholderTextColor={SLATE_600}
             value={hourlyRate}
             onChangeText={onChangeHourlyRate}
             keyboardType="numeric"
@@ -475,7 +475,7 @@ function StepBusiness({
             <Text className="text-white font-bold text-lg mr-2">
               Let's go!
             </Text>
-            <ArrowRight size={20} color="#FFF" />
+            <ArrowRight size={20} color={WHITE} />
           </LinearGradient>
         </Pressable>
 

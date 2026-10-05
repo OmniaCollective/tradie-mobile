@@ -5,8 +5,8 @@ import { Crown, X, Zap, Users, Send } from 'lucide-react-native';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FREE_TIER_LIMITS } from '@/lib/useProAccess';
+import { TURQUOISE, SLATE_400, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 interface UpgradePromptProps {
   visible: boolean;
@@ -71,7 +71,7 @@ export function UpgradePrompt({ visible, onClose, feature, currentUsage }: Upgra
             onPress={onClose}
             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#334155] items-center justify-center"
           >
-            <X size={16} color="#94A3B8" />
+            <X size={16} color={SLATE_400} />
           </Pressable>
 
           <View className="px-6 pb-8 pt-4">
@@ -120,7 +120,7 @@ export function UpgradePrompt({ visible, onClose, feature, currentUsage }: Upgra
               onPress={handleUpgrade}
               className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
             >
-              <Crown size={20} color="#FFF" />
+              <Crown size={20} color={WHITE} />
               <Text className="text-white font-bold text-base ml-2">
                 Upgrade to Pro
               </Text>

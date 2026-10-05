@@ -24,9 +24,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTradeStore, useJobs, useTodos, useInvoices, useExpenses, useSettings } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
 import { calculateTaxEstimate } from '@/lib/taxEstimator';
+import { formatTime } from '@/lib/dates';
 import { FAB } from '@/components/FAB';
+import { TURQUOISE, GREEN, AMBER, PURPLE, SLATE_500, RED, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function DashboardScreen() {
   const { addTodo, toggleTodo, deleteTodo, updateJob, getCustomer } = useTradeStore();
 
   const [newTodoText, setNewTodoText] = useState('');
+  const [showAllTodos, setShowAllTodos] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -104,15 +106,6 @@ export default function DashboardScreen() {
     return customer ? `${customer.address}, ${customer.postcode}` : '';
   };
 
-  const formatTime = (time?: string) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-  };
-
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -165,7 +158,7 @@ export default function DashboardScreen() {
                       {getCustomerName(currentJob.customerId)}
                     </Text>
                     <View className="flex-row items-center mt-1">
-                      <MapPin size={12} color="#64748B" />
+                      <MapPin size={12} color={SLATE_500} />
                       <Text className="text-slate-500 text-xs ml-1">
                         {getCustomerAddress(currentJob.customerId)}
                       </Text>
@@ -186,7 +179,7 @@ export default function DashboardScreen() {
                   onPress={() => handleCompleteJob(currentJob.id)}
                   className="bg-[#14B8A6] rounded-xl p-3 mt-4 flex-row items-center justify-center active:opacity-80"
                 >
-                  <Check size={18} color="#FFF" />
+                  <Check size={18} color={WHITE} />
                   <Text className="text-white font-bold ml-2">Mark Complete</Text>
                 </Pressable>
               </View>
@@ -207,7 +200,7 @@ export default function DashboardScreen() {
 
           {upcomingJobs.length === 0 ? (
             <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-6 items-center">
-              <Calendar size={32} color="#64748B" />
+              <Calendar size={32} color={SLATE_500} />
               <Text className="text-slate-500 mt-2">No upcoming jobs scheduled</Text>
             </View>
           ) : (
@@ -231,13 +224,13 @@ export default function DashboardScreen() {
                       {getCustomerName(job.customerId)}
                     </Text>
                     <View className="flex-row items-center mt-1">
-                      <Clock size={12} color="#64748B" />
+                      <Clock size={12} color={SLATE_500} />
                       <Text className="text-slate-500 text-xs ml-1">
                         {formatDate(job.scheduledDate)} at {formatTime(job.scheduledTime)}
                       </Text>
                     </View>
                   </View>
-                  <ChevronRight size={20} color="#64748B" />
+                  <ChevronRight size={20} color={SLATE_500} />
                 </Pressable>
               ))}
             </View>
@@ -259,7 +252,7 @@ export default function DashboardScreen() {
 
           {pendingQuotes.length === 0 ? (
             <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-6 items-center">
-              <Check size={32} color="#22C55E" />
+              <Check size={32} color={GREEN} />
               <Text className="text-slate-500 mt-2">All quotes actioned</Text>
             </View>
           ) : (
@@ -273,7 +266,7 @@ export default function DashboardScreen() {
                   }`}
                 >
                   <View className="w-12 h-12 rounded-xl bg-[#8B5CF6]/20 items-center justify-center mr-3">
-                    <AlertCircle size={20} color="#8B5CF6" />
+                    <AlertCircle size={20} color={PURPLE} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-white font-semibold">
@@ -295,7 +288,7 @@ export default function DashboardScreen() {
                       )}
                     </View>
                   </View>
-                  <ChevronRight size={20} color="#64748B" />
+                  <ChevronRight size={20} color={SLATE_500} />
                 </Pressable>
               ))}
             </View>
@@ -314,7 +307,7 @@ export default function DashboardScreen() {
               <TextInput
                 className="flex-1 bg-[#0F172A] rounded-xl px-4 py-3 text-white mr-2"
                 placeholder="Add a note..."
-                placeholderTextColor="#64748B"
+                placeholderTextColor={SLATE_500}
                 value={newTodoText}
                 onChangeText={setNewTodoText}
                 onSubmitEditing={handleAddTodo}
@@ -325,7 +318,7 @@ export default function DashboardScreen() {
                 onPress={handleAddTodo}
                 className="w-12 h-12 rounded-xl bg-[#14B8A6] items-center justify-center active:opacity-80"
               >
-                <Plus size={20} color="#FFF" />
+                <Plus size={20} color={WHITE} />
               </Pressable>
             </View>
 
@@ -335,39 +328,51 @@ export default function DashboardScreen() {
                 <Text className="text-slate-500">No tasks yet</Text>
               </View>
             ) : (
-              todos.slice(0, 5).map((todo, index) => (
-                <View
-                  key={todo.id}
-                  className={`flex-row items-center p-4 ${
-                    index < Math.min(todos.length, 5) - 1 ? 'border-b border-[#334155]' : ''
-                  }`}
-                >
-                  <Pressable
-                    onPress={() => toggleTodo(todo.id)}
-                    className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
-                      todo.completed
-                        ? 'bg-[#14B8A6] border-[#14B8A6]'
-                        : 'border-[#64748B]'
+              <>
+                {(showAllTodos ? todos : todos.slice(0, 5)).map((todo, index, arr) => (
+                  <View
+                    key={todo.id}
+                    className={`flex-row items-center p-4 ${
+                      index < arr.length - 1 ? 'border-b border-[#334155]' : ''
                     }`}
                   >
-                    {todo.completed && <Check size={14} color="#FFF" />}
-                  </Pressable>
-                  <Text
-                    className={`flex-1 ${
-                      todo.completed ? 'text-slate-500 line-through' : 'text-white'
-                    }`}
-                  >
-                    {todo.text}
-                  </Text>
-                  {todo.isVoiceNote && <Mic size={16} color="#64748B" className="mr-2" />}
+                    <Pressable
+                      onPress={() => toggleTodo(todo.id)}
+                      className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                        todo.completed
+                          ? 'bg-[#14B8A6] border-[#14B8A6]'
+                          : 'border-[#64748B]'
+                      }`}
+                    >
+                      {todo.completed && <Check size={14} color={WHITE} />}
+                    </Pressable>
+                    <Text
+                      className={`flex-1 ${
+                        todo.completed ? 'text-slate-500 line-through' : 'text-white'
+                      }`}
+                    >
+                      {todo.text}
+                    </Text>
+                    {todo.isVoiceNote && <Mic size={16} color={SLATE_500} className="mr-2" />}
+                    <Pressable
+                      onPress={() => deleteTodo(todo.id)}
+                      className="p-2 active:opacity-50"
+                    >
+                      <Trash2 size={16} color={RED} />
+                    </Pressable>
+                  </View>
+                ))}
+                {todos.length > 5 && (
                   <Pressable
-                    onPress={() => deleteTodo(todo.id)}
-                    className="p-2 active:opacity-50"
+                    onPress={() => setShowAllTodos((v) => !v)}
+                    className="p-4 items-center border-t border-[#334155] active:opacity-70"
                   >
-                    <Trash2 size={16} color="#EF4444" />
+                    <Text className="text-[#14B8A6] text-sm font-medium">
+                      {showAllTodos ? 'Show less' : `Show ${todos.length - 5} more`}
+                    </Text>
                   </Pressable>
-                </View>
-              ))
+                )}
+              </>
             )}
           </View>
         </View>
@@ -381,12 +386,12 @@ export default function DashboardScreen() {
             >
               <View className="flex-row items-center mb-3">
                 <View className="w-10 h-10 rounded-full bg-[#F59E0B]/20 items-center justify-center mr-3">
-                  <PiggyBank size={20} color="#F59E0B" />
+                  <PiggyBank size={20} color={AMBER} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-slate-400 text-xs uppercase tracking-wide">Set Aside for Tax</Text>
                 </View>
-                <ChevronRight size={18} color="#64748B" />
+                <ChevronRight size={18} color={SLATE_500} />
               </View>
               <View className="flex-row items-end justify-between">
                 <View>

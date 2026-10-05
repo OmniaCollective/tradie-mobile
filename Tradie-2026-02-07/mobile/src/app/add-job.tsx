@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import {
   Check,
   User,
   Phone,
+  Mail,
   MapPin,
   Wrench,
   Clock,
@@ -39,20 +41,21 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import { formatDateObj, formatTimeObj } from '@/lib/dates';
 import { useTradeStore, useCustomers, usePricingPresets, JobType, Urgency, Customer } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
 import { processVoiceNote, ExtractedJobData } from '@/lib/voiceJobExtractor';
+import { TURQUOISE, AMBER, RED, SLATE_500, SLATE_600, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
 
 type ScreenMode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
 
 const urgencyOptions: Array<{ value: Urgency; label: string; color: string }> = [
-  { value: 'standard', label: 'Standard', color: '#64748B' },
-  { value: 'urgent', label: 'Urgent', color: '#F59E0B' },
-  { value: 'emergency', label: 'Emergency', color: '#EF4444' },
+  { value: 'standard', label: 'Standard', color: SLATE_500 },
+  { value: 'urgent', label: 'Urgent', color: AMBER },
+  { value: 'emergency', label: 'Emergency', color: RED },
 ];
 
 export default function AddJobScreen() {
@@ -66,10 +69,11 @@ export default function AddJobScreen() {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [transcription, setTranscription] = useState('');
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const trade = useTradeStore((s) => s.settings.trade);
 
   const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerPostcode, setCustomerPostcode] = useState('');
@@ -120,11 +124,11 @@ export default function AddJobScreen() {
 
   useEffect(() => {
     return () => {
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      if (recorder.isRecording) {
+        recorder.stop().catch(() => {});
       }
     };
-  }, []);
+  }, [recorder]);
 
   const quote = useMemo(() => {
     if (!selectedJobType) return null;
@@ -137,28 +141,27 @@ export default function AddJobScreen() {
   const startRecording = useCallback(async () => {
     try {
       setErrorMessage('');
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) { setErrorMessage('Microphone permission is required'); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setRecordingState('recording');
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      if (__DEV__) console.error('Failed to start recording:', error);
       setErrorMessage('Failed to start recording');
     }
-  }, []);
+  }, [recorder]);
 
   const stopRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
+    if (!recorder.isRecording) return;
     setRecordingState('processing');
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      const uri = recorder.uri;
       if (!uri) throw new Error('No recording URI');
       const { transcription: text, extracted } = await processVoiceNote(uri, trade, pricingPresets);
       setTranscription(text);
@@ -167,11 +170,11 @@ export default function AddJobScreen() {
       setMode('form');
       setRecordingState('idle');
     } catch (error) {
-      console.error('Voice processing error:', error);
+      if (__DEV__) console.error('Voice processing error:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Failed to process voice note');
       setRecordingState('idle');
     }
-  }, [trade, pricingPresets]);
+  }, [recorder, trade, pricingPresets]);
 
   const handleMicPress = useCallback(() => {
     if (recordingState === 'idle') startRecording();
@@ -184,6 +187,7 @@ export default function AddJobScreen() {
       if (match) {
         setMatchedCustomer(match);
         setCustomerName(match.name);
+        setCustomerEmail(match.email);
         setCustomerPhone(match.phone);
         setCustomerAddress(match.address);
         setCustomerPostcode(match.postcode);
@@ -221,8 +225,9 @@ export default function AddJobScreen() {
         customerId = matchedCustomer.id;
       } else {
         customerId = addCustomer({
-          name: customerName.trim(), phone: customerPhone.trim(), email: '',
-          address: customerAddress.trim(), postcode: customerPostcode.trim().toUpperCase(),
+          name: customerName.trim(), email: customerEmail.trim(),
+          phone: customerPhone.trim(), address: customerAddress.trim(),
+          postcode: customerPostcode.trim().toUpperCase(),
         });
       }
       const dateStr = hasDate && scheduledDate ? scheduledDate.toISOString().split('T')[0] : undefined;
@@ -241,24 +246,15 @@ export default function AddJobScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (error) {
-      console.error('Save error:', error);
+      if (__DEV__) console.error('Save error:', error);
       setSaving(false);
     }
   }, [
-    selectedJobType, customerName, customerPhone, customerAddress, customerPostcode,
+    selectedJobType, customerName, customerEmail, customerPhone, customerAddress, customerPostcode,
     matchedCustomer, addCustomer, addJob, hasDate, scheduledDate, scheduledTime,
     description, urgency, quote, router,
   ]);
 
-  const formatDateStr = (date: Date) =>
-    date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-
-  const formatTimeStr = (date: Date) => {
-    const h = date.getHours();
-    const m = date.getMinutes();
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
-  };
 
   // ── Voice Landing ────────────────────────────────────────────────
 
@@ -270,7 +266,7 @@ export default function AddJobScreen() {
             onPress={() => router.back()}
             className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center"
           >
-            <X size={20} color="#F8FAFC" />
+            <X size={20} color={WHITE} />
           </Pressable>
           <Text className="text-white font-bold text-lg">New Job</Text>
           <View className="w-10" />
@@ -286,7 +282,7 @@ export default function AddJobScreen() {
                   justifyContent: 'center', opacity: 0.6,
                 }}
               >
-                <Loader size={40} color="#FFF" />
+                <Loader size={40} color={WHITE} />
               </View>
               <Text className="text-white font-bold text-xl mt-6">Processing...</Text>
               <Text className="text-slate-400 text-center mt-2">
@@ -300,7 +296,7 @@ export default function AddJobScreen() {
                   <Animated.View
                     style={[{
                       position: 'absolute', width: 160, height: 160,
-                      borderRadius: 80, backgroundColor: '#EF4444',
+                      borderRadius: 80, backgroundColor: RED,
                     }, pulseStyle]}
                   />
                 )}
@@ -308,16 +304,16 @@ export default function AddJobScreen() {
                   onPress={handleMicPress}
                   style={{
                     width: 120, height: 120, borderRadius: 60,
-                    backgroundColor: recordingState === 'recording' ? '#EF4444' : TURQUOISE,
+                    backgroundColor: recordingState === 'recording' ? RED : TURQUOISE,
                     alignItems: 'center', justifyContent: 'center',
-                    shadowColor: recordingState === 'recording' ? '#EF4444' : TURQUOISE,
+                    shadowColor: recordingState === 'recording' ? RED : TURQUOISE,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.5, shadowRadius: 16, elevation: 10,
                   }}
                 >
                   {recordingState === 'recording'
-                    ? <Square size={40} color="#FFF" fill="#FFF" />
-                    : <Mic size={48} color="#FFF" />}
+                    ? <Square size={40} color={WHITE} fill={WHITE} />
+                    : <Mic size={48} color={WHITE} />}
                 </Pressable>
               </View>
 
@@ -342,7 +338,7 @@ export default function AddJobScreen() {
         {recordingState === 'idle' && (
           <Animated.View entering={FadeInDown.delay(200).duration(400)} className="pb-10 items-center">
             <Pressable onPress={() => setMode('form')} className="flex-row items-center py-3 px-6">
-              <Keyboard size={18} color="#64748B" />
+              <Keyboard size={18} color={SLATE_500} />
               <Text className="text-slate-500 text-base ml-2">Type instead</Text>
             </Pressable>
           </Animated.View>
@@ -366,7 +362,7 @@ export default function AddJobScreen() {
           }}
           className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center"
         >
-          <X size={20} color="#F8FAFC" />
+          <X size={20} color={WHITE} />
         </Pressable>
         <Text className="text-white font-bold text-lg">
           {transcription ? 'Review Job' : 'New Job'}
@@ -391,17 +387,18 @@ export default function AddJobScreen() {
           <Text className="text-slate-400 text-xs uppercase tracking-wide mb-2 mt-2">Customer</Text>
           <View className="bg-[#1E293B] rounded-xl border border-[#334155] p-4 mb-4">
             <View className="flex-row items-center mb-3">
-              <User size={16} color="#64748B" />
+              <User size={16} color={SLATE_500} />
               <TextInput
                 className="flex-1 text-white text-base ml-3"
                 placeholder="Customer name"
-                placeholderTextColor="#475569"
+                placeholderTextColor={SLATE_600}
                 value={customerName}
                 onChangeText={(text) => {
                   setCustomerName(text);
                   const match = customers.find((c) => c.name.toLowerCase() === text.toLowerCase());
                   if (match) {
                     setMatchedCustomer(match);
+                    setCustomerEmail(match.email);
                     setCustomerPhone(match.phone);
                     setCustomerAddress(match.address);
                     setCustomerPostcode(match.postcode);
@@ -412,23 +409,35 @@ export default function AddJobScreen() {
                 autoCapitalize="words"
               />
             </View>
+            <View className="flex-row items-center mb-3 border-t border-[#334155] pt-3">
+              <Mail size={16} color={SLATE_500} />
+              <TextInput
+                className="flex-1 text-white text-base ml-3"
+                placeholder="Email address (optional)"
+                placeholderTextColor={SLATE_600}
+                value={customerEmail}
+                onChangeText={setCustomerEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
             <View className="flex-row items-center mb-3">
-              <Phone size={16} color="#64748B" />
+              <Phone size={16} color={SLATE_500} />
               <TextInput
                 className="flex-1 text-white text-base ml-3"
                 placeholder="Phone number"
-                placeholderTextColor="#475569"
+                placeholderTextColor={SLATE_600}
                 value={customerPhone}
                 onChangeText={setCustomerPhone}
                 keyboardType="phone-pad"
               />
             </View>
             <View className="flex-row items-center mb-3">
-              <MapPin size={16} color="#64748B" />
+              <MapPin size={16} color={SLATE_500} />
               <TextInput
                 className="flex-1 text-white text-base ml-3"
                 placeholder="Address"
-                placeholderTextColor="#475569"
+                placeholderTextColor={SLATE_600}
                 value={customerAddress}
                 onChangeText={setCustomerAddress}
               />
@@ -436,7 +445,7 @@ export default function AddJobScreen() {
             <TextInput
               className="text-white text-base ml-7"
               placeholder="Postcode"
-              placeholderTextColor="#475569"
+              placeholderTextColor={SLATE_600}
               value={customerPostcode}
               onChangeText={(v) => setCustomerPostcode(v.toUpperCase())}
               autoCapitalize="characters"
@@ -452,11 +461,11 @@ export default function AddJobScreen() {
           <Text className="text-slate-400 text-xs uppercase tracking-wide mb-2">Job</Text>
           <View className="bg-[#1E293B] rounded-xl border border-[#334155] p-4 mb-4">
             <Pressable onPress={() => setShowJobTypePicker(!showJobTypePicker)} className="flex-row items-center">
-              <Wrench size={16} color={selectedJobType ? TURQUOISE : '#64748B'} />
+              <Wrench size={16} color={selectedJobType ? TURQUOISE : SLATE_500} />
               <Text className={`flex-1 text-base ml-3 ${selectedJobType ? 'text-white font-semibold' : 'text-slate-500'}`}>
                 {selectedJobType ? jobTypeLabel : 'Select job type'}
               </Text>
-              <ChevronDown size={18} color="#64748B" />
+              <ChevronDown size={18} color={SLATE_500} />
             </Pressable>
 
             {showJobTypePicker && (
@@ -487,7 +496,7 @@ export default function AddJobScreen() {
                 <TextInput
                   className="text-white text-sm"
                   placeholder="Job description (optional)"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={SLATE_600}
                   value={description}
                   onChangeText={setDescription}
                   multiline
@@ -531,14 +540,14 @@ export default function AddJobScreen() {
                 }}
                 className={`flex-1 rounded-lg p-3 items-center border ${hasDate ? 'border-[#14B8A6] bg-[#14B8A6]/10' : 'border-[#334155]'}`}
               >
-                <Calendar size={16} color={hasDate ? TURQUOISE : '#64748B'} />
+                <Calendar size={16} color={hasDate ? TURQUOISE : SLATE_500} />
                 <Text className={`text-xs mt-1 ${hasDate ? 'text-[#14B8A6] font-medium' : 'text-slate-500'}`}>Set Date</Text>
               </Pressable>
               <Pressable
                 onPress={() => { setHasDate(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                 className={`flex-1 rounded-lg p-3 items-center border ${!hasDate ? 'border-[#14B8A6] bg-[#14B8A6]/10' : 'border-[#334155]'}`}
               >
-                <Clock size={16} color={!hasDate ? TURQUOISE : '#64748B'} />
+                <Clock size={16} color={!hasDate ? TURQUOISE : SLATE_500} />
                 <Text className={`text-xs mt-1 ${!hasDate ? 'text-[#14B8A6] font-medium' : 'text-slate-500'}`}>Not Yet</Text>
               </Pressable>
             </View>
@@ -550,7 +559,7 @@ export default function AddJobScreen() {
                   className="flex-row items-center rounded-lg bg-[#0F172A] p-3 mb-2"
                 >
                   <Calendar size={16} color={TURQUOISE} />
-                  <Text className="text-white text-sm ml-2 flex-1">{formatDateStr(scheduledDate)}</Text>
+                  <Text className="text-white text-sm ml-2 flex-1">{formatDateObj(scheduledDate)}</Text>
                 </Pressable>
 
                 {showDatePicker && (
@@ -580,7 +589,7 @@ export default function AddJobScreen() {
                   className="flex-row items-center rounded-lg bg-[#0F172A] p-3"
                 >
                   <Clock size={16} color={TURQUOISE} />
-                  <Text className="text-white text-sm ml-2 flex-1">{formatTimeStr(scheduledTime)}</Text>
+                  <Text className="text-white text-sm ml-2 flex-1">{formatTimeObj(scheduledTime)}</Text>
                 </Pressable>
 
                 {showTimePicker && (
@@ -652,8 +661,8 @@ export default function AddJobScreen() {
             }`}
           >
             {saving
-              ? <Loader size={20} color={canSave ? '#FFF' : '#64748B'} />
-              : <Check size={20} color={canSave ? '#FFF' : '#64748B'} />}
+              ? <Loader size={20} color={canSave ? WHITE : SLATE_500} />
+              : <Check size={20} color={canSave ? WHITE : SLATE_500} />}
             <Text className={`font-bold text-base ml-2 ${canSave && !saving ? 'text-white' : 'text-slate-500'}`}>
               {saving ? 'Saving...' : 'Save Job'}
             </Text>

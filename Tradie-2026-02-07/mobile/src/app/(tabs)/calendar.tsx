@@ -18,10 +18,9 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTradeStore, useJobs, Job } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/trades';
 import { FAB } from '@/components/FAB';
+import { formatTime } from '@/lib/dates';
+import { TURQUOISE, GREEN, EMERALD, ORANGE, SLATE_500, TEXT_PRIMARY, WHITE } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
-const DARK_BG = '#0F172A';
-const CARD_BG = '#1E293B';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -127,14 +126,6 @@ export default function CalendarScreen() {
     }
   };
 
-  const formatTime = (time?: string) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-  };
 
   const isToday = (dateStr: string) => {
     return dateStr === today.toISOString().split('T')[0];
@@ -157,7 +148,7 @@ export default function CalendarScreen() {
             onPress={goToPrevMonth}
             className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center active:opacity-70"
           >
-            <ChevronLeft size={20} color="#F8FAFC" />
+            <ChevronLeft size={20} color={TEXT_PRIMARY} />
           </Pressable>
           <Text className="text-white font-bold text-lg">
             {MONTHS[currentMonth]} {currentYear}
@@ -166,7 +157,7 @@ export default function CalendarScreen() {
             onPress={goToNextMonth}
             className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center active:opacity-70"
           >
-            <ChevronRight size={20} color="#F8FAFC" />
+            <ChevronRight size={20} color={TEXT_PRIMARY} />
           </Pressable>
         </Animated.View>
 
@@ -196,7 +187,7 @@ export default function CalendarScreen() {
               const allCompleted = hasJobs && dateJobs.every((j) =>
                 j.status === 'COMPLETED' || j.status === 'INVOICED' || j.status === 'PAID'
               );
-              const dotColor = allCompleted ? '#22C55E' : '#14B8A6';
+              const dotColor = allCompleted ? GREEN : TURQUOISE;
 
               return (
                 <Pressable
@@ -267,10 +258,10 @@ export default function CalendarScreen() {
                 };
                 const banner = statusBannerConfig[job.status];
                 const statusTextColor: Record<string, string> = {
-                  IN_PROGRESS: '#14B8A6',
-                  COMPLETED: '#22C55E',
-                  INVOICED: '#F97316',
-                  PAID: '#10B981',
+                  IN_PROGRESS: TURQUOISE,
+                  COMPLETED: GREEN,
+                  INVOICED: ORANGE,
+                  PAID: EMERALD,
                 };
 
                 return (
@@ -292,7 +283,7 @@ export default function CalendarScreen() {
                     <View className="p-4">
                       <View className="flex-row items-start">
                         <View className="w-12 h-12 rounded-xl bg-[#0F172A] items-center justify-center mr-3">
-                          <Wrench size={20} color={isDone ? '#22C55E' : TURQUOISE} />
+                          <Wrench size={20} color={isDone ? GREEN : TURQUOISE} />
                         </View>
                         <View className="flex-1">
                           <View className="flex-row items-center justify-between">
@@ -300,7 +291,7 @@ export default function CalendarScreen() {
                               {getJobTypeLabel(settings.trade, job.type)}
                             </Text>
                             <View className="flex-row items-center">
-                              <Clock size={14} color="#64748B" />
+                              <Clock size={14} color={SLATE_500} />
                               <Text className="text-slate-400 text-sm ml-1">
                                 {formatTime(job.scheduledTime)}
                               </Text>
@@ -310,7 +301,7 @@ export default function CalendarScreen() {
                             {customer?.name || 'Unknown'}
                           </Text>
                           <View className="flex-row items-center mt-2">
-                            <MapPin size={14} color="#64748B" />
+                            <MapPin size={14} color={SLATE_500} />
                             <Text className="text-slate-500 text-xs ml-1">
                               {customer ? `${customer.address}, ${customer.postcode}` : ''}
                             </Text>
@@ -329,7 +320,7 @@ export default function CalendarScreen() {
                           onPress={() => handleStartJob(job.id)}
                           className="bg-[#14B8A6] rounded-xl p-3 mt-4 flex-row items-center justify-center active:opacity-80"
                         >
-                          <Play size={18} color="#FFF" />
+                          <Play size={18} color={WHITE} />
                           <Text className="text-white font-bold ml-2">Start Job</Text>
                         </Pressable>
                       )}

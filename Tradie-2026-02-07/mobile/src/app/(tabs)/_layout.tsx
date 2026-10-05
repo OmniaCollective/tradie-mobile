@@ -2,20 +2,18 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Home, Calendar, FileText, Settings } from 'lucide-react-native';
 import { View } from 'react-native';
+import { TURQUOISE, DARK_BG, BORDER, SLATE_500, TEXT_PRIMARY } from '@/lib/theme';
 
-const TURQUOISE = '#14B8A6';
-const DARK_BG = '#0F172A';
-const CARD_BG = '#1E293B';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: TURQUOISE,
-        tabBarInactiveTintColor: '#64748B',
+        tabBarInactiveTintColor: SLATE_500,
         tabBarStyle: {
           backgroundColor: DARK_BG,
-          borderTopColor: '#334155',
+          borderTopColor: BORDER,
           borderTopWidth: 1,
           height: 88,
           paddingBottom: 16,
@@ -29,7 +27,7 @@ export default function TabLayout() {
         headerStyle: {
           backgroundColor: DARK_BG,
         },
-        headerTintColor: '#F8FAFC',
+        headerTintColor: TEXT_PRIMARY,
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 18,

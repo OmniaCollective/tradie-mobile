@@ -1,6 +1,5 @@
+import { v4 as generateId } from 'uuid';
 import type { Job, Customer, Invoice, Expense, Quote, TodoItem } from './store';
-
-const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
 // Helper to get dates relative to today
 const daysFromNow = (days: number): string => {

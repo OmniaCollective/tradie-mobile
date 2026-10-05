@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { TURQUOISE, GREEN, RED, AMBER } from '@/lib/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -17,10 +18,10 @@ interface ConfirmModalProps {
 }
 
 const variantColors = {
-  default: '#14B8A6',
-  success: '#22C55E',
-  error: '#EF4444',
-  warning: '#F59E0B',
+  default: TURQUOISE,
+  success: GREEN,
+  error: RED,
+  warning: AMBER,
 };
 
 export function ConfirmModal({

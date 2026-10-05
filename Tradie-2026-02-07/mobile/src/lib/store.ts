@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { v4 as generateId } from 'uuid';
 import { Trade, getTradeConfig } from './trades';
+import { generateSampleData } from './sampleData';
 
 // Types
 export type JobStatus =
@@ -165,6 +167,7 @@ export interface BusinessSettings {
   onlyIncomeSource: boolean;
   otherAnnualIncome: number;
   cisRegistered: boolean;
+  cisRate: number; // percentage, e.g. 20 = 20%
   workingHours: {
     start: string;
     end: string;
@@ -220,6 +223,7 @@ const defaultSettings: BusinessSettings = {
   onlyIncomeSource: true,
   otherAnnualIncome: 0,
   cisRegistered: false,
+  cisRate: 20,
   workingHours: {
     start: '08:00',
     end: '18:00',
@@ -300,9 +304,6 @@ interface TradeStore {
   // Quote calculation
   calculateQuote: (jobType: JobType, urgency: Urgency, distanceMiles?: number, additionalMaterials?: number, explicitPartsTotal?: number) => Quote;
 }
-
-// Generate unique IDs
-const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
 export const useTradeStore = create<TradeStore>()(
   persist(
@@ -446,10 +447,10 @@ export const useTradeStore = create<TradeStore>()(
           customerId: job.customerId,
           quote: job.quote,
           status: 'pending',
-          // Auto-apply CIS deduction if CIS registered (default 20%)
+          // Auto-apply CIS deduction if CIS registered
           cisDeducted: settings.cisRegistered || undefined,
           cisDeductionAmount: settings.cisRegistered
-            ? Math.round(job.quote.total * 0.2 * 100) / 100
+            ? Math.round(job.quote.total * (settings.cisRate / 100) * 100) / 100
             : undefined,
           createdAt: new Date().toISOString(),
         };
@@ -596,7 +597,6 @@ export const useTradeStore = create<TradeStore>()(
 
       // Demo data actions
       loadSampleData: () => {
-        const { generateSampleData } = require('./sampleData');
         const data = generateSampleData();
         set({
           customers: data.customers,
@@ -672,7 +672,7 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persisted: any, version: number) => {
         if (version === 0) {
@@ -717,6 +717,12 @@ export const useTradeStore = create<TradeStore>()(
             if (persisted.settings.onlyIncomeSource === undefined) persisted.settings.onlyIncomeSource = true;
             if (persisted.settings.otherAnnualIncome === undefined) persisted.settings.otherAnnualIncome = 0;
             if (persisted.settings.cisRegistered === undefined) persisted.settings.cisRegistered = false;
+          }
+        }
+        if (version < 5) {
+          // Add configurable CIS deduction rate
+          if (persisted.settings && persisted.settings.cisRate === undefined) {
+            persisted.settings.cisRate = 20;
           }
         }
         if (version < 2) {
