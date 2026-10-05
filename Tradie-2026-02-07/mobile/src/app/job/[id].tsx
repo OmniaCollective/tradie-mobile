@@ -78,6 +78,8 @@ const statusColors: Record<JobStatus, string> = {
   PAID: EMERALD,
 };
 
+const makePhotoFileName = () => `photo_${Date.now()}.jpg`;
+
 export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -128,7 +130,7 @@ export default function JobDetailScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       // Copy to document directory for persistence
-      const fileName = `photo_${Date.now()}.jpg`;
+      const fileName = makePhotoFileName();
       const destDir = `${FileSystem.documentDirectory}job-photos/`;
       await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
       const destUri = `${destDir}${fileName}`;

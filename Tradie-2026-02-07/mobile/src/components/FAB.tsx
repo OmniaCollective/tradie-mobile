@@ -27,7 +27,7 @@ export function FAB({ onPress, label }: FABProps) {
   useEffect(() => {
     if (label) {
       // Fade in, then gently pulse
-      labelOpacity.value = withDelay(
+      labelOpacity.set(withDelay(
         600,
         withSequence(
           withTiming(1, { duration: 400, easing: Easing.out(Easing.quad) }),
@@ -42,9 +42,9 @@ export function FAB({ onPress, label }: FABProps) {
             ),
           ),
         ),
-      );
+      ));
     } else {
-      labelOpacity.value = withTiming(0, { duration: 300 });
+      labelOpacity.set(withTiming(0, { duration: 300 }));
     }
   }, [label, labelOpacity]);
 
@@ -96,10 +96,10 @@ export function FAB({ onPress, label }: FABProps) {
       <AnimatedPressable
         onPress={onPress}
         onPressIn={() => {
-          scale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
+          scale.set(withSpring(0.9, { damping: 15, stiffness: 400 }));
         }}
         onPressOut={() => {
-          scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+          scale.set(withSpring(1, { damping: 15, stiffness: 400 }));
         }}
         style={[
           {

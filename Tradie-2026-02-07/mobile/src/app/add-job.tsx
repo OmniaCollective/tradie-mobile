@@ -48,7 +48,6 @@ import { getJobTypeLabel } from '@/lib/trades';
 import { processVoiceNote, ExtractedJobData } from '@/lib/voiceJobExtractor';
 import { TURQUOISE, AMBER, RED, SLATE_500, SLATE_600, WHITE } from '@/lib/theme';
 
-
 type ScreenMode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
 
@@ -106,19 +105,19 @@ export default function AddJobScreen() {
 
   useEffect(() => {
     if (recordingState === 'recording') {
-      pulseScale.value = withRepeat(
+      pulseScale.set(withRepeat(
         withTiming(1.8, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
         -1, true
-      );
-      pulseOpacity.value = withRepeat(
+      ));
+      pulseOpacity.set(withRepeat(
         withTiming(0, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
         -1, true
-      );
+      ));
     } else {
       cancelAnimation(pulseScale);
       cancelAnimation(pulseOpacity);
-      pulseScale.value = 1;
-      pulseOpacity.value = 0.3;
+      pulseScale.set(1);
+      pulseOpacity.set(0.3);
     }
   }, [recordingState, pulseScale, pulseOpacity]);
 
@@ -154,33 +153,6 @@ export default function AddJobScreen() {
     }
   }, [recorder]);
 
-  const stopRecording = useCallback(async () => {
-    if (!recorder.isRecording) return;
-    setRecordingState('processing');
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
-      const uri = recorder.uri;
-      if (!uri) throw new Error('No recording URI');
-      const { transcription: text, extracted } = await processVoiceNote(uri, trade, pricingPresets);
-      setTranscription(text);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      fillFromExtracted(extracted);
-      setMode('form');
-      setRecordingState('idle');
-    } catch (error) {
-      if (__DEV__) console.error('Voice processing error:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to process voice note');
-      setRecordingState('idle');
-    }
-  }, [recorder, trade, pricingPresets]);
-
-  const handleMicPress = useCallback(() => {
-    if (recordingState === 'idle') startRecording();
-    else if (recordingState === 'recording') stopRecording();
-  }, [recordingState, startRecording, stopRecording]);
-
   const fillFromExtracted = useCallback((data: ExtractedJobData) => {
     if (data.customerName) {
       const match = customers.find((c) => c.name.toLowerCase() === data.customerName!.toLowerCase());
@@ -215,6 +187,33 @@ export default function AddJobScreen() {
       setUrgency(data.urgency as Urgency);
     }
   }, [customers, pricingPresets]);
+
+  const stopRecording = useCallback(async () => {
+    if (!recorder.isRecording) return;
+    setRecordingState('processing');
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      const uri = recorder.uri;
+      if (!uri) throw new Error('No recording URI');
+      const { transcription: text, extracted } = await processVoiceNote(uri, trade, pricingPresets);
+      setTranscription(text);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      fillFromExtracted(extracted);
+      setMode('form');
+      setRecordingState('idle');
+    } catch (error) {
+      if (__DEV__) console.error('Voice processing error:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to process voice note');
+      setRecordingState('idle');
+    }
+  }, [recorder, trade, pricingPresets, fillFromExtracted]);
+
+  const handleMicPress = useCallback(() => {
+    if (recordingState === 'idle') startRecording();
+    else if (recordingState === 'recording') stopRecording();
+  }, [recordingState, startRecording, stopRecording]);
 
   const handleSave = useCallback(async () => {
     if (!selectedJobType || !customerName.trim() || !customerPhone.trim()) return;
@@ -254,7 +253,6 @@ export default function AddJobScreen() {
     matchedCustomer, addCustomer, addJob, hasDate, scheduledDate, scheduledTime,
     description, urgency, quote, router,
   ]);
-
 
   // ── Voice Landing ────────────────────────────────────────────────
 

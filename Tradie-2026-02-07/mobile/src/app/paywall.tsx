@@ -61,18 +61,7 @@ export default function PaywallScreen() {
     lifetime: PurchasesPackage | null;
   }>({ monthly: null, yearly: null, lifetime: null });
 
-  useEffect(() => {
-    loadOfferings();
-  }, []);
-
-  const loadOfferings = async () => {
-    if (!isRevenueCatEnabled()) {
-      setLoading(false);
-      setModal({ title: 'Subscriptions Unavailable', message: 'In-app purchases are not available right now. Please try again later.', variant: 'error', onDismissAction: () => router.back() });
-      return;
-    }
-
-    const result = await getOfferings();
+  const handleOfferings = (result: Awaited<ReturnType<typeof getOfferings>>) => {
     if (result.ok && result.data.current) {
       const availablePackages = result.data.current.availablePackages;
       setPackages({
@@ -80,11 +69,17 @@ export default function PaywallScreen() {
         yearly: availablePackages.find(p => p.identifier === '$rc_annual') || null,
         lifetime: availablePackages.find(p => p.identifier === '$rc_lifetime') || null,
       });
+    } else if (!result.ok && result.reason === 'not_configured') {
+      setModal({ title: 'Subscriptions Unavailable', message: 'In-app purchases are not available right now. Please try again later.', variant: 'error', onDismissAction: () => router.back() });
     } else if (!result.ok) {
       if (__DEV__) console.log('Failed to load offerings:', result);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    getOfferings().then(handleOfferings);
+  }, []);
 
   const handlePurchase = async () => {
     const pkg = selectedPlan === 'monthly'

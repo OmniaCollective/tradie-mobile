@@ -46,21 +46,21 @@ export function VoiceRecorder({ visible, onClose, onComplete }: VoiceRecorderPro
 
   useEffect(() => {
     if (state === 'recording') {
-      pulseScale.value = withRepeat(
+      pulseScale.set(withRepeat(
         withTiming(1.5, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
         -1,
         true
-      );
-      pulseOpacity.value = withRepeat(
+      ));
+      pulseOpacity.set(withRepeat(
         withTiming(0, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
         -1,
         true
-      );
+      ));
     } else {
       cancelAnimation(pulseScale);
       cancelAnimation(pulseOpacity);
-      pulseScale.value = 1;
-      pulseOpacity.value = 0.3;
+      pulseScale.set(1);
+      pulseOpacity.set(0.3);
     }
   }, [state, pulseScale, pulseOpacity]);
 

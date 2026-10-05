@@ -81,14 +81,7 @@ export default function SettingsScreen() {
     return `user_${settings.businessName.replace(/\s/g, '_')}_${settings.phone.replace(/\s/g, '')}` || 'default_user';
   };
 
-  useEffect(() => {
-    checkProStatus();
-    checkCalendarPermissions();
-    if (ONLINE_PAYMENTS_ENABLED) checkPaymentSetup();
-  }, []);
-
   const checkPaymentSetup = async () => {
-    setCheckingPayment(true);
     try {
       const userId = getUserId();
       const result = await connectApi.getStatus(userId);
@@ -112,18 +105,22 @@ export default function SettingsScreen() {
     }
   };
 
-  const checkProStatus = async () => {
-    if (!isRevenueCatEnabled()) return;
-    const result = await hasEntitlement('pro');
-    if (result.ok) {
-      setIsPro(result.data);
-    }
+  const retryPaymentSetup = () => {
+    setCheckingPayment(true);
+    checkPaymentSetup();
   };
 
-  const checkCalendarPermissions = async () => {
-    const hasPermission = await hasCalendarPermissions();
-    setCalendarEnabled(hasPermission);
-  };
+  useEffect(() => {
+    if (isRevenueCatEnabled()) {
+      hasEntitlement('pro').then((result) => {
+        if (result.ok) setIsPro(result.data);
+      });
+    }
+    hasCalendarPermissions().then(setCalendarEnabled);
+    if (ONLINE_PAYMENTS_ENABLED) {
+      Promise.resolve().then(checkPaymentSetup);
+    }
+  }, []);
 
   const handleCalendarToggle = async (value: boolean) => {
     if (value) {
@@ -332,7 +329,7 @@ export default function SettingsScreen() {
                     )}
                   </Pressable>
                   <Pressable
-                    onPress={checkPaymentSetup}
+                    onPress={retryPaymentSetup}
                     className="mt-2 p-2"
                   >
                     <Text className="text-slate-400 text-sm text-center">Tap to refresh status</Text>
@@ -353,7 +350,7 @@ export default function SettingsScreen() {
                     You can still send invoices manually. Online payments require a backend server to be configured.
                   </Text>
                   <Pressable
-                    onPress={checkPaymentSetup}
+                    onPress={retryPaymentSetup}
                     className="bg-[#334155] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
                   >
                     <Text className="text-slate-300 font-medium">Retry</Text>
