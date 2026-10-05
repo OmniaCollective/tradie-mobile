@@ -37,8 +37,8 @@ import { TURQUOISE, DARK_BG, YELLOW, WHITE } from '@/lib/theme';
 const PRO_FEATURES = [
   {
     icon: Send,
-    title: 'Unlimited Booking Messages',
-    description: 'No monthly cap on messages to customers',
+    title: 'Unlimited Booking Invites',
+    description: 'No monthly cap on invites to customers',
   },
   {
     icon: Users,

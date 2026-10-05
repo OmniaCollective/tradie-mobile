@@ -239,7 +239,7 @@ export default function SettingsScreen() {
                       <Text className="text-white font-bold text-lg">Upgrade to Pro</Text>
                     </View>
                     <Text className="text-white/80 text-sm">
-                      Unlimited customers & booking messages
+                      Unlimited customers & booking invites
                     </Text>
                   </View>
                   <ChevronRight size={20} color={WHITE} />

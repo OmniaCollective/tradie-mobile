@@ -39,7 +39,7 @@ export default function SendLinkScreen() {
   const contactPhone = settings.phone || '';
   const contactEmail = settings.email || '';
 
-  // Build a plain-text booking message with the tradesperson's contact details
+  // Build a plain-text booking invite with the tradesperson's contact details
   const buildSmsMessage = () => {
     const lines = [
       `Hi ${customerName},`,

@@ -2,7 +2,7 @@
  * Pro Access Hook
  *
  * Provides centralized access control for Pro features with usage limits.
- * Free tier limits: 15 booking links/month, 20 customers total
+ * Free tier limits: 15 booking invites/month, 20 customers total
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -99,7 +99,7 @@ export function useFeatureGate(feature: 'bookingLinks' | 'customers'): {
         isLoading: false,
         reason: canSendBookingLink
           ? undefined
-          : `You've used all ${FREE_TIER_LIMITS.bookingLinksPerMonth} booking messages this month`,
+          : `You've used all ${FREE_TIER_LIMITS.bookingLinksPerMonth} booking invites this month`,
       };
     case 'customers':
       return {

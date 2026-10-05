@@ -29,9 +29,9 @@ export function UpgradePrompt({ visible, onClose, feature, currentUsage }: Upgra
       case 'bookingLinks':
         return {
           icon: <Send size={32} color={TURQUOISE} />,
-          title: 'Booking Message Limit Reached',
-          description: `You've sent ${currentUsage ?? FREE_TIER_LIMITS.bookingLinksPerMonth} of ${FREE_TIER_LIMITS.bookingLinksPerMonth} free booking messages this month.`,
-          benefit: 'Upgrade to Pro for unlimited booking messages',
+          title: 'Booking Invite Limit Reached',
+          description: `You've sent ${currentUsage ?? FREE_TIER_LIMITS.bookingLinksPerMonth} of ${FREE_TIER_LIMITS.bookingLinksPerMonth} free booking invites this month.`,
+          benefit: 'Upgrade to Pro for unlimited booking invites',
         };
       case 'customers':
         return {
@@ -104,7 +104,7 @@ export function UpgradePrompt({ visible, onClose, feature, currentUsage }: Upgra
                 Pro includes
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {['Unlimited booking messages', 'Unlimited customers'].map((feature) => (
+                {['Unlimited booking invites', 'Unlimited customers'].map((feature) => (
                   <View
                     key={feature}
                     className="bg-[#334155] rounded-full px-3 py-1.5"
