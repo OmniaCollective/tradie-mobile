@@ -291,6 +291,10 @@ interface TradeStore {
   updatePricingPreset: (type: JobType, updates: Partial<PricingPreset>) => void;
   setTrade: (trade: Trade) => void;
 
+  // Onboarding
+  hasCompletedOnboarding: boolean;
+  completeOnboarding: () => void;
+
   // Usage tracking actions
   incrementBookingLinksSent: () => void;
 
@@ -316,6 +320,7 @@ export const useTradeStore = create<TradeStore>()(
       todos: [],
       settings: defaultSettings,
       pricingPresets: defaultPricingPresets,
+      hasCompletedOnboarding: false,
 
       // Usage tracking
       bookingLinksSentThisMonth: 0,
@@ -545,6 +550,8 @@ export const useTradeStore = create<TradeStore>()(
         }));
       },
 
+      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+
       setTrade: (trade: Trade) => {
         const tradeConfig = getTradeConfig(trade);
         set((state) => ({
@@ -672,7 +679,7 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persisted: any, version: number) => {
         if (version === 0) {
@@ -724,6 +731,10 @@ export const useTradeStore = create<TradeStore>()(
           if (persisted.settings && persisted.settings.cisRate === undefined) {
             persisted.settings.cisRate = 20;
           }
+        }
+        if (version < 6) {
+          // Anyone with saved data from an earlier version has already set up the app
+          persisted.hasCompletedOnboarding = true;
         }
         if (version < 2) {
           // Clear sample data for clean new-user experience

@@ -14,10 +14,6 @@ import {
   addNotificationReceivedListener,
 } from '@/lib/notifications';
 
-export const unstable_settings = {
-  initialRouteName: 'onboarding',
-};
-
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 

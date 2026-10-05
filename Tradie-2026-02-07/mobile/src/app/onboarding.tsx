@@ -492,7 +492,7 @@ function StepBusiness({
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { setTrade, updateSettings } = useTradeStore();
+  const { setTrade, updateSettings, completeOnboarding } = useTradeStore();
   const [step, setStep] = useState(0);
   const [navigating, setNavigating] = useState(false);
 
@@ -552,10 +552,11 @@ export default function OnboardingScreen() {
       }
 
       updateSettings(updates);
+      completeOnboarding();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     },
-    [navigating, ownerName, businessName, phone, hourlyRate, updateSettings, router]
+    [navigating, ownerName, businessName, phone, hourlyRate, updateSettings, completeOnboarding, router]
   );
 
   return (
