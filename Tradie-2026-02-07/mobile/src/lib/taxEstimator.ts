@@ -1,9 +1,12 @@
 import { Invoice, Expense, BusinessSettings } from './store';
 
-// UK 2024/25 tax bands (apply to 2025/26 until updated)
+// UK income tax (England/Wales/NI). Bands frozen from 2021/22 through 2026/27.
 const BASIC_RATE = 0.20;
 const HIGHER_RATE = 0.40;
-const BASIC_RATE_THRESHOLD = 50270;
+const ADDITIONAL_RATE = 0.45;
+const BASIC_RATE_BAND = 37700; // taxable income taxed at 20%
+const ADDITIONAL_RATE_THRESHOLD = 125140; // taxable income above this taxed at 45%
+const ALLOWANCE_TAPER_THRESHOLD = 100000; // allowance reduced £1 for every £2 above this
 
 // Class 4 NI rates
 const CLASS4_LOWER_RATE = 0.06; // 6% on profits £12,570–£50,270
@@ -42,6 +45,34 @@ function filterToTaxYear<T extends { date?: string; paidAt?: string; createdAt: 
     const d = new Date(dateStr);
     return d >= start && d <= end;
   });
+}
+
+/**
+ * Income tax on trading profit, with the personal allowance reduced by other
+ * income and tapered away above £100k.
+ */
+function calculateIncomeTax(
+  profit: number,
+  settings: BusinessSettings,
+): { personalAllowance: number; incomeAfterAllowance: number; incomeTax: number } {
+  const otherIncome = settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome;
+  const taper = Math.max(0, (profit + otherIncome - ALLOWANCE_TAPER_THRESHOLD) / 2);
+  const taperedAllowance = Math.max(0, settings.personalAllowance - taper);
+  const availableAllowance = Math.max(0, taperedAllowance - otherIncome);
+
+  const incomeAfterAllowance = Math.max(0, profit - availableAllowance);
+  const basicRateIncome = Math.min(incomeAfterAllowance, BASIC_RATE_BAND);
+  const higherRateIncome = Math.max(0, Math.min(incomeAfterAllowance, ADDITIONAL_RATE_THRESHOLD) - BASIC_RATE_BAND);
+  const additionalRateIncome = Math.max(0, incomeAfterAllowance - ADDITIONAL_RATE_THRESHOLD);
+
+  return {
+    personalAllowance: Math.min(availableAllowance, profit),
+    incomeAfterAllowance,
+    incomeTax:
+      basicRateIncome * BASIC_RATE +
+      higherRateIncome * HIGHER_RATE +
+      additionalRateIncome * ADDITIONAL_RATE,
+  };
 }
 
 export interface TaxEstimate {
@@ -132,16 +163,8 @@ export function calculateTaxEstimate(
   // Taxable profit
   const taxableProfit = Math.max(0, grossIncome - totalExpenses);
 
-  // Personal allowance — reduced by other income
-  const otherIncome = settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome;
-  const availableAllowance = Math.max(0, settings.personalAllowance - otherIncome);
-  const personalAllowance = Math.min(availableAllowance, taxableProfit);
-  const incomeAfterAllowance = Math.max(0, taxableProfit - availableAllowance);
-
   // Income tax
-  const basicRateIncome = Math.min(incomeAfterAllowance, BASIC_RATE_THRESHOLD - settings.personalAllowance);
-  const higherRateIncome = Math.max(0, incomeAfterAllowance - basicRateIncome);
-  const incomeTax = (basicRateIncome * BASIC_RATE) + (higherRateIncome * HIGHER_RATE);
+  const { personalAllowance, incomeAfterAllowance, incomeTax } = calculateIncomeTax(taxableProfit, settings);
 
   // Class 4 NI on profits
   const class4Band1 = Math.max(0, Math.min(taxableProfit, CLASS4_UPPER_THRESHOLD) - CLASS4_LOWER_THRESHOLD);
@@ -167,13 +190,7 @@ export function calculateTaxEstimate(
 
   // Project annual tax based on current trajectory, then calculate monthly set-aside
   const projectedAnnualProfit = (taxableProfit / monthsElapsed) * monthsInYear;
-  const projectedOtherIncome = settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome;
-  const projectedAllowance = Math.max(0, settings.personalAllowance - projectedOtherIncome);
-  const projectedAfterAllowance = Math.max(0, projectedAnnualProfit - projectedAllowance);
-
-  const projectedBasic = Math.min(projectedAfterAllowance, BASIC_RATE_THRESHOLD - settings.personalAllowance);
-  const projectedHigher = Math.max(0, projectedAfterAllowance - projectedBasic);
-  const projectedIncomeTax = (projectedBasic * BASIC_RATE) + (projectedHigher * HIGHER_RATE);
+  const { incomeTax: projectedIncomeTax } = calculateIncomeTax(projectedAnnualProfit, settings);
 
   const projectedNIBand1 = Math.max(0, Math.min(projectedAnnualProfit, CLASS4_UPPER_THRESHOLD) - CLASS4_LOWER_THRESHOLD);
   const projectedNIBand2 = Math.max(0, projectedAnnualProfit - CLASS4_UPPER_THRESHOLD);

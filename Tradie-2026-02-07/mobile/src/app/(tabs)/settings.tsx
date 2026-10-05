@@ -43,7 +43,7 @@ import {
 } from '@/lib/calendarSync';
 import { getJobTypeLabel } from '@/lib/trades';
 import { scheduleReminderCheck } from '@/lib/customerReminders';
-import { connectApi } from '@/lib/paymentsApi';
+import { connectApi, ONLINE_PAYMENTS_ENABLED } from '@/lib/paymentsApi';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { TURQUOISE, GREEN, AMBER, BORDER, SLATE_500, SLATE_600, RED, WHITE } from '@/lib/theme';
 
@@ -84,7 +84,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     checkProStatus();
     checkCalendarPermissions();
-    checkPaymentSetup();
+    if (ONLINE_PAYMENTS_ENABLED) checkPaymentSetup();
   }, []);
 
   const checkPaymentSetup = async () => {
@@ -242,7 +242,7 @@ export default function SettingsScreen() {
                       <Text className="text-white font-bold text-lg">Upgrade to Pro</Text>
                     </View>
                     <Text className="text-white/80 text-sm">
-                      Unlimited bookings, analytics & more
+                      Unlimited customers & booking messages
                     </Text>
                   </View>
                   <ChevronRight size={20} color={WHITE} />
@@ -269,6 +269,7 @@ export default function SettingsScreen() {
           )}
 
           {/* Payment Setup */}
+          {ONLINE_PAYMENTS_ENABLED && (
           <Animated.View entering={FadeInDown.delay(75).duration(400)} className="mb-6">
             <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
               Payment Setup
@@ -390,6 +391,7 @@ export default function SettingsScreen() {
               )}
             </View>
           </Animated.View>
+          )}
 
           {/* Business Details */}
           <Animated.View entering={FadeInDown.delay(100).duration(400)} className="mb-6">

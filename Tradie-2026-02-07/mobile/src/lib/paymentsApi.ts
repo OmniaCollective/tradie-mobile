@@ -6,6 +6,10 @@ if (!BACKEND_URL && !__DEV__) {
 
 const BASE_URL = BACKEND_URL ?? 'http://localhost:3000';
 
+// Online payments (Stripe Connect + pay-by-link) need the payments backend.
+// The previous host was shut down; keep this off until a new backend is live.
+export const ONLINE_PAYMENTS_ENABLED = false;
+
 interface CreateInvoiceRequest {
   id: string;
   jobId: string;

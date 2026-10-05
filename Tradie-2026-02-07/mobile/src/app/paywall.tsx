@@ -14,10 +14,7 @@ import {
   Check,
   Zap,
   Send,
-  BarChart3,
-  Bell,
-  Smartphone,
-  Palette,
+  Users,
   Infinity,
 } from 'lucide-react-native';
 import Animated, {
@@ -36,31 +33,17 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { TURQUOISE, DARK_BG, YELLOW, WHITE } from '@/lib/theme';
 
 
+// Only list what Pro actually unlocks today (App Store guideline 2.3.1)
 const PRO_FEATURES = [
   {
     icon: Send,
-    title: 'Unlimited Bookings',
-    description: 'Send unlimited booking links',
+    title: 'Unlimited Booking Messages',
+    description: 'No monthly cap on messages to customers',
   },
   {
-    icon: Palette,
-    title: 'Custom Branding',
-    description: 'Your logo on booking pages',
-  },
-  {
-    icon: BarChart3,
-    title: 'Business Analytics',
-    description: 'Track your performance',
-  },
-  {
-    icon: Bell,
-    title: 'Auto Reminders',
-    description: 'SMS reminders for jobs',
-  },
-  {
-    icon: Smartphone,
-    title: 'Multi-Device Sync',
-    description: 'Access from anywhere',
+    icon: Users,
+    title: 'Unlimited Customers',
+    description: 'Free plan is limited to 20 customers',
   },
 ];
 
@@ -172,7 +155,11 @@ export default function PaywallScreen() {
   const hasYearlyTrial = yearlyTrial?.price === 0;
 
   // Calculate savings
-  const yearlySavings = Math.round((1 - (99 / (19.99 * 12))) * 100);
+  const monthlyAmount = packages.monthly?.product.price;
+  const yearlyAmount = packages.yearly?.product.price;
+  const yearlySavings = monthlyAmount && yearlyAmount
+    ? Math.round((1 - yearlyAmount / (monthlyAmount * 12)) * 100)
+    : Math.round((1 - (99 / (19.99 * 12))) * 100);
 
   return (
     <View className="flex-1 bg-[#0F172A]">

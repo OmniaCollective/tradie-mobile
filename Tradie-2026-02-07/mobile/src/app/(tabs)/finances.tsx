@@ -34,7 +34,7 @@ import {
   EXPENSE_CATEGORY_LABELS,
 } from '@/lib/store';
 import { sendPaymentReceivedNotification } from '@/lib/notifications';
-import { paymentsApi } from '@/lib/paymentsApi';
+import { paymentsApi, ONLINE_PAYMENTS_ENABLED } from '@/lib/paymentsApi';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   exportCsv,
@@ -120,6 +120,7 @@ export default function FinancesScreen() {
 
   // Check payment status for all sent invoices
   const checkAllPaymentStatuses = useCallback(async () => {
+    if (!ONLINE_PAYMENTS_ENABLED) return;
     const sentInvoices = invoices.filter((inv) => inv.status === 'sent');
 
     for (const invoice of sentInvoices) {
@@ -175,6 +176,26 @@ export default function FinancesScreen() {
     }
 
     setLoadingInvoiceId(invoice.id);
+
+    // Without the payments backend, send the invoice as a PDF instead of a pay-by-link message
+    if (!ONLINE_PAYMENTS_ENABLED) {
+      const job = getJob(invoice.jobId);
+      try {
+        if (!job) throw new Error('Job not found');
+        await exportInvoicePdf({ invoice, job, customer, settings });
+        updateInvoice(invoice.id, {
+          status: 'sent',
+          sentAt: invoice.sentAt ?? new Date().toISOString(),
+        });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        if (__DEV__) console.error('Error sending invoice PDF:', error);
+        setModal({ title: 'Error', message: 'Could not create the invoice PDF. Please try again.', variant: 'error' });
+      } finally {
+        setLoadingInvoiceId(null);
+      }
+      return;
+    }
 
     try {
       let paymentLink = invoice.stripePaymentLink;
@@ -770,15 +791,17 @@ export default function FinancesScreen() {
                                   </>
                                 )}
                               </Pressable>
-                              <Pressable
-                                onPress={() => handleCheckPayment(invoice)}
-                                disabled={isLoading}
-                                className="flex-1 bg-[#8B5CF6] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
-                                style={{ opacity: isLoading ? 0.6 : 1 }}
-                              >
-                                <RefreshCw size={16} color={WHITE} />
-                                <Text className="text-white font-bold ml-2">Check</Text>
-                              </Pressable>
+                              {ONLINE_PAYMENTS_ENABLED && (
+                                <Pressable
+                                  onPress={() => handleCheckPayment(invoice)}
+                                  disabled={isLoading}
+                                  className="flex-1 bg-[#8B5CF6] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
+                                  style={{ opacity: isLoading ? 0.6 : 1 }}
+                                >
+                                  <RefreshCw size={16} color={WHITE} />
+                                  <Text className="text-white font-bold ml-2">Check</Text>
+                                </Pressable>
+                              )}
                             </View>
                             <Pressable
                               onPress={() => handleMarkPaid(invoice.id)}

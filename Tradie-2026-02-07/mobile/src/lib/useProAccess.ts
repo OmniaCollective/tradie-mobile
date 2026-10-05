@@ -99,7 +99,7 @@ export function useFeatureGate(feature: 'bookingLinks' | 'customers'): {
         isLoading: false,
         reason: canSendBookingLink
           ? undefined
-          : `You've used all ${FREE_TIER_LIMITS.bookingLinksPerMonth} booking links this month`,
+          : `You've used all ${FREE_TIER_LIMITS.bookingLinksPerMonth} booking messages this month`,
       };
     case 'customers':
       return {
