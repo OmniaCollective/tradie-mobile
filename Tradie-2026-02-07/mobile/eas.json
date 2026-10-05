@@ -9,7 +9,8 @@
       "ios": {
         "buildConfiguration": "Release",
         "autoIncrement": true
-      }
+      },
+      "environment": "production"
     }
   },
   "submit": {

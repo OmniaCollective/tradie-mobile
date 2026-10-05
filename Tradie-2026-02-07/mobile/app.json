@@ -15,11 +15,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Tradie uses your camera to take photos of job sites and completed work for quotes and invoices.",
         "NSCalendarsUsageDescription": "Tradie syncs your scheduled jobs to your calendar so you never miss an appointment.",
-        "NSContactsUsageDescription": "Tradie accesses your contacts to quickly add customer details when creating bookings.",
         "NSPhotoLibraryUsageDescription": "Tradie accesses your photo library to attach photos of job sites and completed work.",
-        "NSLocationWhenInUseUsageDescription": "Tradie uses your location to calculate travel distance for job quotes.",
-        "NSMicrophoneUsageDescription": "Tradie uses your microphone for audio recording when documenting job sites.",
-        "NSPhotoLibraryAddUsageDescription": "Tradie saves photos of completed jobs to your photo library."
+        "NSMicrophoneUsageDescription": "Tradie uses your microphone for audio recording when documenting job sites."
       }
     },
     "android": {},
@@ -37,11 +34,7 @@
       "expo-font",
       "expo-image",
       "expo-mail-composer",
-      "expo-secure-store",
-      "expo-sharing",
-      "expo-sqlite",
-      "expo-video",
-      "expo-web-browser"
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
