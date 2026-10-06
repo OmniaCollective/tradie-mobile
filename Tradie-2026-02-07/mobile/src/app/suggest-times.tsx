@@ -30,6 +30,8 @@ const TRAVEL_NOTE: Record<TravelNote, string> = {
 export default function SuggestTimesScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const router = useRouter();
+  // Opened from a link or notification there may be nothing to go back to; then go Home.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const account = useAccount();
@@ -102,7 +104,7 @@ export default function SuggestTimesScreen() {
       }
       saveOffer();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      goBack();
     } catch (e) {
       if (__DEV__) console.error('Send times failed:', e);
     } finally {
@@ -117,7 +119,7 @@ export default function SuggestTimesScreen() {
     <View className="flex-1 bg-bg">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
-        <Pressable onPress={() => router.back()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
+        <Pressable onPress={() => goBack()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
           <Text className="text-link text-[17px]">Cancel</Text>
         </Pressable>
         <Text className="text-fg text-[17px] font-semibold">Suggest times</Text>

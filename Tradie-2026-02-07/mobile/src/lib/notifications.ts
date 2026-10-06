@@ -59,6 +59,11 @@ export async function scheduleJobReminder(jobId: string, customerName: string, j
   });
 }
 
+/** Removes a job's reminder, e.g. when the job is deleted. */
+export async function cancelJobReminder(jobId: string): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(jobReminderId(jobId)).catch(() => {});
+}
+
 /** Whether the 6pm "message tomorrow's customers" nudge is on. */
 export async function isDailyReminderOn(): Promise<boolean> {
   try {

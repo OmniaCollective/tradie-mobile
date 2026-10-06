@@ -112,6 +112,13 @@ export default function JobsScreen() {
           month: 'long',
         });
   const visibleTodos = showAllTodos ? todos : todos.slice(0, TODOS_SHOWN);
+  const unbooked = useMemo(
+    () =>
+      jobs
+        .filter((j) => !j.scheduledDate && (j.status === 'REQUESTED' || j.status === 'QUOTED' || j.status === 'APPROVED'))
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt)),
+    [jobs],
+  );
 
   return (
     <ScrollView
@@ -284,6 +291,38 @@ export default function JobsScreen() {
           </Group>
         )}
       </View>
+
+      {/* Jobs without a time yet, so nothing waiting to be booked is ever out of sight */}
+      {unbooked.length > 0 && (
+        <View className="mb-8">
+          <SectionHeader title="Not booked yet" />
+          <Group>
+            {unbooked.map((job, i) => (
+              <View key={job.id}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => router.push(`/job/${job.id}`)}
+                  className="flex-row items-center px-4 py-3 active:opacity-70"
+                  accessibilityRole="button"
+                >
+                  <View className="flex-1 mr-2">
+                    <Text className="text-fg text-base font-medium" numberOfLines={1}>
+                      {getJobTypeLabel(settings.trade, job.type)}
+                    </Text>
+                    <Text className="text-secondary text-sm" numberOfLines={1}>
+                      {getCustomer(job.customerId)?.name ?? 'Unknown customer'}
+                    </Text>
+                    <View className="mt-1">
+                      <JobStatus job={job} />
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+                </Pressable>
+              </View>
+            ))}
+          </Group>
+        </View>
+      )}
 
       {/* To-do */}
       <View>

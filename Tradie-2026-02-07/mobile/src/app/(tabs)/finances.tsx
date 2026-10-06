@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Switch } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Trash2, Paperclip, CircleCheck, Lock } from 'lucide-react-native';
+import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useTradeStore,
@@ -11,6 +11,8 @@ import {
   useSettings,
   useRegion,
   getJobTypeLabel,
+  invoiceNumberLabel,
+  useTaxSetAside,
   type Invoice,
   type Job,
   type Customer,
@@ -36,7 +38,7 @@ import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { useProAccess, FREE_LIMITS } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, ProgressBar, ProTeaser, Sheet } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, ProgressBar, ProTeaser, Sheet, LinkRow } from '@/components/ui';
 
 type ViewMode = 'income' | 'expenses';
 type ExportType = 'invoices' | 'expenses' | 'tax_summary';
@@ -47,8 +49,23 @@ const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 const money = formatMoney;
 const wholePounds = formatPounds;
 
+/** What the customer actually pays the tradie: the total less any CIS the contractor deducted. */
+const received = (invoice: Invoice) => invoice.quote.total - (invoice.cisDeducted ? invoice.cisDeductionAmount ?? 0 : 0);
+
 export default function MoneyScreen() {
   const router = useRouter();
+  // Opened from a job's "See invoice" link.
+  const params = useLocalSearchParams<{ invoice?: string }>();
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(params.invoice ?? null);
+  const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<string | null>(null);
+  const [confirmDeleteExpense, setConfirmDeleteExpense] = useState<string | null>(null);
+  const deleteInvoice = useTradeStore((s) => s.deleteInvoice);
+  // A new link opens that invoice (adjusting state during render, as React recommends over an effect).
+  const [linkedInvoice, setLinkedInvoice] = useState(params.invoice);
+  if (params.invoice !== linkedInvoice) {
+    setLinkedInvoice(params.invoice);
+    if (params.invoice) setOpenInvoiceId(params.invoice);
+  }
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const invoices = useInvoices();
@@ -60,8 +77,8 @@ export default function MoneyScreen() {
   const getJob = useTradeStore((s) => s.getJob);
   const updateInvoice = useTradeStore((s) => s.updateInvoice);
   const deleteExpense = useTradeStore((s) => s.deleteExpense);
-  const addTaxSetAside = useTradeStore((s) => s.addTaxSetAside);
-  const taxSetAsideTotal = useTradeStore((s) => s.taxSetAsideTotal);
+  const setTaxSetAside = useTradeStore((s) => s.setTaxSetAside);
+  const taxSetAsideTotal = useTaxSetAside();
 
   const [viewMode, setViewMode] = useState<ViewMode>('income');
   const [loadingInvoiceId, setLoadingInvoiceId] = useState<string | null>(null);
@@ -96,8 +113,9 @@ export default function MoneyScreen() {
 
   const totals = useMemo(
     () => ({
-      outstanding: [...groups.toSend, ...groups.waiting].reduce((s, i) => s + i.quote.total, 0),
-      collected: groups.paid.reduce((s, i) => s + i.quote.total, 0),
+      // What actually reaches the bank: CIS is held back by the contractor and paid to HMRC.
+      outstanding: [...groups.toSend, ...groups.waiting].reduce((s, i) => s + received(i), 0),
+      collected: groups.paid.reduce((s, i) => s + received(i), 0),
       expenses: expenses.reduce((s, e) => s + e.amount, 0),
     }),
     [groups, expenses],
@@ -271,10 +289,11 @@ export default function MoneyScreen() {
     }
   };
 
+  // The field holds the running total, so a mistake is fixed by typing the right figure.
   const saveSetAside = async () => {
-    const amount = parseFloat(setAsideAmount) || 0;
-    if (amount > 0) {
-      addTaxSetAside(amount);
+    const total = parseFloat(setAsideAmount.replace(',', '.'));
+    if (Number.isFinite(total) && total >= 0) {
+      setTaxSetAside(total);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setSetAsideAmount('');
@@ -287,7 +306,7 @@ export default function MoneyScreen() {
     const customer = getCustomer(invoice.customerId);
     const job = getJob(invoice.jobId);
     const loading = loadingInvoiceId === invoice.id;
-    const detail =
+    const state =
       invoice.status === 'paid'
         ? `Paid ${formatDate(invoice.paidAt)}`
         : invoice.status === 'sent'
@@ -295,21 +314,30 @@ export default function MoneyScreen() {
           : job
             ? getJobTypeLabel(settings.trade, job.type)
             : formatDate(invoice.createdAt);
+    const detail = `${invoiceNumberLabel(invoice)} · ${state}`;
 
-    const action =
+    // Paid on the spot is common, so an unsent invoice can be marked paid too.
+    const actions =
       invoice.status === 'pending'
-        ? { label: 'Send', run: () => handleSendInvoice(invoice) }
+        ? [
+            { label: 'Send', run: () => handleSendInvoice(invoice) },
+            { label: 'Paid', run: () => handleMarkPaid(invoice) },
+          ]
         : invoice.status === 'sent'
-          ? { label: 'Mark paid', run: () => handleMarkPaid(invoice) }
-          : { label: 'PDF', run: () => handleSharePdf(invoice) };
+          ? [
+              { label: 'Resend', run: () => handleSharePdf(invoice) },
+              { label: 'Mark paid', run: () => handleMarkPaid(invoice) },
+            ]
+          : [{ label: 'PDF', run: () => handleSharePdf(invoice) }];
 
     // Row body and its action are sibling tap targets, so VoiceOver can reach both.
     return (
       <View className="flex-row items-center pr-4">
         <Pressable
-          onPress={() => router.push(`/job/${invoice.jobId}`)}
+          onPress={() => setOpenInvoiceId(invoice.id)}
           className="flex-1 pl-4 py-3 mr-3 active:opacity-70"
           accessibilityRole="button"
+          accessibilityHint="Shows everything you can do with this invoice"
         >
           <View>
             <Text className="text-fg text-base font-medium" numberOfLines={1}>
@@ -331,9 +359,13 @@ export default function MoneyScreen() {
           {loading ? (
             <ActivityIndicator size="small" color={t.link} className="mt-1" />
           ) : (
-            <Pressable onPress={action.run} hitSlop={10} className="mt-0.5" accessibilityRole="button">
-              <Text className="text-link text-sm font-semibold">{action.label}</Text>
-            </Pressable>
+            <View className="flex-row gap-4 mt-0.5">
+              {actions.map((a) => (
+                <Pressable key={a.label} onPress={a.run} hitSlop={8} accessibilityRole="button">
+                  <Text className="text-link text-sm font-semibold">{a.label}</Text>
+                </Pressable>
+              ))}
+            </View>
           )}
         </View>
       </View>
@@ -444,17 +476,26 @@ export default function MoneyScreen() {
                         value={setAsideAmount}
                         onChangeText={setSetAsideAmount}
                         keyboardType="decimal-pad"
-                        placeholder={String(Math.round(taxView.headline))}
+                        placeholder="0"
                         placeholderTextColor={t.secondary}
                         autoFocus
-                        accessibilityLabel="Amount set aside"
+                        accessibilityLabel="Total set aside so far"
                       />
                     </View>
                     <PrimaryButton compact label="Save" onPress={saveSetAside} />
                   </View>
                 ) : (
-                  <Pressable onPress={() => setShowSetAsideInput(true)} className="self-start min-h-[44px] justify-center" accessibilityRole="button">
-                    <Text className="text-link text-[15px] font-semibold">I’ve set money aside</Text>
+                  <Pressable
+                    onPress={() => {
+                      setSetAsideAmount(taxSetAsideTotal > 0 ? String(taxSetAsideTotal) : '');
+                      setShowSetAsideInput(true);
+                    }}
+                    className="self-start min-h-[44px] justify-center"
+                    accessibilityRole="button"
+                  >
+                    <Text className="text-link text-[15px] font-semibold">
+                      {taxSetAsideTotal > 0 ? 'Update amount set aside' : 'I’ve set money aside'}
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -580,7 +621,12 @@ export default function MoneyScreen() {
                 <View key={expense.id}>
                   <RowDivider />
                   <View className="flex-row items-center pl-4 py-2.5">
-                    <View className="flex-1 mr-3">
+                    <Pressable
+                      onPress={() => router.push(`/add-expense?id=${expense.id}`)}
+                      className="flex-1 mr-3 active:opacity-70"
+                      accessibilityRole="button"
+                      accessibilityHint="Edit this expense"
+                    >
                       <Text className="text-fg text-base" numberOfLines={1}>
                         {expense.description}
                       </Text>
@@ -593,13 +639,10 @@ export default function MoneyScreen() {
                           <Paperclip size={14} color={t.secondary} strokeWidth={2} style={{ marginLeft: 6 }} />
                         )}
                       </View>
-                    </View>
+                    </Pressable>
                     <Text className="text-fg text-base font-semibold">{money(expense.amount)}</Text>
                     <Pressable
-                      onPress={async () => {
-                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        deleteExpense(expense.id);
-                      }}
+                      onPress={() => setConfirmDeleteExpense(expense.id)}
                       className="w-11 h-11 items-center justify-center active:opacity-60"
                       accessibilityRole="button"
                       accessibilityLabel={`Delete ${expense.description}`}
@@ -615,6 +658,97 @@ export default function MoneyScreen() {
       </ScrollView>
 
       {/* Mark paid with CIS */}
+      {/* Everything you can do with one invoice */}
+      {(() => {
+        const invoice = invoices.find((i) => i.id === openInvoiceId);
+        if (!invoice) return null;
+        const close = () => {
+          setOpenInvoiceId(null);
+          router.setParams({ invoice: undefined });
+        };
+        const then = (run: () => void) => () => {
+          close();
+          run();
+        };
+        const customer = getCustomer(invoice.customerId);
+        return (
+          <Sheet visible onClose={close}>
+            <Text className="text-secondary text-[13px]">{invoiceNumberLabel(invoice)}</Text>
+            <View className="flex-row items-baseline justify-between mb-1">
+              <Text className="text-fg text-[20px] font-semibold flex-1 mr-3" numberOfLines={1}>
+                {customer?.name ?? 'Unknown customer'}
+              </Text>
+              <Text className="text-fg text-[20px] font-semibold">{money(invoice.quote.total)}</Text>
+            </View>
+            <Text className={cn('text-[15px] mb-4', invoice.status === 'paid' ? 'text-link' : 'text-secondary')}>
+              {invoice.status === 'paid'
+                ? `Paid ${formatDate(invoice.paidAt)}`
+                : invoice.status === 'sent'
+                  ? `Sent ${formatDate(invoice.sentAt)} · not paid yet`
+                  : 'Not sent yet'}
+              {invoice.cisDeducted && invoice.cisDeductionAmount ? ` · CIS −${money(invoice.cisDeductionAmount)}` : ''}
+            </Text>
+            <Group className="bg-bg mb-4">
+              {invoice.status === 'pending' && <LinkRow icon={Send} label="Send invoice" onPress={then(() => handleSendInvoice(invoice))} />}
+              {invoice.status !== 'pending' && (
+                <LinkRow
+                  icon={Share2}
+                  label={invoice.status === 'paid' ? 'Share PDF' : 'Send again'}
+                  onPress={then(() => handleSharePdf(invoice))}
+                />
+              )}
+              <RowDivider />
+              {invoice.status === 'paid' ? (
+                <LinkRow
+                  icon={Undo2}
+                  label="Mark as not paid"
+                  onPress={then(() =>
+                    updateInvoice(invoice.id, {
+                      status: invoice.sentAt ? 'sent' : 'pending',
+                      paidAt: undefined,
+                    }),
+                  )}
+                />
+              ) : (
+                <LinkRow icon={CircleCheck} label="Mark paid" onPress={then(() => handleMarkPaid(invoice))} />
+              )}
+              <RowDivider />
+              <LinkRow icon={Wrench} label="Open job" onPress={then(() => router.push(`/job/${invoice.jobId}`))} />
+              <RowDivider />
+              <LinkRow icon={Trash2} label="Delete invoice" destructive onPress={then(() => setConfirmDeleteInvoice(invoice.id))} />
+            </Group>
+          </Sheet>
+        );
+      })()}
+
+      <ConfirmModal
+        visible={!!confirmDeleteExpense}
+        title="Delete this expense?"
+        message="It will no longer count towards your expenses or tax."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="error"
+        onConfirm={async () => {
+          if (!confirmDeleteExpense) return;
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          deleteExpense(confirmDeleteExpense);
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setConfirmDeleteExpense(null)}
+      />
+
+      <ConfirmModal
+        visible={!!confirmDeleteInvoice}
+        title="Delete this invoice?"
+        message="The job goes back to Done, so you can fix the price and invoice it again. Delete an invoice only if it was made by mistake."
+        confirmText="Delete invoice"
+        cancelText="Cancel"
+        variant="error"
+        onConfirm={() => confirmDeleteInvoice && deleteInvoice(confirmDeleteInvoice)}
+        onCancel={() => {}}
+        onDismiss={() => setConfirmDeleteInvoice(null)}
+      />
+
       <Sheet visible={!!cisModal} onClose={() => setCisModal(null)}>
         <Text className="text-fg text-[17px] font-semibold text-center mb-4">Mark as paid</Text>
         <View className="bg-bg rounded-2xl px-4 mb-4">

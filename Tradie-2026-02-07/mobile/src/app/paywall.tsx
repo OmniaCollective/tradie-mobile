@@ -46,6 +46,8 @@ async function loadPackages(): Promise<{ monthly: PurchasesPackage | null; yearl
 
 export default function PaywallScreen() {
   const router = useRouter();
+  // Opened from a link or notification there may be nothing to go back to; then go Home.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const refreshPro = useRefreshPro();
@@ -150,7 +152,7 @@ export default function PaywallScreen() {
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 260 }}>
         <View className="flex-row justify-end">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             className="w-11 h-11 -mr-2.5 items-center justify-center"
             accessibilityRole="button"
             accessibilityLabel="Close"
@@ -248,7 +250,7 @@ export default function PaywallScreen() {
           onDismiss={() => {
             const done = modal.done;
             setModal(null);
-            if (done) router.back();
+            if (done) goBack();
           }}
         />
       )}

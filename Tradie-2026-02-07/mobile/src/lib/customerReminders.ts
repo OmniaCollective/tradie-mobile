@@ -182,5 +182,6 @@ export function isQuoteExpiringSoon(job: Job): boolean {
   const now = new Date();
   const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-  return hoursUntilExpiry > 0 && hoursUntilExpiry <= 24;
+  // Nudge in the last 3 days of the quote.
+  return hoursUntilExpiry > 0 && hoursUntilExpiry <= 72;
 }

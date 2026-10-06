@@ -53,20 +53,23 @@ export function formatDateFull(dateStr?: string): string {
 }
 
 /** Format an "HH:MM" time string to "10:00 AM" */
+/** "14:30" in the UK, "2:30 PM" in the US. */
+function clock(h: number, m: number): string {
+  const mm = m.toString().padStart(2, '0');
+  if (getRegion().country !== 'US') return `${h.toString().padStart(2, '0')}:${mm}`;
+  return `${h % 12 || 12}:${mm} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+/** Format a stored "HH:MM" time for display. */
 export function formatTime(time?: string): string {
   if (!time) return '';
   const [h, m] = time.split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return time;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
+  return clock(h, m);
 }
 
-/** Format a Date object's time to "10:00 AM" */
 export function formatTimeObj(date: Date): string {
-  const h = date.getHours();
-  const m = date.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
+  return clock(date.getHours(), date.getMinutes());
 }
 
 /**

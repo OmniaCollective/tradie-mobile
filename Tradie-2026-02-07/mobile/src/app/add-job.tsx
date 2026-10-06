@@ -40,6 +40,8 @@ function InputRow({
 
 export default function AddJobScreen() {
   const router = useRouter();
+  // Opened from a link or notification there may be nothing to go back to; then go Home.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const params = useLocalSearchParams<{ date?: string }>();
@@ -213,7 +215,8 @@ export default function AddJobScreen() {
         type: jobType,
         description: description.trim() || jobLabel,
         urgency,
-        status: 'QUOTED',
+        // The quote is ready but not sent; sharing it from the job marks it Quoted.
+        status: 'REQUESTED',
         quote: quote ? { ...quote, jobId: '' } : undefined,
         notes: '',
       });
@@ -224,7 +227,7 @@ export default function AddJobScreen() {
       const customer = all.find((c) => c.id === customerId);
       if (hasDate && job && customer) {
         await scheduleJob(job, customer, when);
-        router.back();
+        goBack();
       } else {
         // Not booked yet: open the job so times can be suggested straight away.
         router.replace(`/job/${jobId}`);
@@ -238,7 +241,7 @@ export default function AddJobScreen() {
   const header = (title: string, right?: React.ReactNode) => (
     <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
       <Pressable
-        onPress={() => (mode === 'form' && transcription ? setMode('voice') : router.back())}
+        onPress={() => (mode === 'form' && transcription ? setMode('voice') : goBack())}
         hitSlop={10}
         className="min-h-[44px] justify-center min-w-[56px]"
         accessibilityRole="button"
@@ -496,10 +499,7 @@ export default function AddJobScreen() {
             <Group className="px-4 py-3">
               {(
                 [
-                  ['Labour', quote.labour],
-                  ['Materials (estimate)', quote.materials],
-                  ['Travel', quote.travel],
-                  ...(quote.emergencySurcharge > 0 ? [['Emergency call-out', quote.emergencySurcharge]] : []),
+                  [urgency === 'standard' ? 'Labour' : `Labour (${urgency} rate)`, quote.labour],
                   ...(quote.vat > 0 ? [['VAT', quote.vat]] : []),
                 ] as [string, number][]
               ).map(([k, v]) => (
@@ -514,6 +514,9 @@ export default function AddJobScreen() {
                 <Text className="text-fg text-[17px] font-bold">{formatMoney(quote.total)}</Text>
               </View>
             </Group>
+            <Text className="text-secondary text-[13px] mx-1 mt-2">
+              Your price for this job type. After saving you can change it and add materials or travel.
+            </Text>
           </>
         )}
       </ScrollView>

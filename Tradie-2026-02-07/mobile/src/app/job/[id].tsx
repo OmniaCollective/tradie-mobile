@@ -18,12 +18,24 @@ import {
   Trash2,
   CircleAlert,
   Lock,
+  Pencil,
+  CalendarX,
+  FileText,
   type LucideIcon,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
-import { useTradeStore, useJobExpenses, EXPENSE_CATEGORY_LABELS, getRegion, getJobTypeLabel, businessDisplayName } from '@/lib/store';
-import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions } from '@/lib/calendarSync';
+import {
+  useTradeStore,
+  useJobExpenses,
+  EXPENSE_CATEGORY_LABELS,
+  getRegion,
+  getJobTypeLabel,
+  businessDisplayName,
+  priceQuote,
+} from '@/lib/store';
+import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions, removeJobFromCalendar } from '@/lib/calendarSync';
+import { cancelJobReminder } from '@/lib/notifications';
 import { activeOffer, offerExpired, formatSlot, slotDate, scheduleJob, confirmationMessage } from '@/lib/booking';
 import type { OfferedSlot, BusinessSettings } from '@/lib/store';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
@@ -37,7 +49,7 @@ import { exportQuotePdf } from '@/lib/invoiceExport';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet, NumberFieldRow, FieldRow } from '@/components/ui';
 
 type PhotoTab = 'before' | 'during' | 'after';
 
@@ -56,6 +68,8 @@ function Line({ label, value, strong }: { label: string; value: string; strong?:
 export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  // Opened from a link or notification there may be nothing to go back to; then go Home.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const job = useTradeStore((s) => s.jobs.find((j) => j.id === id));
@@ -65,6 +79,11 @@ export default function JobDetailScreen() {
   const updateJob = useTradeStore((s) => s.updateJob);
   const createInvoice = useTradeStore((s) => s.createInvoice);
   const addPart = useTradeStore((s) => s.addPart);
+  const updateQuote = useTradeStore((s) => s.updateQuote);
+  const deleteJob = useTradeStore((s) => s.deleteJob);
+  const invoiceId = useTradeStore((s) => s.invoices.find((inv) => inv.jobId === id)?.id);
+  const hasInvoice = !!invoiceId;
+  const updateCustomer = useTradeStore((s) => s.updateCustomer);
   const removePart = useTradeStore((s) => s.removePart);
   const addPhoto = useTradeStore((s) => s.addPhoto);
   const removePhoto = useTradeStore((s) => s.removePhoto);
@@ -93,6 +112,10 @@ export default function JobDetailScreen() {
     return d;
   });
   const [showComplete, setShowComplete] = useState(false);
+  const [editQuote, setEditQuote] = useState<{ labour: number; materials: number; travel: number } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancelBooking, setConfirmCancelBooking] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<{ name: string; phone: string; email: string; address: string; postcode: string } | null>(null);
   const [limitPrompt, setLimitPrompt] = useState(false);
 
   if (!job || !customer) {
@@ -110,6 +133,8 @@ export default function JobDetailScreen() {
   const expensesTotal = jobExpenses.reduce((s, e) => s + e.amount, 0);
   const photos = (job.photos ?? []).filter((p) => p.type === photoTab);
   const isDone = job.status === 'COMPLETED' || job.status === 'INVOICED' || job.status === 'PAID';
+  // The price can change until it's on an invoice.
+  const quoteEditable = !hasInvoice;
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -162,6 +187,8 @@ export default function JobDetailScreen() {
   const unscheduled = !job.scheduledDate && (job.status === 'REQUESTED' || job.status === 'QUOTED' || job.status === 'APPROVED');
   const openSuggest = () => router.push(`/suggest-times?jobId=${job.id}`);
   const openPicker = () => {
+    // Changing a booked time starts from the current one.
+    if (job.scheduledDate) setScheduleDate(slotDate({ date: job.scheduledDate, time: job.scheduledTime || '09:00' }));
     setPickerMode('date');
     setShowSchedule(true);
   };
@@ -229,6 +256,11 @@ export default function JobDetailScreen() {
   const shareQuote = async (current: BusinessSettings) => {
     try {
       await exportQuotePdf({ job, customer, settings: current });
+      // Shared with the customer: the quote now counts as sent.
+      updateJob(job.id, {
+        quoteSentAt: new Date().toISOString(),
+        ...(job.status === 'REQUESTED' && { status: 'QUOTED' as const }),
+      });
     } catch (error) {
       if (__DEV__) console.error('Quote PDF error:', error);
       setModal({
@@ -349,7 +381,25 @@ export default function JobDetailScreen() {
         {/* Customer */}
         <Group className="mb-8">
           <View className="px-4 pt-4 pb-3">
-            <Text className="text-fg text-[17px] font-semibold">{customer.name}</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="flex-1 text-fg text-[17px] font-semibold mr-3">{customer.name}</Text>
+              <Pressable
+                onPress={() =>
+                  setEditCustomer({
+                    name: customer.name,
+                    phone: customer.phone ?? '',
+                    email: customer.email ?? '',
+                    address: customer.address ?? '',
+                    postcode: customer.postcode ?? '',
+                  })
+                }
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Edit customer"
+              >
+                <Text className="text-link text-[15px] font-semibold">Edit</Text>
+              </Pressable>
+            </View>
             {(customer.address || customer.postcode) && (
               <Text className="text-secondary text-[15px] mt-0.5">
                 {[customer.address, customer.postcode].filter(Boolean).join(', ')}
@@ -443,10 +493,25 @@ export default function JobDetailScreen() {
                     label={busy === 'reminder' ? 'Opening…' : 'Remind the customer'}
                     onPress={handleRemindCustomer}
                   />
+                  <RowDivider />
+                  <LinkRow icon={CalendarClock} label="Change time" onPress={openPicker} />
+                  <RowDivider />
+                  <LinkRow icon={CalendarX} label="Cancel booking" onPress={() => setConfirmCancelBooking(true)} />
                 </>
               )}
             </Group>
           </View>
+        )}
+
+        {/* Invoice */}
+        {invoiceId && (
+          <Group className="mb-8">
+            <LinkRow
+              icon={FileText}
+              label={job.status === 'PAID' ? 'Invoice · paid' : 'See invoice'}
+              onPress={() => router.push(`/(tabs)/finances?invoice=${invoiceId}`)}
+            />
+          </Group>
         )}
 
         {/* Quote */}
@@ -473,8 +538,8 @@ export default function JobDetailScreen() {
               )}
               <View className="px-4 py-3">
                 <Line label="Labour" value={formatMoney(job.quote.labour)} />
-                <Line label="Materials" value={formatMoney(job.quote.materials)} />
-                <Line label="Travel" value={formatMoney(job.quote.travel)} />
+                {job.quote.materials > 0 && <Line label="Materials" value={formatMoney(job.quote.materials)} />}
+                {job.quote.travel > 0 && <Line label="Travel" value={formatMoney(job.quote.travel)} />}
                 {job.quote.emergencySurcharge > 0 && (
                   <Line label="Emergency call-out" value={formatMoney(job.quote.emergencySurcharge)} />
                 )}
@@ -482,8 +547,22 @@ export default function JobDetailScreen() {
                 <View className="h-px bg-divider my-2" />
                 <Line label="Total" value={formatMoney(job.quote.total)} strong />
               </View>
+              {quoteEditable && (
+                <>
+                  <RowDivider />
+                  <LinkRow
+                    icon={Pencil}
+                    label="Edit quote"
+                    onPress={() => setEditQuote({ labour: job.quote!.labour, materials: job.quote!.materials, travel: job.quote!.travel })}
+                  />
+                </>
+              )}
               <RowDivider />
-              <LinkRow icon={Share2} label="Share quote as PDF" onPress={handleShareQuote} />
+              <LinkRow
+                icon={Share2}
+                label={job.quoteSentAt ? 'Share quote again' : 'Send quote as PDF'}
+                onPress={handleShareQuote}
+              />
             </Group>
           </View>
         )}
@@ -715,6 +794,13 @@ export default function JobDetailScreen() {
             </Pressable>
           </Group>
         </View>
+
+        {/* A job that hasn't been invoiced can be deleted, e.g. when the customer says no */}
+        {!hasInvoice && (
+          <Group className="mt-4">
+            <LinkRow icon={Trash2} label="Delete job" destructive onPress={() => setConfirmDelete(true)} />
+          </Group>
+        )}
       </ScrollView>
 
       {/* Next step */}
@@ -781,6 +867,22 @@ export default function JobDetailScreen() {
           {jobExpenses.length > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatMoney(expensesTotal)} />}
           {(job.photos ?? []).length > 0 && <Line label="Photos" value={String((job.photos ?? []).length)} />}
         </View>
+        {job.quote && partsTotal > job.quote.materials && (
+          <Pressable
+            onPress={() => {
+              setShowComplete(false);
+              setEditQuote({ labour: job.quote!.labour, materials: partsTotal, travel: job.quote!.travel });
+            }}
+            className="flex-row items-center mb-4 active:opacity-70"
+            accessibilityRole="button"
+          >
+            <CircleAlert size={16} color={t.secondary} strokeWidth={2} />
+            <Text className="flex-1 text-secondary text-[14px] ml-2">
+              Your quote doesn’t include {formatMoney(partsTotal)} of parts.{' '}
+              <Text className="text-link font-semibold">Add them to the price</Text>
+            </Text>
+          </Pressable>
+        )}
         <PrimaryButton
           label="Mark done"
           onPress={async () => {
@@ -800,6 +902,144 @@ export default function JobDetailScreen() {
           <Text className="text-secondary text-base font-semibold">Cancel</Text>
         </Pressable>
       </Sheet>
+
+      {/* Edit quote */}
+      {editQuote && job.quote && (
+        <Sheet visible onClose={() => setEditQuote(null)}>
+          <Text className="text-fg text-[20px] font-semibold mb-4">Edit quote</Text>
+          <Group className="bg-bg mb-3">
+            <NumberFieldRow
+              label="Labour"
+              prefix={currencySymbol()}
+              value={editQuote.labour}
+              onChangeNumber={(n) => setEditQuote({ ...editQuote, labour: n })}
+              width="w-24"
+            />
+            <RowDivider />
+            <NumberFieldRow
+              label="Materials"
+              prefix={currencySymbol()}
+              value={editQuote.materials}
+              onChangeNumber={(n) => setEditQuote({ ...editQuote, materials: n })}
+              width="w-24"
+            />
+            <RowDivider />
+            <NumberFieldRow
+              label="Travel"
+              prefix={currencySymbol()}
+              value={editQuote.travel}
+              onChangeNumber={(n) => setEditQuote({ ...editQuote, travel: n })}
+              width="w-24"
+            />
+          </Group>
+          {partsTotal > 0 && editQuote.materials !== partsTotal && (
+            <Pressable
+              onPress={() => setEditQuote({ ...editQuote, materials: partsTotal })}
+              className="min-h-[44px] justify-center mb-1"
+              accessibilityRole="button"
+            >
+              <Text className="text-link text-[15px] font-semibold">
+                Use parts total for materials ({formatMoney(partsTotal)})
+              </Text>
+            </Pressable>
+          )}
+          {(() => {
+            const priced = priceQuote(settings, editQuote, job.quote.emergencySurcharge);
+            return (
+              <View className="px-1 mb-5">
+                {priced.emergencySurcharge > 0 && <Line label="Emergency call-out" value={formatMoney(priced.emergencySurcharge)} />}
+                {priced.vat > 0 && <Line label={`VAT (${settings.vatRate}%)`} value={formatMoney(priced.vat)} />}
+                <Line label="Total" value={formatMoney(priced.total)} strong />
+              </View>
+            );
+          })()}
+          <PrimaryButton
+            label="Save quote"
+            onPress={async () => {
+              updateQuote(job.id, editQuote);
+              setEditQuote(null);
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
+          />
+          <Pressable onPress={() => setEditQuote(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+            <Text className="text-secondary text-base font-semibold">Cancel</Text>
+          </Pressable>
+        </Sheet>
+      )}
+
+      {/* Edit customer */}
+      {editCustomer && (
+        <Sheet visible onClose={() => setEditCustomer(null)}>
+          <Text className="text-fg text-[20px] font-semibold mb-4">Customer details</Text>
+          <Group className="bg-bg mb-5">
+            <FieldRow label="Name" value={editCustomer.name} onChangeText={(v) => setEditCustomer({ ...editCustomer, name: v })} placeholder="Name" autoCapitalize="words" width="w-48" />
+            <RowDivider />
+            <FieldRow label="Phone" value={editCustomer.phone} onChangeText={(v) => setEditCustomer({ ...editCustomer, phone: v })} placeholder="Phone" keyboardType="phone-pad" width="w-48" />
+            <RowDivider />
+            <FieldRow label="Email" value={editCustomer.email} onChangeText={(v) => setEditCustomer({ ...editCustomer, email: v })} placeholder="Optional" keyboardType="email-address" autoCapitalize="none" width="w-48" />
+            <RowDivider />
+            <FieldRow label="Address" value={editCustomer.address} onChangeText={(v) => setEditCustomer({ ...editCustomer, address: v })} placeholder="Street" width="w-48" />
+            <RowDivider />
+            <FieldRow
+              label={getRegion().postcodeLabel === 'ZIP code' ? 'ZIP code' : 'Postcode'}
+              value={editCustomer.postcode}
+              onChangeText={(v) => setEditCustomer({ ...editCustomer, postcode: v.toUpperCase() })}
+              autoCapitalize="characters"
+              width="w-28"
+            />
+          </Group>
+          <PrimaryButton
+            label="Save"
+            disabled={!editCustomer.name.trim()}
+            onPress={() => {
+              updateCustomer(customer.id, {
+                name: editCustomer.name.trim(),
+                phone: editCustomer.phone.trim(),
+                email: editCustomer.email.trim(),
+                address: editCustomer.address.trim(),
+                postcode: editCustomer.postcode.trim(),
+              });
+              setEditCustomer(null);
+            }}
+          />
+          <Pressable onPress={() => setEditCustomer(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+            <Text className="text-secondary text-base font-semibold">Cancel</Text>
+          </Pressable>
+        </Sheet>
+      )}
+
+      <ConfirmModal
+        visible={confirmCancelBooking}
+        title="Cancel this booking?"
+        message="The job stays, without a time, so you can book it again. Its reminder and calendar event are removed. Let the customer know yourself."
+        confirmText="Cancel booking"
+        cancelText="Keep it"
+        variant="warning"
+        onConfirm={async () => {
+          await cancelJobReminder(job.id);
+          await removeJobFromCalendar(job.id);
+          updateJob(job.id, { status: 'APPROVED', scheduledDate: undefined, scheduledTime: undefined });
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setConfirmCancelBooking(false)}
+      />
+
+      <ConfirmModal
+        visible={confirmDelete}
+        title="Delete this job?"
+        message={`The job for ${customer.name} and its quote, parts, notes and photos will be deleted. This can’t be undone.`}
+        confirmText="Delete job"
+        cancelText="Cancel"
+        variant="error"
+        onConfirm={async () => {
+          await cancelJobReminder(job.id);
+          await removeJobFromCalendar(job.id);
+          deleteJob(job.id);
+          goBack();
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setConfirmDelete(false)}
+      />
 
       <UpgradePrompt visible={limitPrompt} onClose={() => setLimitPrompt(false)} feature="invoices" />
 

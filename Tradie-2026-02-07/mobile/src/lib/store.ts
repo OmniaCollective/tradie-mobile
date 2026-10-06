@@ -49,6 +49,7 @@ export interface Quote {
   labour: number;
   materials: number;
   travel: number;
+  /** Only on quotes from before 1.6; new quotes put the emergency rate into labour. */
   emergencySurcharge: number;
   vat: number;
   total: number;
@@ -78,6 +79,8 @@ export interface Job {
   urgency: Urgency;
   status: JobStatus;
   quote?: Quote;
+  /** When the quote PDF was shared with the customer. Unset = not sent yet. */
+  quoteSentAt?: string;
   scheduledDate?: string;
   scheduledTime?: string;
   completedAt?: string;
@@ -273,7 +276,7 @@ interface TradeStore {
 
   // Tax set-aside tracking
   taxSetAsideTotal: number; // Cumulative amount user has set aside this tax year
-  taxSetAsideTaxYear: string; // Format: "YYYY" (April start year)
+  taxSetAsideTaxYear: string; // taxYearKey() of the year the total belongs to
 
   // Job actions
   addJob: (job: Omit<Job, 'id' | 'createdAt'>) => string;
@@ -298,6 +301,8 @@ interface TradeStore {
   // Invoice actions
   createInvoice: (jobId: string) => string | null;
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
+  /** Removes an invoice made by mistake; its job goes back to Done so it can be invoiced again. */
+  deleteInvoice: (id: string) => void;
   getInvoice: (id: string) => Invoice | undefined;
 
   // Expense actions
@@ -323,14 +328,17 @@ interface TradeStore {
   completeOnboarding: () => void;
 
   // Tax set-aside actions
-  addTaxSetAside: (amount: number) => void;
+  /** Sets the total put aside for tax this tax year (the tradie can correct it any time). */
+  setTaxSetAside: (total: number) => void;
 
   // Demo data actions
   loadSampleData: () => void;
   clearAllData: () => void;
 
   // Quote calculation
-  calculateQuote: (jobType: JobType, urgency: Urgency, distanceMiles?: number, additionalMaterials?: number, explicitPartsTotal?: number) => Quote;
+  calculateQuote: (jobType: JobType, urgency: Urgency) => Quote;
+  /** Changes a job's quote; VAT and total are worked out again. */
+  updateQuote: (jobId: string, prices: QuotePrices) => void;
 }
 
 export const useTradeStore = create<TradeStore>()(
@@ -348,11 +356,7 @@ export const useTradeStore = create<TradeStore>()(
 
       // Tax set-aside tracking
       taxSetAsideTotal: 0,
-      taxSetAsideTaxYear: (() => {
-        const now = new Date();
-        return ((now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6)
-          ? now.getFullYear() : now.getFullYear() - 1).toString();
-      })(),
+      taxSetAsideTaxYear: '',
 
       // Job actions
       addJob: (jobData) => {
@@ -493,12 +497,27 @@ export const useTradeStore = create<TradeStore>()(
         return id;
       },
 
+      deleteInvoice: (id) => {
+        set((state) => {
+          const invoice = state.invoices.find((inv) => inv.id === id);
+          return {
+            invoices: state.invoices.filter((inv) => inv.id !== id),
+            jobs: invoice ? state.jobs.map((j) => (j.id === invoice.jobId ? { ...j, status: 'COMPLETED' } : j)) : state.jobs,
+          };
+        });
+      },
+
       updateInvoice: (id, updates) => {
-        set((state) => ({
-          invoices: state.invoices.map((inv) =>
-            inv.id === id ? { ...inv, ...updates } : inv
-          ),
-        }));
+        set((state) => {
+          const invoice = state.invoices.find((inv) => inv.id === id);
+          // The job follows its invoice: paid means paid, and undoing a payment puts it back to invoiced.
+          const jobStatus: JobStatus | undefined =
+            updates.status === 'paid' ? 'PAID' : updates.status && invoice?.status === 'paid' ? 'INVOICED' : undefined;
+          return {
+            invoices: state.invoices.map((inv) => (inv.id === id ? { ...inv, ...updates } : inv)),
+            jobs: jobStatus && invoice ? state.jobs.map((j) => (j.id === invoice.jobId ? { ...j, status: jobStatus } : j)) : state.jobs,
+          };
+        });
       },
 
       getInvoice: (id) => get().invoices.find((inv) => inv.id === id),
@@ -622,23 +641,11 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       // Tax set-aside actions
-      addTaxSetAside: (amount) => {
-        const now = new Date();
-        const currentTaxYear = ((now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6)
-          ? now.getFullYear() : now.getFullYear() - 1).toString();
-
-        set((state) => {
-          // Reset if new tax year
-          if (state.taxSetAsideTaxYear !== currentTaxYear) {
-            return {
-              taxSetAsideTotal: amount,
-              taxSetAsideTaxYear: currentTaxYear,
-            };
-          }
-          return {
-            taxSetAsideTotal: Math.round((state.taxSetAsideTotal + amount) * 100) / 100,
-          };
-        });
+      setTaxSetAside: (total) => {
+        set((state) => ({
+          taxSetAsideTotal: Math.max(0, Math.round(total * 100) / 100),
+          taxSetAsideTaxYear: taxYearKey(regionFor(state.settings.country).country),
+        }));
       },
 
       // Demo data actions
@@ -651,6 +658,7 @@ export const useTradeStore = create<TradeStore>()(
           expenses: data.expenses,
           todos: data.todos,
           taxSetAsideTotal: data.taxSetAsideTotal,
+          taxSetAsideTaxYear: taxYearKey(regionFor(get().settings.country).country),
         });
       },
 
@@ -666,54 +674,34 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       // Quote calculation
-      calculateQuote: (jobType, urgency, distanceMiles = 5, additionalMaterials = 0, explicitPartsTotal) => {
+      // A new quote is the tradie's own price for the job type, at the urgency rate. Materials and
+      // travel start at nothing and are added by the tradie, never guessed.
+      calculateQuote: (jobType, urgency) => {
         const { settings, pricingPresets } = get();
         const preset = pricingPresets.find((p) => p.type === jobType);
+        if (!preset) throw new Error('Invalid job type');
 
-        if (!preset) {
-          throw new Error('Invalid job type');
-        }
-
-        // Base labour cost
         let labour = Math.max(preset.basePrice, settings.minimumCharge);
+        if (urgency === 'urgent') labour *= settings.urgentMultiplier;
+        else if (urgency === 'emergency') labour *= settings.emergencyMultiplier;
 
-        // Apply urgency multiplier
-        if (urgency === 'urgent') {
-          labour *= settings.urgentMultiplier;
-        } else if (urgency === 'emergency') {
-          labour *= settings.emergencyMultiplier;
-        }
-
-        // Calculate travel
-        const travel = distanceMiles * settings.travelRatePerMile;
-
-        // Materials (base estimate + additional)
-        const materials = (preset.basePrice * 0.15) + additionalMaterials;
-
-        // Emergency surcharge
-        const emergencySurcharge = urgency === 'emergency' ? labour * 0.25 : 0;
-
-        // Subtotal before VAT
-        const subtotal = labour + materials + travel + emergencySurcharge;
-
-        // VAT — only for VAT-registered UK traders (US sales tax isn't handled)
-        const vat = settings.vatRegistered && regionFor(settings.country).country === 'GB' ? subtotal * (settings.vatRate / 100) : 0;
-
-        // Total
-        const total = subtotal + vat;
-
+        const now = new Date();
         return {
           id: generateId(),
           jobId: '',
-          labour: Math.round(labour * 100) / 100,
-          materials: Math.round(materials * 100) / 100,
-          travel: Math.round(travel * 100) / 100,
-          emergencySurcharge: Math.round(emergencySurcharge * 100) / 100,
-          vat: Math.round(vat * 100) / 100,
-          total: Math.round(total * 100) / 100,
-          validUntil: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-          createdAt: new Date().toISOString(),
+          ...priceQuote(settings, { labour, materials: 0, travel: 0 }),
+          validUntil: new Date(now.getTime() + QUOTE_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          createdAt: now.toISOString(),
         };
+      },
+
+      updateQuote: (jobId, prices) => {
+        const { settings } = get();
+        set((state) => ({
+          jobs: state.jobs.map((j) =>
+            j.id === jobId && j.quote ? { ...j, quote: { ...j.quote, ...priceQuote(settings, prices, j.quote.emergencySurcharge) } } : j,
+          ),
+        }));
       },
     }),
     {
@@ -817,6 +805,52 @@ export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
 export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
 export const useSettings = () => useTradeStore(useShallow((s) => s.settings));
+
+/**
+ * Which tax year a date falls in: the UK year starting 6 April (e.g. "2026" for 2026/27),
+ * or the US calendar year.
+ */
+export function taxYearKey(country: Country, now: Date = new Date()): string {
+  if (country === 'US') return String(now.getFullYear());
+  const afterStart = now.getMonth() > 3 || (now.getMonth() === 3 && now.getDate() >= 6);
+  return String(afterStart ? now.getFullYear() : now.getFullYear() - 1);
+}
+
+/** Amount put aside for tax in the current tax year; a total from a past year counts as nothing. */
+export const useTaxSetAside = (): number =>
+  useTradeStore((s) =>
+    s.taxSetAsideTaxYear === taxYearKey(regionFor(s.settings.country).country) ? s.taxSetAsideTotal : 0,
+  );
+
+/** How long a new quote stays valid. */
+export const QUOTE_VALID_DAYS = 30;
+
+export interface QuotePrices {
+  labour: number;
+  materials: number;
+  travel: number;
+}
+
+const roundPence = (n: number) => Math.round(n * 100) / 100;
+
+/** Line amounts plus VAT (VAT-registered UK traders only) and total. */
+export function priceQuote(
+  settings: Pick<BusinessSettings, 'vatRegistered' | 'vatRate' | 'country'>,
+  { labour, materials, travel }: QuotePrices,
+  emergencySurcharge = 0,
+): Pick<Quote, 'labour' | 'materials' | 'travel' | 'emergencySurcharge' | 'vat' | 'total'> {
+  const subtotal = roundPence(labour) + roundPence(materials) + roundPence(travel) + roundPence(emergencySurcharge);
+  const vatApplies = settings.vatRegistered && regionFor(settings.country).country === 'GB';
+  const vat = vatApplies ? roundPence(subtotal * (settings.vatRate / 100)) : 0;
+  return {
+    labour: roundPence(labour),
+    materials: roundPence(materials),
+    travel: roundPence(travel),
+    emergencySurcharge: roundPence(emergencySurcharge),
+    vat,
+    total: roundPence(subtotal + vat),
+  };
+}
 
 /** The name customers see: the business name, or the tradie's own name if there isn't one. */
 export const businessDisplayName = (settings: Pick<BusinessSettings, 'businessName' | 'ownerName'>): string =>

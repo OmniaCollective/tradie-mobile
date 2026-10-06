@@ -230,6 +230,19 @@ export async function syncJobToCalendar(
   }
 }
 
+/** Removes a job's event from the iPhone calendar, e.g. when the job is deleted. */
+export async function removeJobFromCalendar(jobId: string): Promise<void> {
+  try {
+    const syncedEvents = await getSyncedEvents();
+    const syncedEvent = syncedEvents.find((e) => e.jobId === jobId);
+    if (!syncedEvent) return;
+    await Calendar.deleteEventAsync(syncedEvent.eventId);
+    await saveSyncedEvents(syncedEvents.filter((e) => e.jobId !== jobId));
+  } catch (error) {
+    if (__DEV__) console.error('[Calendar] Error removing job:', error);
+  }
+}
+
 /**
  * Sync all scheduled jobs to the device calendar
  */

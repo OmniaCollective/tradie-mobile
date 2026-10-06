@@ -51,27 +51,37 @@ async function saveReceipt(uri: string): Promise<string> {
 
 export default function AddExpenseScreen() {
   const router = useRouter();
+  // Opened from a link or notification there may be nothing to go back to; then go Home.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
-  const { jobId: routeJobId } = useLocalSearchParams<{ jobId?: string }>();
+  const { jobId: routeJobId, id: editId } = useLocalSearchParams<{ jobId?: string; id?: string }>();
   const addExpense = useTradeStore((s) => s.addExpense);
+  const updateExpense = useTradeStore((s) => s.updateExpense);
+  // Editing: start from the saved expense. Phone costs are stored as the business share, so show the full bill.
+  const [editing] = useState(() => (editId ? useTradeStore.getState().expenses.find((e) => e.id === editId) : undefined));
+  const fullAmount = editing
+    ? editing.businessUsePercent
+      ? Math.round((editing.amount * 100) / editing.businessUsePercent * 100) / 100
+      : editing.amount
+    : undefined;
   const expenses = useTradeStore((s) => s.expenses);
   const getCustomer = useTradeStore((s) => s.getCustomer);
   const settings = useTradeStore((s) => s.settings);
   const jobs = useJobs();
   const { isPro, isLoading } = useProAccess();
 
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ExpenseCategory | null>(null);
-  const [date, setDate] = useState(() => new Date());
+  const [amount, setAmount] = useState(fullAmount !== undefined && !editing?.miles ? String(fullAmount) : '');
+  const [description, setDescription] = useState(editing?.description ?? '');
+  const [category, setCategory] = useState<ExpenseCategory | null>(editing?.category ?? null);
+  const [date, setDate] = useState(() => (editing ? parseDate(editing.date) : new Date()));
   const [showDate, setShowDate] = useState(false);
   const [picker, setPicker] = useState<'category' | 'job' | null>(null);
-  const [receiptUri, setReceiptUri] = useState<string | null>(null);
-  const [miles, setMiles] = useState('');
-  const [businessUse, setBusinessUse] = useState('100');
-  const [vatAmount, setVatAmount] = useState('');
-  const [jobId, setJobId] = useState<string | null>(routeJobId || null);
+  const [receiptUri, setReceiptUri] = useState<string | null>(editing?.receiptUri ?? null);
+  const [miles, setMiles] = useState(editing?.miles ? String(editing.miles) : '');
+  const [businessUse, setBusinessUse] = useState(editing?.businessUsePercent ? String(editing.businessUsePercent) : '100');
+  const [vatAmount, setVatAmount] = useState(editing?.vatAmount ? String(editing.vatAmount) : '');
+  const [jobId, setJobId] = useState<string | null>(editing?.jobId ?? routeJobId ?? null);
   const [saving, setSaving] = useState(false);
 
   // Expenses are a Pro feature.
@@ -123,7 +133,7 @@ export default function AddExpenseScreen() {
     if (!category || !canSave) return;
     setSaving(true);
     try {
-      addExpense({
+      const fields = {
         amount: Math.round(claimable * 100) / 100,
         description: description.trim() || EXPENSE_CATEGORY_LABELS[category],
         category,
@@ -133,9 +143,11 @@ export default function AddExpenseScreen() {
         businessUsePercent: category === 'phone_internet' ? num(businessUse) || 100 : undefined,
         vatAmount: num(vatAmount) > 0 ? Math.round(num(vatAmount) * 100) / 100 : undefined,
         jobId: jobId || undefined,
-      });
+      };
+      if (editing) updateExpense(editing.id, fields);
+      else addExpense(fields);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      goBack();
     } catch (error) {
       if (__DEV__) console.error('Save expense error:', error);
       setSaving(false);
@@ -146,10 +158,10 @@ export default function AddExpenseScreen() {
     <View className="flex-1 bg-bg">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
-        <Pressable onPress={() => router.back()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
+        <Pressable onPress={() => goBack()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
           <Text className="text-link text-[17px]">Cancel</Text>
         </Pressable>
-        <Text className="text-fg text-[17px] font-semibold">New expense</Text>
+        <Text className="text-fg text-[17px] font-semibold">{editing ? 'Edit expense' : 'New expense'}</Text>
         <Pressable onPress={handleSave} disabled={!canSave} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
           <Text className={cn('text-[17px] font-semibold', canSave ? 'text-link' : 'text-secondary opacity-50')}>Save</Text>
         </Pressable>

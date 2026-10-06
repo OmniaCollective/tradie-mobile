@@ -83,7 +83,9 @@ export default function HomeScreen() {
   );
   const nextUp: Job | undefined = inProgress ?? upcoming[0];
   const comingUp = upcoming.filter((j) => j.id !== nextUp?.id).slice(0, 3);
-  const quotes = jobs.filter((j) => j.status === 'QUOTED');
+  // Quotes not yet accepted (sent or still to send), and accepted jobs that still need a time.
+  const quotes = jobs.filter((j) => j.status === 'REQUESTED' || j.status === 'QUOTED');
+  const toBook = jobs.filter((j) => j.status === 'APPROVED' && !j.scheduledDate);
 
   const label = (job: Job) => getJobTypeLabel(settings.trade, job.type);
   const customerName = (job: Job) => getCustomer(job.customerId)?.name ?? 'Unknown customer';
@@ -242,33 +244,79 @@ export default function HomeScreen() {
               <SectionHeader title="Quotes waiting" />
               <Group>
                 {quotes.map((job, i) => {
-                  const expired = !!job.quote?.validUntil && new Date(job.quote.validUntil) < new Date();
+                  const sent = job.status === 'QUOTED' && !!job.quoteSentAt;
+                  const expired = sent && !!job.quote?.validUntil && new Date(job.quote.validUntil) < new Date();
                   return (
-                    <View key={job.id}>
-                      {i > 0 && <RowDivider />}
-                      <Pressable
-                        onPress={() => router.push(`/job/${job.id}`)}
-                        className="flex-row items-center px-4 py-3 active:opacity-70"
-                        accessibilityRole="button"
-                      >
-                        <View className="flex-1 mr-3">
-                          <Text className="text-fg text-base font-medium" numberOfLines={1}>{label(job)}</Text>
-                          <Text className={expired ? 'text-alert text-sm' : 'text-secondary text-sm'} numberOfLines={1}>
-                            {customerName(job)}
-                            {job.quote ? ` · ${expired ? 'expired' : `sent ${daysAgo(job.quote.createdAt)}`}` : ''}
-                          </Text>
-                        </View>
-                        {job.quote && <Text className="text-fg text-base font-semibold mr-2">{money(job.quote.total)}</Text>}
-                        <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
-                      </Pressable>
-                    </View>
+                    <JobRow
+                      key={job.id}
+                      first={i === 0}
+                      title={label(job)}
+                      detail={`${customerName(job)} · ${expired ? 'expired' : sent ? `sent ${daysAgo(job.quoteSentAt!)}` : 'not sent yet'}`}
+                      alert={expired}
+                      amount={job.quote ? money(job.quote.total) : undefined}
+                      onPress={() => router.push(`/job/${job.id}`)}
+                    />
                   );
                 })}
+              </Group>
+            </View>
+          )}
+
+          {/* Accepted, not booked yet */}
+          {toBook.length > 0 && (
+            <View>
+              <SectionHeader title="To book" />
+              <Group>
+                {toBook.map((job, i) => (
+                  <JobRow
+                    key={job.id}
+                    first={i === 0}
+                    title={label(job)}
+                    detail={`${customerName(job)} · ${job.offeredSlots?.length ? 'times offered' : 'quote accepted'}`}
+                    amount={job.quote ? money(job.quote.total) : undefined}
+                    onPress={() => router.push(`/job/${job.id}`)}
+                  />
+                ))}
               </Group>
             </View>
           )}
         </>
       )}
     </ScrollView>
+  );
+}
+
+function JobRow({
+  first,
+  title,
+  detail,
+  alert,
+  amount,
+  onPress,
+}: {
+  first: boolean;
+  title: string;
+  detail: string;
+  alert?: boolean;
+  amount?: string;
+  onPress: () => void;
+}) {
+  const t = useTheme();
+  return (
+    <View>
+      {!first && <RowDivider />}
+      <Pressable onPress={onPress} className="flex-row items-center px-4 py-3 active:opacity-70" accessibilityRole="button">
+        <View className="flex-1 mr-3">
+          <Text className="text-fg text-base font-medium" numberOfLines={1}>
+            {title}
+          </Text>
+          <Text className={alert ? 'text-alert text-sm' : 'text-secondary text-sm'} numberOfLines={1}>
+            {detail}
+          </Text>
+        </View>
+        {amount && <Text className="text-fg text-base font-semibold mr-2">{amount}</Text>}
+        <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+      </Pressable>
+    </View>
   );
 }
