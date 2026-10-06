@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Welcome to Tradie</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#0E7C86}a:hover{color:#0B6770}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 96px 24px 40px; background: {{c.bg}}; color: {{c.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column; justify-content: space-between">
+
+<div style="display: flex; flex-direction: column; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 17px; font-weight: 800; letter-spacing: 0.14em; color: {{c.accentText}}">TRADIE</div>
+<h1 style="margin: 0; font-size: 34px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em">Quotes, jobs and invoices. Sorted.</h1>
+<p style="margin: 0; font-size: 17px; line-height: 1.45; color: {{c.secondary}}">Built for UK sole traders. Know what to set aside for tax as you go.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; gap: 14px; align-items: flex-start">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 600">Add a job by voice</span><span style="font-size: 15px; color: {{c.secondary}}">Say it once, the details fill themselves in</span></div>
+</div>
+<div style="display: flex; gap: 14px; align-items: flex-start">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 600">Quote and invoice in a tap</span><span style="font-size: 15px; color: {{c.secondary}}">Professional PDFs from your own prices</span></div>
+</div>
+<div style="display: flex; gap: 14px; align-items: flex-start">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M18 7c0-5.333-8-5.333-8 0"/><path d="M10 7v14"/><path d="M6 21h12"/><path d="M6 13h10"/></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 600">Your tax, worked out</span><span style="font-size: 15px; color: {{c.secondary}}">Income Tax and NI to set aside, live</span></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<button style="height: 52px; border: 0; border-radius: 12px; background: {{c.appleBg}}; color: {{c.appleText}}; font: inherit; font-size: 17px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px"><span style="font-size: 20px; line-height: 1"></span>Continue with Apple</button>
+<button style="height: 48px; border: 0; background: transparent; color: {{c.text}}; font: inherit; font-size: 16px; font-weight: 600">Not now</button>
+<p style="margin: 4px 0 0; font-size: 12px; line-height: 1.5; text-align: center; color: {{c.secondary}}">Signing in keeps Pro on a new phone and lets voice work. Your jobs stay on your phone. <a href="#" style="color: {{c.accentText}}">Privacy</a></p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0F172A', text: '#F8FAFC', secondary: '#94A3B8', accentText: '#00F5F5', appleBg: '#FFFFFF', appleText: '#000000' },
+      light: { bg: '#F3F5F7', text: '#0B1220', secondary: '#5B6676', accentText: '#0E7C86', appleBg: '#000000', appleText: '#FFFFFF' }
+    };
+    return { c: themes[this.props.mode ?? 'dark'] || themes.dark };
+  }
+}
+</script>
+</body>
+</html>

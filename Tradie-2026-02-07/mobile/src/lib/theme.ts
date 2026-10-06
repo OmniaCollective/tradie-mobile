@@ -1,43 +1,92 @@
 /**
- * App-wide design tokens.
- * Import from here instead of defining colors inline.
+ * Tradie design tokens (brand system v4, approved 2026-10-06 — see brand/BRAND-BRIEF.md).
  *
- * NOTE: NativeWind className strings (e.g. `bg-[#0F172A]`) must use literal hex
- * values — Tailwind cannot resolve JS constants at build time. Use these exports
- * for icon `color` props, inline `style` objects, and any JS-computed values.
+ * Eight colours, each with a light and a dark value. Screens never use raw hex:
+ * - In className, use the token utilities from tailwind.config.js
+ *   (`bg-bg`, `bg-surface`, `border-divider`, `text-fg`, `text-secondary`,
+ *   `bg-accent`, `text-on-accent`, `text-link`, `text-alert`). They read CSS
+ *   variables that ThemeRoot sets from the phone's light/dark setting.
+ * - For icon `color` props and other JS values, use `useTheme()`.
  */
+import { useColorScheme } from 'react-native';
+import { vars } from 'nativewind';
 
-// ─── Primary accent ───────────────────────────────────────────────────────────
-export const TURQUOISE = '#14B8A6';
-export const TURQUOISE_DARK = '#0D9488';
-export const TURQUOISE_DEEPER = '#134E4A';
+export interface Palette {
+  /** Screen behind everything */
+  bg: string;
+  /** Grouped lists, sheets, tab bar */
+  surface: string;
+  /** Lines inside lists, input borders */
+  divider: string;
+  /** Titles, body, amounts */
+  fg: string;
+  /** Supporting text, idle icons */
+  secondary: string;
+  /** Logo cyan: primary button fill, active marks */
+  accent: string;
+  /** Text and icons on the accent fill */
+  onAccent: string;
+  /** Links, active tab, "Paid" */
+  link: string;
+  /** Overdue, emergency, delete */
+  alert: string;
+}
 
-// ─── Backgrounds ──────────────────────────────────────────────────────────────
-export const DARK_BG = '#0F172A';
-export const CARD_BG = '#1E293B';
+export const palettes: Record<'light' | 'dark', Palette> = {
+  light: {
+    bg: '#F3F5F7',
+    surface: '#FFFFFF',
+    divider: '#E4E7EB',
+    fg: '#0B1220',
+    secondary: '#5B6676',
+    accent: '#00F5F5',
+    onAccent: '#0F172A',
+    link: '#0E7C86',
+    alert: '#B91C1C',
+  },
+  dark: {
+    bg: '#0F172A',
+    surface: '#1E293B',
+    divider: '#334155',
+    fg: '#F8FAFC',
+    secondary: '#94A3B8',
+    accent: '#00F5F5',
+    onAccent: '#0F172A',
+    link: '#00F5F5',
+    alert: '#F87171',
+  },
+};
 
-// ─── Borders & UI chrome ──────────────────────────────────────────────────────
-export const BORDER = '#334155';
+export type ColorMode = 'light' | 'dark';
 
-// ─── Slate scale (low → high luminance) ──────────────────────────────────────
-export const SLATE_600 = '#475569';   // placeholder text
-export const SLATE_500 = '#64748B';   // muted icons / secondary text
-export const SLATE_400 = '#94A3B8';   // tertiary text
-export const SLATE_300 = '#CBD5E1';
-export const SLATE_200 = '#E2E8F0';
+export function useColorMode(): ColorMode {
+  return useColorScheme() === 'light' ? 'light' : 'dark';
+}
 
-// ─── Text ─────────────────────────────────────────────────────────────────────
-export const TEXT_PRIMARY = '#F8FAFC';  // near-white, headings / body on dark BG
-export const WHITE = '#FFFFFF';         // pure white — icons on coloured buttons
+/** The current palette, for icon colours and other values outside className. */
+export function useTheme(): Palette & { mode: ColorMode } {
+  const mode = useColorMode();
+  return { ...palettes[mode], mode };
+}
 
-// ─── Semantic status colours ──────────────────────────────────────────────────
-export const GREEN = '#22C55E';    // completed / success
-export const EMERALD = '#10B981';  // paid / approved
-export const AMBER = '#F59E0B';    // warning / pending / urgent
-export const ORANGE = '#F97316';   // invoiced
-export const RED = '#EF4444';      // danger / error / emergency
-export const BLUE = '#3B82F6';     // scheduled / info
-export const PURPLE = '#8B5CF6';   // quoted / sent (invoice)
+function rgbTriplet(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}
 
-// ─── Premium / highlight ──────────────────────────────────────────────────────
-export const YELLOW = '#FCD34D';   // premium star / lifetime badge
+function cssVars(p: Palette) {
+  return vars({
+    '--c-bg': rgbTriplet(p.bg),
+    '--c-surface': rgbTriplet(p.surface),
+    '--c-divider': rgbTriplet(p.divider),
+    '--c-fg': rgbTriplet(p.fg),
+    '--c-secondary': rgbTriplet(p.secondary),
+    '--c-accent': rgbTriplet(p.accent),
+    '--c-on-accent': rgbTriplet(p.onAccent),
+    '--c-link': rgbTriplet(p.link),
+    '--c-alert': rgbTriplet(p.alert),
+  });
+}
+
+/** NativeWind variable sets, applied by ThemeRoot at the top of the app. */
+export const themeVars = { light: cssVars(palettes.light), dark: cssVars(palettes.dark) };

@@ -1,6 +1,19 @@
-import { JobType } from './store';
+import type { JobType } from './store';
+import type { Country } from './region';
+import { US_TRADES } from './data/usTrades';
 
-export type Trade = 'plumber' | 'electrician' | 'gardener' | 'cleaner' | 'dog_walker' | 'window_cleaner' | 'carpenter' | 'diy' | 'car_valet' | 'carpet_cleaner' | 'custom';
+export type Trade =
+  | 'plumber'
+  | 'electrician'
+  | 'gardener'
+  | 'cleaner'
+  | 'dog_walker'
+  | 'window_cleaner'
+  | 'carpenter'
+  | 'diy'
+  | 'car_valet'
+  | 'carpet_cleaner'
+  | 'custom';
 
 export interface PricingPreset {
   type: JobType;
@@ -231,12 +244,6 @@ export const tradeConfigs: Record<Trade, TradeConfig> = {
   },
 };
 
-export const getTradeConfig = (trade: Trade): TradeConfig => {
-  return tradeConfigs[trade];
-};
-
-export const getJobTypeLabel = (trade: Trade, jobType: JobType): string => {
-  const config = getTradeConfig(trade);
-  const preset = config.jobTypes.find((j) => j.type === jobType);
-  return preset?.label || jobType;
-};
+/** A trade's wording, job types and starting prices for the tradie's country. */
+export const getTradeConfig = (trade: Trade, country: Country = 'GB'): TradeConfig =>
+  country === 'US' ? { ...tradeConfigs[trade], ...US_TRADES[trade] } : tradeConfigs[trade];

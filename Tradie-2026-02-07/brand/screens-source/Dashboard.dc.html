@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tradie dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#0E7C86}a:hover{color:#0B6770}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: {{c.bg}}; color: {{c.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif">
+
+<div style="padding: 60px 16px 0; display: flex; flex-direction: column; gap: 28px">
+
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 14px; color: {{c.secondary}}">Tuesday 6 October</div>
+<h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em">Morning, Paul</h1>
+</div>
+<button style="height: 40px; padding: 0 14px 0 10px; border: 0; border-radius: 12px; background: {{c.accent}}; color: {{c.onAccent}}; font: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>New job</button>
+</div>
+
+<div style="background: {{c.surface}}; border-radius: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: {{c.secondary}}">Unpaid</span>
+<span style="font-size: 22px; font-weight: 700; letter-spacing: -0.01em">£92.00</span>
+<span style="font-size: 12px; color: {{c.alert}}; display: flex; align-items: center; gap: 4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>1 overdue</span>
+</div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; border-left: 1px solid {{c.divider}}">
+<span style="font-size: 13px; color: {{c.secondary}}">Paid this month</span>
+<span style="font-size: 22px; font-weight: 700; letter-spacing: -0.01em">£485.00</span>
+<span style="font-size: 12px; color: {{c.secondary}}">3 invoices</span>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0 4px; font-size: 17px; font-weight: 600">Next up</h2>
+<div style="background: {{c.surface}}; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<span style="font-size: 14px; font-weight: 600; color: {{c.accentText}}">Thu 8 Oct · 11:00</span>
+<span style="font-size: 14px; color: {{c.secondary}}">£118.00</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 17px; font-weight: 600">Toilet fill valve</span>
+<span style="font-size: 15px; color: {{c.secondary}}">Emma Davis · 91 Church Road, SE1</span>
+</div>
+<div style="display: flex; gap: 20px; padding-top: 6px; border-top: 1px solid {{c.divider}}; font-size: 15px; font-weight: 600; color: {{c.accentText}}">
+<a href="#" style="display: flex; align-items: center; gap: 6px; text-decoration: none; color: inherit; min-height: 44px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>Call</a>
+<a href="#" style="display: flex; align-items: center; gap: 6px; text-decoration: none; color: inherit; min-height: 44px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Directions</a>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">Quotes waiting</h2>
+<a href="#" style="font-size: 15px; color: {{c.accentText}}; text-decoration: none">See all</a>
+</div>
+<div style="background: {{c.surface}}; border-radius: 16px; padding: 0 16px">
+<sc-for list="{{quotes}}" as="q" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: {{q.divider}}">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 500">{{q.title}}</span>
+<span style="font-size: 14px; color: {{c.secondary}}">{{q.customer}} · sent {{q.sent}}</span>
+</div>
+<span style="font-size: 16px; font-weight: 600">{{q.amount}}</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{c.secondary}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<nav style="position: absolute; left: 0; right: 0; bottom: 0; height: 84px; box-sizing: border-box; padding: 8px 8px 0; background: {{c.surface}}; border-top: 1px solid {{c.divider}}; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+<a href="#" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{c.accentText}}; font-size: 11px; font-weight: 600">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</a>
+<a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{c.secondary}}; font-size: 11px; font-weight: 500">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Jobs</a>
+<a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{c.secondary}}; font-size: 11px; font-weight: 500">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7c0-5.333-8-5.333-8 0"/><path d="M10 7v14"/><path d="M6 21h12"/><path d="M6 13h10"/></svg>Money</a>
+<a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: {{c.secondary}}; font-size: 11px; font-weight: 500">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Account</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'dark';
+    const themes = {
+      dark: {
+        bg: '#0F172A', surface: '#1E293B', divider: '#334155',
+        text: '#F8FAFC', secondary: '#94A3B8',
+        accent: '#00F5F5', accentText: '#00F5F5', onAccent: '#0F172A', alert: '#F87171'
+      },
+      light: {
+        bg: '#F3F5F7', surface: '#FFFFFF', divider: '#E4E7EB',
+        text: '#0B1220', secondary: '#5B6676',
+        accent: '#00F5F5', accentText: '#0E7C86', onAccent: '#0F172A', alert: '#B91C1C'
+      }
+    };
+    const c = themes[mode] || themes.dark;
+    const quotes = [
+      { title: 'Water heater replacement', customer: 'Mike Johnson', sent: '3 days ago', amount: '£560' },
+      { title: 'Burst pipe repair', customer: 'John Smith', sent: '20 days ago', amount: '£240' }
+    ].map((q, i) => ({ ...q, divider: i === 0 ? '0' : '1px solid ' + c.divider }));
+    return { c, quotes };
+  }
+}
+</script>
+</body>
+</html>

@@ -14,10 +14,13 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Tradie uses your camera to take photos of job sites and completed work for quotes and invoices.",
-        "NSCalendarsUsageDescription": "Tradie syncs your scheduled jobs to your calendar so you never miss an appointment.",
+        "NSCalendarsUsageDescription": "Tradie adds your scheduled jobs to your calendar and checks when you're busy so it only suggests free times.",
         "NSPhotoLibraryUsageDescription": "Tradie accesses your photo library to attach photos of job sites and completed work.",
-        "NSMicrophoneUsageDescription": "Tradie uses your microphone for audio recording when documenting job sites."
-      }
+        "NSMicrophoneUsageDescription": "Tradie uses your microphone so you can add jobs by voice.",
+        "NSCalendarsFullAccessUsageDescription": "Tradie adds your scheduled jobs to your calendar and checks when you're busy so it only suggests free times.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Tradie adds your scheduled jobs to your calendar."
+      },
+      "usesAppleSignIn": true
     },
     "android": {},
     "plugins": [
@@ -40,11 +43,13 @@
       ],
       "expo-font",
       "expo-image",
-      "expo-mail-composer",
       "expo-sharing",
       "@react-native-community/datetimepicker",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-apple-authentication",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,9 +1,14 @@
 import { create } from 'zustand';
+import { regionFor, type Country, type RegionInfo } from './region';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as generateId } from 'uuid';
 import { Trade, getTradeConfig } from './trades';
 import { generateSampleData } from './sampleData';
+
+// Selector hooks for performance — useShallow prevents re-renders when
+// the returned object/array is structurally equal but referentially new.
+import { useShallow } from 'zustand/react/shallow';
 
 // Types
 export type JobStatus =
@@ -80,7 +85,21 @@ export interface Job {
   notes: string;
   parts?: Part[];
   photos?: JobPhoto[];
+  /** Times suggested to the customer by text, waiting for their reply. */
+  offeredSlots?: OfferedSlot[];
+  /** When those times were sent; they're held (pencilled in) for OFFER_HOLD_HOURS. */
+  offeredAt?: string;
 }
+
+export interface OfferedSlot {
+  /** YYYY-MM-DD, local */
+  date: string;
+  /** HH:MM, 24h */
+  time: string;
+}
+
+/** Offered times stay pencilled in so they aren't offered to someone else. */
+export const OFFER_HOLD_HOURS = 48;
 
 export interface Invoice {
   id: string;
@@ -173,12 +192,13 @@ export interface BusinessSettings {
     end: string;
   };
   workingDays: number[]; // 0 = Sunday, 6 = Saturday
+  /** Where the tradie works. Unset = the phone's region (see lib/region.ts). */
+  country?: Country;
+  /** US federal filing status for the tax estimate. */
+  usFilingStatus?: USFilingStatus;
 }
 
-export interface UsageTracking {
-  bookingLinksSentThisMonth: number;
-  currentMonth: string; // Format: "YYYY-MM"
-}
+export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
 
 export interface PricingPreset {
   type: JobType;
@@ -242,10 +262,6 @@ interface TradeStore {
   settings: BusinessSettings;
   pricingPresets: PricingPreset[];
 
-  // Usage tracking
-  bookingLinksSentThisMonth: number;
-  usageTrackingMonth: string; // Format: "YYYY-MM"
-
   // Tax set-aside tracking
   taxSetAsideTotal: number; // Cumulative amount user has set aside this tax year
   taxSetAsideTaxYear: string; // Format: "YYYY" (April start year)
@@ -290,13 +306,12 @@ interface TradeStore {
   updateSettings: (updates: Partial<BusinessSettings>) => void;
   updatePricingPreset: (type: JobType, updates: Partial<PricingPreset>) => void;
   setTrade: (trade: Trade) => void;
+  /** Switch country; job names follow, and prices still at the old defaults move to the new ones. */
+  setCountry: (country: Country) => void;
 
   // Onboarding
   hasCompletedOnboarding: boolean;
   completeOnboarding: () => void;
-
-  // Usage tracking actions
-  incrementBookingLinksSent: () => void;
 
   // Tax set-aside actions
   addTaxSetAside: (amount: number) => void;
@@ -321,10 +336,6 @@ export const useTradeStore = create<TradeStore>()(
       settings: defaultSettings,
       pricingPresets: defaultPricingPresets,
       hasCompletedOnboarding: false,
-
-      // Usage tracking
-      bookingLinksSentThisMonth: 0,
-      usageTrackingMonth: new Date().toISOString().slice(0, 7), // "YYYY-MM"
 
       // Tax set-aside tracking
       taxSetAsideTotal: 0,
@@ -553,7 +564,7 @@ export const useTradeStore = create<TradeStore>()(
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
 
       setTrade: (trade: Trade) => {
-        const tradeConfig = getTradeConfig(trade);
+        const tradeConfig = getTradeConfig(trade, regionFor(get().settings.country).country);
         set((state) => ({
           settings: {
             ...state.settings,
@@ -565,20 +576,36 @@ export const useTradeStore = create<TradeStore>()(
         }));
       },
 
-      // Usage tracking actions
-      incrementBookingLinksSent: () => {
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        set((state) => {
-          // Reset counter if we're in a new month
-          if (state.usageTrackingMonth !== currentMonth) {
+      setCountry: (country: Country) => {
+        const { settings, pricingPresets } = get();
+        const from = regionFor(settings.country).country;
+        if (from === country) {
+          set({ settings: { ...settings, country } });
+          return;
+        }
+        const before = getTradeConfig(settings.trade, from);
+        const after = getTradeConfig(settings.trade, country);
+        // Anything the tradie changed themselves stays as they set it.
+        const follow = <T, >(current: T, oldDefault: T | undefined, newDefault: T): T =>
+          oldDefault === undefined || current === oldDefault ? newDefault : current;
+        set({
+          settings: {
+            ...settings,
+            country,
+            hourlyRate: follow(settings.hourlyRate, before.defaultHourlyRate, after.defaultHourlyRate),
+            minimumCharge: follow(settings.minimumCharge, before.defaultMinimumCharge, after.defaultMinimumCharge),
+          },
+          pricingPresets: pricingPresets.map((p) => {
+            const o = before.jobTypes.find((j) => j.type === p.type);
+            const n = after.jobTypes.find((j) => j.type === p.type);
+            if (!n) return p;
             return {
-              bookingLinksSentThisMonth: 1,
-              usageTrackingMonth: currentMonth,
+              ...p,
+              label: follow(p.label, o?.label, n.label),
+              basePrice: follow(p.basePrice, o?.basePrice, n.basePrice),
+              estimatedHours: follow(p.estimatedHours, o?.estimatedHours, n.estimatedHours),
             };
-          }
-          return {
-            bookingLinksSentThisMonth: state.bookingLinksSentThisMonth + 1,
-          };
+          }),
         });
       },
 
@@ -758,16 +785,23 @@ export const useTradeStore = create<TradeStore>()(
   )
 );
 
-// Selector hooks for performance — useShallow prevents re-renders when
-// the returned object/array is structurally equal but referentially new.
-import { useShallow } from 'zustand/react/shallow';
-
 export const useJobs = () => useTradeStore(useShallow((s) => s.jobs));
 export const useCustomers = () => useTradeStore(useShallow((s) => s.customers));
 export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
 export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
 export const useSettings = () => useTradeStore(useShallow((s) => s.settings));
+
+/** Currency, date style and tax wording for the tradie's country. */
+export const useRegion = (): RegionInfo => regionFor(useTradeStore((s) => s.settings.country));
+export const getRegion = (): RegionInfo => regionFor(useTradeStore.getState().settings.country);
+
+/** What the tradie calls this job type — their own list first, then their trade's defaults for their country. */
+export const getJobTypeLabel = (trade: Trade, type: JobType): string => {
+  const { settings, pricingPresets } = useTradeStore.getState();
+  const own = settings.trade === trade ? pricingPresets.find((p) => p.type === type)?.label : undefined;
+  return own ?? getTradeConfig(trade, regionFor(settings.country).country).jobTypes.find((j) => j.type === type)?.label ?? type;
+};
 export const usePricingPresets = () => useTradeStore(useShallow((s) => s.pricingPresets));
 export const useJobExpenses = (jobId: string) =>
   useTradeStore(useShallow((s) => s.expenses.filter((e) => e.jobId === jobId)));

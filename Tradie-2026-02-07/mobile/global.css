@@ -2,3 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand tokens (src/lib/theme.ts). Defined here as well as on the root view so
+   anything rendered outside the root — modals, sheets — still gets them. */
+:root {
+  --c-bg: 243 245 247;
+  --c-surface: 255 255 255;
+  --c-divider: 228 231 235;
+  --c-fg: 11 18 32;
+  --c-secondary: 91 102 118;
+  --c-accent: 0 245 245;
+  --c-on-accent: 15 23 42;
+  --c-link: 14 124 134;
+  --c-alert: 185 28 28;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: 15 23 42;
+    --c-surface: 30 41 59;
+    --c-divider: 51 65 85;
+    --c-fg: 248 250 252;
+    --c-secondary: 148 163 184;
+    --c-accent: 0 245 245;
+    --c-on-accent: 15 23 42;
+    --c-link: 0 245 245;
+    --c-alert: 248 113 113;
+  }
+}

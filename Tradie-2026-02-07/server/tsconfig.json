@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    // ESM with Node's real resolution rules (same as Arken's vercel-api):
+    // every local import ends in ".js", which TypeScript maps to the ".ts" source.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist"
+  },
+  "include": ["api/**/*.ts"]
+}

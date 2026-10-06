@@ -1,8 +1,4 @@
-const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL;
-
-if (!BACKEND_URL && !__DEV__) {
-  throw new Error('EXPO_PUBLIC_VIBECODE_BACKEND_URL is not set. Cannot initialise payments API.');
-}
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 const BASE_URL = BACKEND_URL ?? 'http://localhost:3000';
 

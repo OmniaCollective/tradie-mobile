@@ -1,1063 +1,797 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TextInput,
-  Pressable,
-  Linking,
-  Share,
-  Image,
-  Platform,
-} from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, Linking, Image, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Phone,
-  MapPin,
-  Clock,
-  Calendar,
   MessageCircle,
-  Play,
-  Check,
-  FileText,
-  Send,
   Navigation,
-  Bell,
+  Calendar,
   CalendarPlus,
-  AlertCircle,
-  Receipt,
-  Plus,
+  CalendarClock,
+  Bell,
   Share2,
+  Plus,
+  Trash2,
+  CircleAlert,
+  Lock,
+  type LucideIcon,
 } from 'lucide-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useTradeStore, useJobExpenses, JobStatus, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
-import { getJobTypeLabel } from '@/lib/trades';
-import {
-  scheduleJobReminder,
-  sendBookingConfirmedNotification,
-} from '@/lib/notifications';
-import {
-  syncJobToCalendar,
-  requestCalendarPermissions,
-  hasCalendarPermissions,
-} from '@/lib/calendarSync';
-import {
-  sendCustomerReminder,
-  sendQuoteFollowup,
-  isQuoteExpiringSoon,
-} from '@/lib/customerReminders';
+import * as SMS from 'expo-sms';
+import { useTradeStore, useJobExpenses, EXPENSE_CATEGORY_LABELS, getRegion, getJobTypeLabel } from '@/lib/store';
+import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions } from '@/lib/calendarSync';
+import { activeOffer, offerExpired, formatSlot, slotDate, scheduleJob, confirmationMessage } from '@/lib/booking';
+import type { OfferedSlot } from '@/lib/store';
+import { sendCustomerReminder, sendQuoteFollowup, isQuoteExpiringSoon } from '@/lib/customerReminders';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { formatDateFull, formatTime } from '@/lib/dates';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { JobStatus } from '@/components/JobStatus';
+import { formatDateFull, formatTime, toDateKey } from '@/lib/dates';
+import { formatMoney, currencySymbol } from '@/lib/money';
 import { exportQuotePdf } from '@/lib/invoiceExport';
-import { TURQUOISE, GREEN, EMERALD, AMBER, ORANGE, BLUE, PURPLE, SLATE_500, WHITE } from '@/lib/theme';
+import { useProAccess } from '@/lib/useProAccess';
+import { useTheme } from '@/lib/theme';
+import { cn } from '@/lib/cn';
+import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet } from '@/components/ui';
 
-
-const statusLabels: Record<JobStatus, string> = {
-  REQUESTED: 'Requested',
-  QUOTED: 'Quoted',
-  APPROVED: 'Approved',
-  SCHEDULED: 'Scheduled',
-  IN_PROGRESS: 'In Progress',
-  COMPLETED: 'Completed',
-  INVOICED: 'Invoiced',
-  PAID: 'Paid',
-};
-
-const statusColors: Record<JobStatus, string> = {
-  REQUESTED: AMBER,
-  QUOTED: PURPLE,
-  APPROVED: EMERALD,
-  SCHEDULED: BLUE,
-  IN_PROGRESS: TURQUOISE,
-  COMPLETED: GREEN,
-  INVOICED: ORANGE,
-  PAID: EMERALD,
-};
+type PhotoTab = 'before' | 'during' | 'after';
 
 const makePhotoFileName = () => `photo_${Date.now()}.jpg`;
+const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View className="flex-row justify-between py-1">
+      <Text className={strong ? 'text-fg text-base font-semibold' : 'text-secondary text-[15px]'}>{label}</Text>
+      <Text className={strong ? 'text-fg text-[17px] font-bold' : 'text-fg text-[15px]'}>{value}</Text>
+    </View>
+  );
+}
 
 export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { getJob, getCustomer, updateJob, createInvoice, settings, addPart, removePart, addPhoto, removePhoto } = useTradeStore();
+  const insets = useSafeAreaInsets();
+  const t = useTheme();
+  const job = useTradeStore((s) => s.jobs.find((j) => j.id === id));
+  const customer = useTradeStore((s) => (job ? s.customers.find((c) => c.id === job.customerId) : undefined));
+  const settings = useTradeStore((s) => s.settings);
+  const updateJob = useTradeStore((s) => s.updateJob);
+  const createInvoice = useTradeStore((s) => s.createInvoice);
+  const addPart = useTradeStore((s) => s.addPart);
+  const removePart = useTradeStore((s) => s.removePart);
+  const addPhoto = useTradeStore((s) => s.addPhoto);
+  const removePhoto = useTradeStore((s) => s.removePhoto);
+  const jobExpenses = useJobExpenses(id);
+  const { isPro, canCreateInvoice, invoicesLeft } = useProAccess();
 
-  const [syncingCalendar, setSyncingCalendar] = useState(false);
-  const [sendingReminder, setSendingReminder] = useState(false);
-  const [modal, setModal] = useState<{ title: string; message: string; variant?: 'default' | 'success' | 'error' | 'warning' } | null>(null);
+  const [busy, setBusy] = useState<'calendar' | 'reminder' | null>(null);
+  const [modal, setModal] = useState<{
+    title: string;
+    message: string;
+    variant?: 'default' | 'success' | 'error' | 'warning';
+  } | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
   const [addingPart, setAddingPart] = useState(false);
   const [partName, setPartName] = useState('');
   const [partQty, setPartQty] = useState('');
   const [partCost, setPartCost] = useState('');
-  const [photoTab, setPhotoTab] = useState<'before' | 'during' | 'after'>('before');
-  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [photoTab, setPhotoTab] = useState<PhotoTab>('before');
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
   const [scheduleDate, setScheduleDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(10, 0, 0, 0);
-    return tomorrow;
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d;
   });
-  const [schedulePickerMode, setSchedulePickerMode] = useState<'date' | 'time'>('date');
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-
-  const job = getJob(id);
-  const customer = job ? getCustomer(job.customerId) : null;
-  const jobExpenses = useJobExpenses(id);
+  const [showComplete, setShowComplete] = useState(false);
+  const [limitPrompt, setLimitPrompt] = useState(false);
 
   if (!job || !customer) {
     return (
-      <View className="flex-1 bg-[#0F172A] items-center justify-center">
-        <Text className="text-slate-500">Job not found</Text>
+      <View className="flex-1 bg-bg items-center justify-center px-8">
+        <Stack.Screen options={{ title: 'Job' }} />
+        <Text className="text-secondary text-base text-center">This job no longer exists.</Text>
       </View>
     );
   }
 
-  const statusColor = statusColors[job.status];
+  const label = getJobTypeLabel(settings.trade, job.type);
+  const parts = job.parts ?? [];
+  const partsTotal = parts.reduce((s, p) => s + p.quantity * p.unitCost, 0);
+  const expensesTotal = jobExpenses.reduce((s, e) => s + e.amount, 0);
+  const photos = (job.photos ?? []).filter((p) => p.type === photoTab);
+  const isDone = job.status === 'COMPLETED' || job.status === 'INVOICED' || job.status === 'PAID';
 
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   const handleAddPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsMultipleSelection: false,
     });
-
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      // Copy to document directory for persistence
-      const fileName = makePhotoFileName();
-      const destDir = `${FileSystem.documentDirectory}job-photos/`;
-      await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
-      const destUri = `${destDir}${fileName}`;
-      await FileSystem.copyAsync({ from: asset.uri, to: destUri });
-
-      addPhoto(job.id, {
-        uri: destUri,
-        type: photoTab,
-        createdAt: new Date().toISOString(),
-      });
-    }
+    if (result.canceled || !result.assets[0]) return;
+    const destDir = `${FileSystem.documentDirectory}job-photos/`;
+    await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
+    const destUri = `${destDir}${makePhotoFileName()}`;
+    await FileSystem.copyAsync({ from: result.assets[0].uri, to: destUri });
+    addPhoto(job.id, {
+      uri: destUri,
+      type: photoTab,
+      createdAt: new Date().toISOString(),
+    });
   };
 
   const handleDeletePhoto = async (photoId: string, uri: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     removePhoto(job.id, photoId);
     try {
       await FileSystem.deleteAsync(uri, { idempotent: true });
     } catch {}
   };
 
-  const handleCall = () => {
-    Linking.openURL(`tel:${customer.phone}`);
-  };
-
-  const handleMessage = () => {
-    Linking.openURL(`sms:${customer.phone}`);
-  };
-
-  const handleNavigate = () => {
-    const address = encodeURIComponent(`${customer.address}, ${customer.postcode}`);
-    Linking.openURL(`https://maps.apple.com/?daddr=${address}`);
-  };
-
-  const handleStartJob = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    updateJob(job.id, { status: 'IN_PROGRESS' });
-  };
-
-  const handleCompleteJob = async () => {
-    setShowCompletionModal(true);
-  };
-
-  const confirmCompleteJob = async () => {
+  const confirmSchedule = async () => {
+    setShowSchedule(false);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateJob(job.id, {
-      status: 'COMPLETED',
-      completedAt: new Date().toISOString(),
-    });
-    setShowCompletionModal(false);
+    await scheduleJob(job, customer, scheduleDate);
   };
 
-  const handleCreateInvoice = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const invoiceId = createInvoice(job.id);
-    if (invoiceId) {
-      router.push('/(tabs)/finances');
+  /** Customer replied with one of the offered times: book it and send a confirmation. */
+  const bookOffered = async (slot: OfferedSlot) => {
+    const when = slotDate(slot);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await scheduleJob(job, customer, when);
+    if (customer.phone && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
+      await SMS.sendSMSAsync([customer.phone], confirmationMessage(customer, when));
     }
   };
 
-  const handleApproveQuote = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    updateJob(job.id, { status: 'APPROVED' });
+  const offers = activeOffer(job);
+  const expired = offerExpired(job);
+  const unscheduled = !job.scheduledDate && (job.status === 'REQUESTED' || job.status === 'QUOTED' || job.status === 'APPROVED');
+  const openSuggest = () => router.push(`/suggest-times?jobId=${job.id}`);
+  const openPicker = () => {
+    setPickerMode('date');
+    setShowSchedule(true);
   };
 
-  const handleScheduleJob = () => {
-    setShowSchedulePicker(true);
-    setSchedulePickerMode('date');
-  };
-
-  const confirmScheduleJob = async () => {
-    const scheduledDate = scheduleDate.toISOString().split('T')[0];
-    const hours = scheduleDate.getHours().toString().padStart(2, '0');
-    const minutes = scheduleDate.getMinutes().toString().padStart(2, '0');
-    const scheduledTime = `${hours}:${minutes}`;
-
-    setShowSchedulePicker(false);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateJob(job.id, {
-      status: 'SCHEDULED',
-      scheduledDate,
-      scheduledTime,
-    });
-
-    // Send confirmation notification
-    await sendBookingConfirmedNotification(
-      customer.name,
-      scheduledDate,
-      scheduledTime
-    );
-
-    // Schedule reminder 1 hour before
-    const jobLabel = getJobTypeLabel(settings.trade, job.type);
-    await scheduleJobReminder(
-      job.id,
-      customer.name,
-      jobLabel,
-      scheduleDate,
-      scheduledTime
-    );
-
-    // Sync to device calendar
-    const hasPermission = await hasCalendarPermissions();
-    if (hasPermission) {
-      const updatedJob = { ...job, scheduledDate, scheduledTime, status: 'SCHEDULED' as JobStatus };
-      await syncJobToCalendar(updatedJob, customer, jobLabel);
-    }
-  };
-
-  const handleSyncToCalendar = async () => {
-    setSyncingCalendar(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
+  const handleAddToCalendar = async () => {
+    setBusy('calendar');
     try {
-      let hasPermission = await hasCalendarPermissions();
-
-      if (!hasPermission) {
-        hasPermission = await requestCalendarPermissions();
-        if (!hasPermission) {
-          setModal({ title: 'Calendar Access Required', message: 'Please enable calendar access in Settings to sync jobs to your calendar.', variant: 'warning' });
-          setSyncingCalendar(false);
-          return;
-        }
+      const allowed = (await hasCalendarPermissions()) || (await requestCalendarPermissions());
+      if (!allowed) {
+        setModal({
+          title: 'Calendar access needed',
+          message: 'Allow Tradie to use your calendar in the iPhone Settings app.',
+          variant: 'warning',
+        });
+        return;
       }
-
-      const jobLabel = getJobTypeLabel(settings.trade, job.type);
-      const success = await syncJobToCalendar(job, customer, jobLabel);
-
-      if (success) {
+      if (await syncJobToCalendar(job, customer, label)) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setModal({ title: 'Synced', message: 'Job added to your calendar with reminders.', variant: 'success' });
+        setModal({
+          title: 'Added to your calendar',
+          message: 'With a reminder before the job.',
+          variant: 'success',
+        });
       } else {
-        setModal({ title: 'Error', message: 'Could not sync to calendar. Please try again.', variant: 'error' });
+        setModal({
+          title: 'Couldn’t add it',
+          message: 'Please try again.',
+          variant: 'error',
+        });
       }
     } catch (error) {
       if (__DEV__) console.error('Calendar sync error:', error);
-      setModal({ title: 'Error', message: 'Could not sync to calendar.', variant: 'error' });
+      setModal({
+        title: 'Couldn’t add it',
+        message: 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setBusy(null);
     }
-
-    setSyncingCalendar(false);
   };
 
-  const handleSendCustomerReminder = async () => {
-    setSendingReminder(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const jobLabel = getJobTypeLabel(settings.trade, job.type);
-    const businessName = settings.businessName || 'TRADIE';
-
-    // Determine reminder type based on scheduled date
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-    let reminderType: 'day_before' | 'morning_of' = 'day_before';
-    if (job.scheduledDate === today) {
-      reminderType = 'morning_of';
-    }
-
-    const success = await sendCustomerReminder(
-      customer,
-      job,
-      jobLabel,
-      businessName,
-      reminderType
-    );
-
-    if (success) {
+  const handleRemindCustomer = async () => {
+    setBusy('reminder');
+    const type = job.scheduledDate === toDateKey() ? 'morning_of' : 'day_before';
+    if (await sendCustomerReminder(customer, job, label, settings.businessName || 'TRADIE', type)) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+    setBusy(null);
+  };
 
-    setSendingReminder(false);
+  const handleQuoteFollowup = async () => {
+    setBusy('reminder');
+    if (await sendQuoteFollowup(customer, job, label, settings.businessName || 'TRADIE')) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setBusy(null);
   };
 
   const handleShareQuote = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await exportQuotePdf({ job, customer, settings });
     } catch (error) {
       if (__DEV__) console.error('Quote PDF error:', error);
-      setModal({ title: 'Error', message: 'Could not generate quote PDF.', variant: 'error' });
+      setModal({
+        title: 'Couldn’t create the PDF',
+        message: 'Please try again.',
+        variant: 'error',
+      });
     }
   };
 
-  const handleSendQuoteFollowup = async () => {
-    setSendingReminder(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const jobLabel = getJobTypeLabel(settings.trade, job.type);
-    const businessName = settings.businessName || 'TRADIE';
-
-    const success = await sendQuoteFollowup(customer, job, jobLabel, businessName);
-
-    if (success) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleCreateInvoice = async () => {
+    if (!canCreateInvoice) {
+      setLimitPrompt(true);
+      return;
     }
-
-    setSendingReminder(false);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (createInvoice(job.id)) router.push('/(tabs)/finances');
   };
+
+  const savePart = () => {
+    const qty = parseInt(partQty, 10);
+    const cost = parseFloat(partCost.replace(',', '.'));
+    if (!partName.trim() || !(qty > 0) || !(cost > 0)) return;
+    addPart(job.id, { name: partName.trim(), quantity: qty, unitCost: cost });
+    cancelPart();
+  };
+  const cancelPart = () => {
+    setPartName('');
+    setPartQty('');
+    setPartCost('');
+    setAddingPart(false);
+  };
+
+  // The one next step for this stage of the job.
+  const nextStep: { label: string; run: () => void } | null = (() => {
+    switch (job.status) {
+      case 'REQUESTED':
+      case 'QUOTED':
+        return {
+          label: 'Customer approved the quote',
+          run: () => updateJob(job.id, { status: 'APPROVED' }),
+        };
+      case 'APPROVED':
+        // Once times are offered, booking happens from the offered times.
+        return offers.length ? null : { label: expired ? 'Offer new times' : 'Suggest times', run: openSuggest };
+      case 'SCHEDULED':
+        return {
+          label: 'Start job',
+          run: async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            updateJob(job.id, { status: 'IN_PROGRESS' });
+          },
+        };
+      case 'IN_PROGRESS':
+        return { label: 'Mark job done', run: () => setShowComplete(true) };
+      case 'COMPLETED':
+        return {
+          label: isPro || !Number.isFinite(invoicesLeft) ? 'Create invoice' : `Create invoice (${invoicesLeft} free left)`,
+          run: handleCreateInvoice,
+        };
+      default:
+        return null;
+    }
+  })();
+
+  const contactActions: {
+    icon: LucideIcon;
+    label: string;
+    run: () => void;
+    show: boolean;
+  }[] = [
+    {
+      icon: Phone,
+      label: 'Call',
+      run: () => Linking.openURL(`tel:${customer.phone}`),
+      show: !!customer.phone,
+    },
+    {
+      icon: MessageCircle,
+      label: 'Text',
+      run: () => Linking.openURL(`sms:${customer.phone}`),
+      show: !!customer.phone,
+    },
+    {
+      icon: Navigation,
+      label: 'Directions',
+      run: () =>
+        Linking.openURL(`https://maps.apple.com/?daddr=${encodeURIComponent(`${customer.address}, ${customer.postcode}`)}`),
+      show: !!customer.address,
+    },
+  ];
+
+  // ── Screen ─────────────────────────────────────────────────────────────────
 
   return (
     <>
-    <ScrollView className="flex-1 bg-[#0F172A]">
-      <View className="px-4 pb-8">
-        {/* Status Badge */}
-        <Animated.View
-          entering={FadeInDown.delay(100).duration(400)}
-          className="flex-row items-center mb-4"
-        >
-          <View
-            className="px-3 py-1.5 rounded-full"
-            style={{ backgroundColor: `${statusColor}20` }}
-          >
-            <Text style={{ color: statusColor }} className="font-semibold text-sm">
-              {statusLabels[job.status]}
-            </Text>
+      <Stack.Screen options={{ title: 'Job' }} />
+      <ScrollView
+        className="flex-1 bg-bg"
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 8,
+          paddingBottom: nextStep ? 120 : 40,
+        }}
+      >
+        {/* Title */}
+        <View className="mb-6">
+          <View className="flex-row items-center mb-2">
+            <JobStatus job={job} size="md" />
+            {job.urgency === 'urgent' && !isDone && <Text className="text-secondary text-sm font-semibold ml-2">· Urgent</Text>}
           </View>
-          {job.urgency === 'urgent' && (
-            <View className="ml-2 px-3 py-1.5 rounded-full bg-[#F59E0B]/20">
-              <Text className="text-[#F59E0B] font-semibold text-sm">Urgent</Text>
-            </View>
-          )}
-          {job.urgency === 'emergency' && (
-            <View className="ml-2 px-3 py-1.5 rounded-full bg-[#EF4444]/20">
-              <Text className="text-[#EF4444] font-semibold text-sm">Emergency</Text>
-            </View>
-          )}
-        </Animated.View>
+          <Text className="text-fg text-[28px] font-bold tracking-tight">{label}</Text>
+          {job.description ? <Text className="text-secondary text-base leading-6 mt-1">{job.description}</Text> : null}
+        </View>
 
-        {/* Job Type & Description */}
-        <Animated.View entering={FadeInDown.delay(200).duration(400)} className="mb-6">
-          <Text className="text-white font-bold text-2xl mb-2">
-            {getJobTypeLabel(settings.trade, job.type)}
-          </Text>
-          <Text className="text-slate-400 text-base">{job.description}</Text>
-        </Animated.View>
-
-        {/* Customer Card */}
-        <Animated.View
-          entering={FadeInDown.delay(300).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
-        >
-          <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Customer</Text>
-          <View className="flex-row items-center mb-4">
-            <View className="w-12 h-12 rounded-full bg-[#334155] items-center justify-center mr-3">
-              <Text className="text-white font-bold text-lg">
-                {customer.name.charAt(0)}
+        {/* Customer */}
+        <Group className="mb-8">
+          <View className="px-4 pt-4 pb-3">
+            <Text className="text-fg text-[17px] font-semibold">{customer.name}</Text>
+            {(customer.address || customer.postcode) && (
+              <Text className="text-secondary text-[15px] mt-0.5">
+                {[customer.address, customer.postcode].filter(Boolean).join(', ')}
               </Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-white font-bold text-lg">{customer.name}</Text>
-              <View className="flex-row items-center mt-1">
-                <MapPin size={14} color={SLATE_500} />
-                <Text className="text-slate-500 text-sm ml-1">
-                  {customer.address}, {customer.postcode}
+            )}
+          </View>
+          <View className="flex-row border-t border-divider">
+            {contactActions
+              .filter((a) => a.show)
+              .map(({ icon: Icon, label: text, run }, i) => (
+                <Pressable
+                  key={text}
+                  onPress={run}
+                  className={cn(
+                    'flex-1 flex-row items-center justify-center min-h-[48px] active:opacity-60',
+                    i > 0 && 'border-l border-divider',
+                  )}
+                  accessibilityRole="button"
+                >
+                  <Icon size={20} color={t.link} strokeWidth={2} />
+                  <Text className="text-link text-[15px] font-semibold ml-1.5">{text}</Text>
+                </Pressable>
+              ))}
+          </View>
+        </Group>
+
+        {/* Scheduling an unbooked job */}
+        {unscheduled && (
+          <View className="mb-8">
+            <SectionHeader title={offers.length ? 'Times offered' : 'When'} />
+            <Group>
+              {offers.length > 0 && (
+                <>
+                  {offers.map((slot, i) => (
+                    <View key={`${slot.date}T${slot.time}`}>
+                      {i > 0 && <RowDivider />}
+                      <View className="flex-row items-center px-4 min-h-[52px]">
+                        <Text className="text-secondary text-base w-7">{i + 1})</Text>
+                        <Text className="flex-1 text-fg text-base">{formatSlot(slotDate(slot))}</Text>
+                        <Pressable onPress={() => bookOffered(slot)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Book ${formatSlot(slotDate(slot))}`}>
+                          <Text className="text-link text-[15px] font-semibold">Book</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                  <RowDivider />
+                </>
+              )}
+              {expired && (
+                <>
+                  <View className="px-4 py-3">
+                    <Text className="text-secondary text-[15px]">The times you offered have expired and are free again.</Text>
+                  </View>
+                  <RowDivider />
+                </>
+              )}
+              <LinkRow icon={CalendarClock} label={offers.length || expired ? 'Offer new times' : 'Suggest times'} onPress={openSuggest} />
+              <RowDivider />
+              <LinkRow icon={Calendar} label="Pick a time myself" onPress={openPicker} />
+            </Group>
+            {offers.length > 0 && (
+              <Text className="text-secondary text-[13px] mx-1 mt-2">
+                Pencilled in until the customer replies. Tap Book on the one they choose.
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* When */}
+        {job.scheduledDate && (
+          <View className="mb-8">
+            <SectionHeader title="When" />
+            <Group>
+              <View className="flex-row items-center px-4 min-h-[52px]">
+                <Calendar size={20} color={t.secondary} strokeWidth={2} />
+                <Text className="text-fg text-base ml-3">
+                  {formatDateFull(job.scheduledDate)} · {formatTime(job.scheduledTime)}
                 </Text>
               </View>
-            </View>
+              {job.status === 'SCHEDULED' && (
+                <>
+                  <RowDivider />
+                  <LinkRow
+                    icon={CalendarPlus}
+                    label={busy === 'calendar' ? 'Adding…' : 'Add to my calendar'}
+                    onPress={handleAddToCalendar}
+                  />
+                  <RowDivider />
+                  <LinkRow
+                    icon={Bell}
+                    label={busy === 'reminder' ? 'Opening…' : 'Remind the customer'}
+                    onPress={handleRemindCustomer}
+                  />
+                </>
+              )}
+            </Group>
           </View>
-
-          {/* Quick Actions */}
-          <View className="flex-row gap-2">
-            <Pressable
-              onPress={handleCall}
-              className="flex-1 bg-[#0F172A] rounded-xl py-3 flex-row items-center justify-center active:opacity-70"
-            >
-              <Phone size={18} color={TURQUOISE} />
-              <Text className="text-white font-medium ml-2">Call</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleMessage}
-              className="flex-1 bg-[#0F172A] rounded-xl py-3 flex-row items-center justify-center active:opacity-70"
-            >
-              <MessageCircle size={18} color={TURQUOISE} />
-              <Text className="text-white font-medium ml-2">Text</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleNavigate}
-              className="flex-1 bg-[#0F172A] rounded-xl py-3 flex-row items-center justify-center active:opacity-70"
-            >
-              <Navigation size={18} color={TURQUOISE} />
-              <Text className="text-white font-medium ml-2">Navigate</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-
-        {/* Schedule */}
-        {job.scheduledDate && (
-          <Animated.View
-            entering={FadeInDown.delay(400).duration(400)}
-            className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
-          >
-            <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Schedule</Text>
-            <View className="flex-row items-center">
-              <View className="w-10 h-10 rounded-xl bg-[#0F172A] items-center justify-center mr-3">
-                <Calendar size={20} color={TURQUOISE} />
-              </View>
-              <View>
-                <Text className="text-white font-semibold">{formatDateFull(job.scheduledDate)}</Text>
-                <View className="flex-row items-center mt-1">
-                  <Clock size={14} color={SLATE_500} />
-                  <Text className="text-slate-400 text-sm ml-1">
-                    {formatTime(job.scheduledTime)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
         )}
 
         {/* Quote */}
         {job.quote && (
-          <Animated.View
-            entering={FadeInDown.delay(500).duration(400)}
-            className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
-          >
-            <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Quote</Text>
-            <View className="bg-[#0F172A] rounded-xl p-3">
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500">Labour</Text>
-                <Text className="text-slate-300">£{job.quote.labour.toFixed(2)}</Text>
-              </View>
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500">Materials</Text>
-                <Text className="text-slate-300">£{job.quote.materials.toFixed(2)}</Text>
-              </View>
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500">Travel</Text>
-                <Text className="text-slate-300">£{job.quote.travel.toFixed(2)}</Text>
-              </View>
-              {job.quote.emergencySurcharge > 0 && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500">Emergency Surcharge</Text>
-                  <Text className="text-slate-300">£{job.quote.emergencySurcharge.toFixed(2)}</Text>
-                </View>
+          <View className="mb-8">
+            <SectionHeader title="Quote" />
+            <Group>
+              {job.status === 'QUOTED' && isQuoteExpiringSoon(job) && (
+                <>
+                  <View className="flex-row items-center px-4 min-h-[52px]">
+                    <CircleAlert size={20} color={t.alert} strokeWidth={2} />
+                    <Text className="flex-1 text-alert text-[15px] ml-3">Quote expires soon</Text>
+                    <Pressable
+                      onPress={handleQuoteFollowup}
+                      disabled={busy === 'reminder'}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                    >
+                      <Text className="text-link text-[15px] font-semibold">Follow up</Text>
+                    </Pressable>
+                  </View>
+                  <RowDivider />
+                </>
               )}
-              {job.quote.vat > 0 && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500">VAT</Text>
-                  <Text className="text-slate-300">£{job.quote.vat.toFixed(2)}</Text>
-                </View>
-              )}
-              <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between">
-                <Text className="text-white font-bold">Total</Text>
-                <Text className="text-[#14B8A6] font-bold text-xl">
-                  £{job.quote.total.toFixed(2)}
-                </Text>
+              <View className="px-4 py-3">
+                <Line label="Labour" value={formatMoney(job.quote.labour)} />
+                <Line label="Materials" value={formatMoney(job.quote.materials)} />
+                <Line label="Travel" value={formatMoney(job.quote.travel)} />
+                {job.quote.emergencySurcharge > 0 && (
+                  <Line label="Emergency call-out" value={formatMoney(job.quote.emergencySurcharge)} />
+                )}
+                {job.quote.vat > 0 && <Line label="VAT" value={formatMoney(job.quote.vat)} />}
+                <View className="h-px bg-divider my-2" />
+                <Line label="Total" value={formatMoney(job.quote.total)} strong />
               </View>
-            </View>
-            <Pressable
-              onPress={handleShareQuote}
-              className="mt-3 rounded-xl py-3 flex-row items-center justify-center gap-2 active:opacity-80"
-              style={{ backgroundColor: TURQUOISE }}
-            >
-              <Share2 size={16} color={WHITE} />
-              <Text className="text-white font-semibold">Share Quote PDF</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-
-        {/* Job Profitability — show on completed+ jobs with a quote */}
-        {job.quote && ['COMPLETED', 'INVOICED', 'PAID'].includes(job.status) && (
-          <Animated.View
-            entering={FadeInDown.delay(525).duration(400)}
-            className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
-          >
-            <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Job Profit</Text>
-            {(() => {
-              const quoteTotal = job.quote!.total - job.quote!.vat; // ex-VAT revenue
-              const partsTotal = (job.parts ?? []).reduce((s, p) => s + p.quantity * p.unitCost, 0);
-              const expensesTotal = jobExpenses.reduce((s, e) => s + e.amount, 0);
-              const totalCosts = partsTotal + expensesTotal;
-              const profit = quoteTotal - totalCosts;
-              const margin = quoteTotal > 0 ? (profit / quoteTotal) * 100 : 0;
-              const isPositive = profit >= 0;
-
-              return (
-                <View className="bg-[#0F172A] rounded-xl p-3">
-                  <View className="flex-row justify-between mb-2">
-                    <Text className="text-slate-500 text-sm">Revenue (ex-VAT)</Text>
-                    <Text className="text-slate-300 text-sm">£{quoteTotal.toFixed(2)}</Text>
-                  </View>
-                  {partsTotal > 0 && (
-                    <View className="flex-row justify-between mb-2">
-                      <Text className="text-slate-500 text-sm">Parts ({(job.parts ?? []).length})</Text>
-                      <Text className="text-slate-300 text-sm">−£{partsTotal.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {expensesTotal > 0 && (
-                    <View className="flex-row justify-between mb-2">
-                      <Text className="text-slate-500 text-sm">Expenses ({jobExpenses.length})</Text>
-                      <Text className="text-slate-300 text-sm">−£{expensesTotal.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between items-center">
-                    <View>
-                      <Text className="text-white font-bold">Profit</Text>
-                      {quoteTotal > 0 && (
-                        <Text className="text-slate-500 text-xs">{margin.toFixed(0)}% margin</Text>
-                      )}
-                    </View>
-                    <Text className={`font-bold text-xl ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                      {isPositive ? '' : '−'}£{Math.abs(profit).toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })()}
-          </Animated.View>
-        )}
-
-        {/* Parts & Materials */}
-        <Animated.View
-          entering={FadeInDown.delay(550).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-4"
-        >
-          <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Parts & Materials</Text>
-
-          {(job.parts ?? []).length > 0 ? (
-            <View className="bg-[#0F172A] rounded-xl p-3 mb-3">
-              {(job.parts ?? []).map((part) => (
-                <View key={part.id} className="flex-row items-center justify-between mb-2">
-                  <View className="flex-1 mr-2">
-                    <Text className="text-white text-sm">{part.name}</Text>
-                    <Text className="text-slate-500 text-xs">
-                      {part.quantity} × £{part.unitCost.toFixed(2)}
-                    </Text>
-                  </View>
-                  <Text className="text-slate-300 text-sm mr-3">
-                    £{(part.quantity * part.unitCost).toFixed(2)}
-                  </Text>
-                  <Pressable onPress={() => removePart(job.id, part.id)}>
-                    <Text className="text-red-400 text-xs">Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-              <View className="border-t border-[#334155] mt-1 pt-2 flex-row justify-between">
-                <Text className="text-slate-400 text-sm">Parts Total</Text>
-                <Text className="text-white font-semibold">
-                  £{(job.parts ?? []).reduce((sum, p) => sum + p.quantity * p.unitCost, 0).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          ) : !addingPart ? (
-            <Text className="text-slate-500 text-sm mb-3">No parts added yet</Text>
-          ) : null}
-
-          {addingPart ? (
-            <View className="bg-[#0F172A] rounded-xl p-3">
-              <TextInput
-                value={partName}
-                onChangeText={setPartName}
-                placeholder="Part name"
-                placeholderTextColor={SLATE_500}
-                className="text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5 mb-2"
-              />
-              <View className="flex-row gap-2 mb-3">
-                <TextInput
-                  value={partQty}
-                  onChangeText={setPartQty}
-                  placeholder="Qty"
-                  placeholderTextColor={SLATE_500}
-                  keyboardType="numeric"
-                  className="flex-1 text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5"
-                />
-                <TextInput
-                  value={partCost}
-                  onChangeText={setPartCost}
-                  placeholder="Unit cost (£)"
-                  placeholderTextColor={SLATE_500}
-                  keyboardType="decimal-pad"
-                  className="flex-1 text-white text-sm bg-[#1E293B] rounded-lg px-3 py-2.5"
-                />
-              </View>
-              <View className="flex-row gap-2">
-                <Pressable
-                  onPress={() => {
-                    const qty = parseInt(partQty, 10);
-                    const cost = parseFloat(partCost);
-                    if (partName.trim() && qty > 0 && cost > 0) {
-                      addPart(job.id, { name: partName.trim(), quantity: qty, unitCost: cost });
-                      setPartName('');
-                      setPartQty('');
-                      setPartCost('');
-                      setAddingPart(false);
-                    }
-                  }}
-                  className="flex-1 bg-[#14B8A6] rounded-xl py-2.5 items-center active:opacity-80"
-                >
-                  <Text className="text-white font-bold text-sm">Save</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setPartName('');
-                    setPartQty('');
-                    setPartCost('');
-                    setAddingPart(false);
-                  }}
-                  className="flex-1 bg-[#0F172A] border border-[#334155] rounded-xl py-2.5 items-center active:opacity-80"
-                >
-                  <Text className="text-slate-400 font-medium text-sm">Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => setAddingPart(true)}
-              className="bg-[#0F172A] rounded-xl py-3 items-center active:opacity-80"
-            >
-              <Text className="text-[#14B8A6] font-medium text-sm">Add Part</Text>
-            </Pressable>
-          )}
-        </Animated.View>
-
-        {/* Notes */}
-        <Animated.View
-          entering={FadeInDown.delay(650).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-6"
-        >
-          <Text className="text-slate-400 text-xs mb-2 uppercase tracking-wide">Notes</Text>
-          {editingNotes ? (
-            <View>
-              <TextInput
-                value={notesText}
-                onChangeText={setNotesText}
-                multiline
-                placeholder="Add notes..."
-                placeholderTextColor={SLATE_500}
-                className="text-white text-base min-h-[80px]"
-                style={{ textAlignVertical: 'top' }}
-                autoFocus
-              />
-              <View className="flex-row gap-3 mt-3">
-                <Pressable
-                  onPress={() => {
-                    updateJob(job.id, { notes: notesText.trim() });
-                    setEditingNotes(false);
-                  }}
-                  className="flex-1 bg-[#14B8A6] rounded-xl py-3 items-center active:opacity-80"
-                >
-                  <Text className="text-white font-bold">Save</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setEditingNotes(false)}
-                  className="flex-1 bg-[#0F172A] rounded-xl py-3 items-center active:opacity-80"
-                >
-                  <Text className="text-slate-400 font-medium">Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => {
-                setNotesText(job.notes || '');
-                setEditingNotes(true);
-              }}
-            >
-              <Text className={job.notes ? 'text-white' : 'text-slate-500'}>
-                {job.notes || 'Tap to add notes...'}
-              </Text>
-            </Pressable>
-          )}
-        </Animated.View>
-
-        {/* Photos */}
-        <Animated.View
-          entering={FadeInDown.delay(700).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-6"
-        >
-          <Text className="text-slate-400 text-xs mb-3 uppercase tracking-wide">Photos</Text>
-
-          {/* Tab selector */}
-          <View className="flex-row bg-[#0F172A] rounded-xl p-1 mb-3">
-            {(['before', 'during', 'after'] as const).map((tab) => (
-              <Pressable
-                key={tab}
-                onPress={() => setPhotoTab(tab)}
-                className={`flex-1 py-2 rounded-lg items-center ${
-                  photoTab === tab ? 'bg-[#1E293B]' : ''
-                }`}
-              >
-                <Text
-                  className={`text-sm font-medium capitalize ${
-                    photoTab === tab ? 'text-white' : 'text-slate-500'
-                  }`}
-                >
-                  {tab}
-                </Text>
-              </Pressable>
-            ))}
+              <RowDivider />
+              <LinkRow icon={Share2} label="Share quote as PDF" onPress={handleShareQuote} />
+            </Group>
           </View>
+        )}
 
-          {/* Photo grid */}
-          {(() => {
-            const filtered = (job.photos ?? []).filter((p) => p.type === photoTab);
-            return filtered.length > 0 ? (
-              <View className="flex-row flex-wrap gap-2 mb-3">
-                {filtered.map((photo) => (
-                  <Pressable
-                    key={photo.id}
-                    onLongPress={() => handleDeletePhoto(photo.id, photo.uri)}
-                    className="rounded-xl overflow-hidden"
-                    style={{ width: '48%', aspectRatio: 1 }}
-                  >
-                    <Image
-                      source={{ uri: photo.uri }}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="cover"
+        {/* Profit */}
+        {job.quote && isDone && (
+          <View className="mb-8">
+            <SectionHeader title="Profit" />
+            <Group className="px-4 py-3">
+              {(() => {
+                const revenue = job.quote.total - job.quote.vat;
+                const profit = revenue - partsTotal - expensesTotal;
+                return (
+                  <>
+                    <Line label="Charged (before VAT)" value={formatMoney(revenue)} />
+                    {partsTotal > 0 && <Line label={`Parts (${parts.length})`} value={formatMoney(-partsTotal)} />}
+                    {expensesTotal > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatMoney(-expensesTotal)} />}
+                    <View className="h-px bg-divider my-2" />
+                    <Line
+                      label={revenue > 0 ? `Profit · ${Math.round((profit / revenue) * 100)}%` : 'Profit'}
+                      value={formatMoney(profit)}
+                      strong
                     />
+                    {partsTotal === 0 && expensesTotal === 0 && (
+                      <Text className="text-secondary text-[13px] mt-1">Add parts or expenses to see your real margin.</Text>
+                    )}
+                  </>
+                );
+              })()}
+            </Group>
+          </View>
+        )}
+
+        {/* Parts */}
+        <View className="mb-8">
+          <SectionHeader title="Parts and materials" />
+          <Group>
+            {parts.map((part, i) => (
+              <View key={part.id}>
+                {i > 0 && <RowDivider />}
+                <View className="flex-row items-center pl-4">
+                  <View className="flex-1 py-2.5">
+                    <Text className="text-fg text-base">{part.name}</Text>
+                    <Text className="text-secondary text-sm">
+                      {part.quantity} × {formatMoney(part.unitCost)}
+                    </Text>
+                  </View>
+                  <Text className="text-fg text-base">{formatMoney(part.quantity * part.unitCost)}</Text>
+                  <Pressable
+                    onPress={() => removePart(job.id, part.id)}
+                    className="w-11 h-11 items-center justify-center active:opacity-60"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${part.name}`}
+                  >
+                    <Trash2 size={16} color={t.secondary} strokeWidth={2} />
                   </Pressable>
-                ))}
+                </View>
+              </View>
+            ))}
+            {parts.length > 0 && <RowDivider />}
+            {addingPart ? (
+              <View className="p-4 gap-2">
+                <TextInput
+                  value={partName}
+                  onChangeText={setPartName}
+                  placeholder="Part name"
+                  placeholderTextColor={t.secondary}
+                  className="bg-bg text-fg text-base rounded-xl px-3 h-11"
+                  autoFocus
+                  accessibilityLabel="Part name"
+                />
+                <View className="flex-row gap-2">
+                  <TextInput
+                    value={partQty}
+                    onChangeText={setPartQty}
+                    placeholder="Qty"
+                    placeholderTextColor={t.secondary}
+                    keyboardType="number-pad"
+                    className="flex-1 bg-bg text-fg text-base rounded-xl px-3 h-11"
+                    accessibilityLabel="Quantity"
+                  />
+                  <TextInput
+                    value={partCost}
+                    onChangeText={setPartCost}
+                    placeholder={`${currencySymbol()} each`}
+                    placeholderTextColor={t.secondary}
+                    keyboardType="decimal-pad"
+                    className="flex-1 bg-bg text-fg text-base rounded-xl px-3 h-11"
+                    accessibilityLabel="Cost each"
+                  />
+                </View>
+                <View className="flex-row items-center justify-end gap-5 mt-1">
+                  <Pressable onPress={cancelPart} hitSlop={8} accessibilityRole="button">
+                    <Text className="text-secondary text-[15px] font-semibold">Cancel</Text>
+                  </Pressable>
+                  <PrimaryButton compact label="Add part" onPress={savePart} />
+                </View>
               </View>
             ) : (
-              <Text className="text-slate-500 text-sm mb-3">
-                No {photoTab} photos yet
-              </Text>
-            );
-          })()}
+              <Pressable
+                onPress={() => setAddingPart(true)}
+                className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+                accessibilityRole="button"
+              >
+                <Plus size={20} color={t.link} strokeWidth={2} />
+                <Text className="text-link text-base font-semibold ml-2">Add part</Text>
+                {partsTotal > 0 && <Text className="ml-auto text-secondary text-[15px]">Total {formatMoney(partsTotal)}</Text>}
+              </Pressable>
+            )}
+          </Group>
+        </View>
 
-          <Pressable
-            onPress={handleAddPhoto}
-            className="bg-[#0F172A] rounded-xl py-3 items-center active:opacity-80"
-          >
-            <Text className="text-[#14B8A6] font-medium text-sm">Add Photo</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Linked Expenses */}
-        <Animated.View
-          entering={FadeInDown.delay(725).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-4 mb-6"
-        >
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-slate-400 text-xs uppercase tracking-wide">Expenses</Text>
-            <Pressable
-              onPress={() => router.push(`/add-expense?jobId=${job.id}`)}
-              className="flex-row items-center active:opacity-70"
-            >
-              <Plus size={14} color={TURQUOISE} />
-              <Text className="text-[#14B8A6] font-medium text-sm ml-1">Add</Text>
-            </Pressable>
-          </View>
-
-          {jobExpenses.length === 0 ? (
-            <Pressable
-              onPress={() => router.push(`/add-expense?jobId=${job.id}`)}
-              className="bg-[#0F172A] rounded-xl py-4 items-center active:opacity-80"
-            >
-              <Receipt size={20} color={SLATE_500} />
-              <Text className="text-slate-500 text-sm mt-1">No expenses linked</Text>
-            </Pressable>
-          ) : (
-            <View className="bg-[#0F172A] rounded-xl p-3">
-              {jobExpenses.map((expense, i) => (
-                <View key={expense.id} className={`flex-row items-center justify-between ${i < jobExpenses.length - 1 ? 'mb-2 pb-2 border-b border-[#334155]' : ''}`}>
-                  <View className="flex-1 mr-2">
-                    <Text className="text-white text-sm">{expense.description}</Text>
-                    <Text className="text-slate-500 text-xs">{EXPENSE_CATEGORY_LABELS[expense.category]}</Text>
-                  </View>
-                  <Text className="text-slate-300 text-sm font-medium">£{expense.amount.toFixed(2)}</Text>
+        {/* Notes */}
+        <View className="mb-8">
+          <SectionHeader title="Notes" />
+          <Group className="p-4">
+            {editingNotes ? (
+              <>
+                <TextInput
+                  value={notesText}
+                  onChangeText={setNotesText}
+                  multiline
+                  placeholder="Access codes, materials, what the customer said…"
+                  placeholderTextColor={t.secondary}
+                  className="text-fg text-base min-h-[88px]"
+                  style={{ textAlignVertical: 'top' }}
+                  autoFocus
+                  accessibilityLabel="Notes"
+                />
+                <View className="flex-row items-center justify-end gap-5 mt-2">
+                  <Pressable onPress={() => setEditingNotes(false)} hitSlop={8} accessibilityRole="button">
+                    <Text className="text-secondary text-[15px] font-semibold">Cancel</Text>
+                  </Pressable>
+                  <PrimaryButton
+                    compact
+                    label="Save"
+                    onPress={() => {
+                      updateJob(job.id, { notes: notesText.trim() });
+                      setEditingNotes(false);
+                    }}
+                  />
                 </View>
-              ))}
-              <View className="border-t border-[#334155] mt-2 pt-2 flex-row justify-between">
-                <Text className="text-slate-400 text-sm">Total</Text>
-                <Text className="text-white font-semibold">
-                  £{jobExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Action Buttons */}
-        <Animated.View entering={FadeInDown.delay(750).duration(400)} className="gap-3">
-          {/* Quote expiry warning and followup */}
-          {job.status === 'QUOTED' && isQuoteExpiringSoon(job) && (
-            <View className="bg-[#F59E0B]/20 rounded-xl p-3 flex-row items-center mb-1">
-              <AlertCircle size={18} color={AMBER} />
-              <Text className="text-[#F59E0B] ml-2 flex-1">Quote expires soon</Text>
+              </>
+            ) : (
               <Pressable
-                onPress={handleSendQuoteFollowup}
-                disabled={sendingReminder}
-                className="bg-[#F59E0B] px-3 py-1.5 rounded-lg active:opacity-80"
-              >
-                <Text className="text-white font-medium text-sm">
-                  {sendingReminder ? 'Sending...' : 'Follow Up'}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-
-          {job.status === 'QUOTED' && (
-            <>
-              <Pressable
-                onPress={handleApproveQuote}
-                className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-              >
-                <Check size={20} color={WHITE} />
-                <Text className="text-white font-bold ml-2">Approve Quote</Text>
-              </Pressable>
-            </>
-          )}
-
-          {job.status === 'APPROVED' && (
-            <Pressable
-              onPress={handleScheduleJob}
-              className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-            >
-              <Calendar size={20} color={WHITE} />
-              <Text className="text-white font-bold ml-2">Schedule Job</Text>
-            </Pressable>
-          )}
-
-          {job.status === 'SCHEDULED' && (
-            <>
-              <Pressable
-                onPress={handleStartJob}
-                className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-              >
-                <Play size={20} color={WHITE} />
-                <Text className="text-white font-bold ml-2">Start Job</Text>
-              </Pressable>
-
-              {/* Calendar sync and customer reminder buttons */}
-              <View className="flex-row gap-2">
-                <Pressable
-                  onPress={handleSyncToCalendar}
-                  disabled={syncingCalendar}
-                  className="flex-1 bg-[#1E293B] border border-[#334155] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
-                >
-                  <CalendarPlus size={18} color={TURQUOISE} />
-                  <Text className="text-white font-medium ml-2 text-sm">
-                    {syncingCalendar ? 'Syncing...' : 'Add to Calendar'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleSendCustomerReminder}
-                  disabled={sendingReminder}
-                  className="flex-1 bg-[#1E293B] border border-[#334155] rounded-xl p-3 flex-row items-center justify-center active:opacity-80"
-                >
-                  <Bell size={18} color={TURQUOISE} />
-                  <Text className="text-white font-medium ml-2 text-sm">
-                    {sendingReminder ? 'Sending...' : 'Remind Customer'}
-                  </Text>
-                </Pressable>
-              </View>
-            </>
-          )}
-
-          {job.status === 'IN_PROGRESS' && (
-            <Pressable
-              onPress={handleCompleteJob}
-              className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-            >
-              <Check size={20} color={WHITE} />
-              <Text className="text-white font-bold ml-2">Mark Complete</Text>
-            </Pressable>
-          )}
-
-          {job.status === 'COMPLETED' && (
-            <Pressable
-              onPress={handleCreateInvoice}
-              className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-            >
-              <FileText size={20} color={WHITE} />
-              <Text className="text-white font-bold ml-2">Create Invoice</Text>
-            </Pressable>
-          )}
-        </Animated.View>
-      </View>
-    </ScrollView>
-
-      {/* Schedule Picker Modal */}
-      {showSchedulePicker && (
-        <Pressable
-          onPress={() => setShowSchedulePicker(false)}
-          className="absolute inset-0 bg-black/60 justify-end"
-        >
-          <Pressable onPress={() => {}} className="bg-[#1E293B] rounded-t-2xl border-t border-[#334155] p-4 pb-8">
-            <Text className="text-white font-bold text-base mb-4 text-center">Schedule Job</Text>
-
-            <View className="flex-row bg-[#0F172A] rounded-xl p-1 mb-4">
-              <Pressable
-                onPress={() => setSchedulePickerMode('date')}
-                className={`flex-1 py-2.5 rounded-lg ${schedulePickerMode === 'date' ? 'bg-[#14B8A6]' : ''}`}
-              >
-                <Text className={`text-center font-semibold text-sm ${schedulePickerMode === 'date' ? 'text-white' : 'text-slate-400'}`}>
-                  Date
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setSchedulePickerMode('time')}
-                className={`flex-1 py-2.5 rounded-lg ${schedulePickerMode === 'time' ? 'bg-[#14B8A6]' : ''}`}
-              >
-                <Text className={`text-center font-semibold text-sm ${schedulePickerMode === 'time' ? 'text-white' : 'text-slate-400'}`}>
-                  Time
-                </Text>
-              </Pressable>
-            </View>
-
-            <View className="bg-[#0F172A] rounded-xl mb-4 overflow-hidden">
-              <DateTimePicker
-                value={scheduleDate}
-                mode={schedulePickerMode}
-                display="spinner"
-                minimumDate={new Date()}
-                onChange={(_, d) => {
-                  if (d) setScheduleDate(d);
+                onPress={() => {
+                  setNotesText(job.notes || '');
+                  setEditingNotes(true);
                 }}
-                themeVariant="dark"
-                accentColor={TURQUOISE}
-                minuteInterval={15}
-              />
-            </View>
+                accessibilityRole="button"
+                accessibilityLabel={job.notes ? 'Edit notes' : 'Add notes'}
+              >
+                <Text className={cn('text-base leading-6', job.notes ? 'text-fg' : 'text-secondary')}>
+                  {job.notes || 'Tap to add notes'}
+                </Text>
+              </Pressable>
+            )}
+          </Group>
+        </View>
 
-            <View className="bg-[#0F172A] rounded-xl p-3 mb-4">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center">
-                  <Calendar size={16} color={TURQUOISE} />
-                  <Text className="text-slate-300 text-sm ml-2">
-                    {scheduleDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Clock size={16} color={TURQUOISE} />
-                  <Text className="text-slate-300 text-sm ml-2">
-                    {formatTime(`${scheduleDate.getHours().toString().padStart(2, '0')}:${scheduleDate.getMinutes().toString().padStart(2, '0')}`)}
-                  </Text>
+        {/* Photos */}
+        <View className="mb-8">
+          <SectionHeader title="Photos" />
+          <Segmented
+            className="mb-3"
+            options={[
+              { key: 'before', label: 'Before' },
+              { key: 'during', label: 'During' },
+              { key: 'after', label: 'After' },
+            ]}
+            value={photoTab}
+            onChange={setPhotoTab}
+          />
+          {photos.length > 0 && (
+            <View className="flex-row flex-wrap justify-between mb-3">
+              {photos.map((photo) => (
+                <Pressable
+                  key={photo.id}
+                  onLongPress={() => handleDeletePhoto(photo.id, photo.uri)}
+                  className="rounded-2xl overflow-hidden mb-2"
+                  style={{ width: '49%', aspectRatio: 1 }}
+                  accessibilityLabel={`${photoTab} photo. Hold to delete.`}
+                >
+                  <Image source={{ uri: photo.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Group>
+            <Pressable
+              onPress={handleAddPhoto}
+              className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+              accessibilityRole="button"
+            >
+              <Plus size={20} color={t.link} strokeWidth={2} />
+              <Text className="text-link text-base font-semibold ml-2">Add {photoTab} photo</Text>
+            </Pressable>
+          </Group>
+          {photos.length > 0 && <Text className="text-secondary text-[13px] mx-1 mt-2">Hold a photo to delete it.</Text>}
+        </View>
+
+        {/* Expenses */}
+        <View className="mb-4">
+          <SectionHeader title="Expenses" />
+          <Group>
+            {jobExpenses.map((expense, i) => (
+              <View key={expense.id}>
+                {i > 0 && <RowDivider />}
+                <View className="flex-row items-center px-4 py-2.5">
+                  <View className="flex-1">
+                    <Text className="text-fg text-base">{expense.description}</Text>
+                    <Text className="text-secondary text-sm">{EXPENSE_CATEGORY_LABELS[expense.category]}</Text>
+                  </View>
+                  <Text className="text-fg text-base">{formatMoney(expense.amount)}</Text>
                 </View>
               </View>
-            </View>
-
+            ))}
+            {jobExpenses.length > 0 && <RowDivider />}
             <Pressable
-              onPress={confirmScheduleJob}
-              className="bg-[#14B8A6] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
+              onPress={() => (isPro ? router.push(`/add-expense?jobId=${job.id}`) : router.push('/paywall'))}
+              className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+              accessibilityRole="button"
             >
-              <Calendar size={18} color={WHITE} />
-              <Text className="text-white font-bold ml-2">Confirm Schedule</Text>
+              {isPro ? <Plus size={20} color={t.link} strokeWidth={2} /> : <Lock size={16} color={t.link} strokeWidth={2} />}
+              <Text className="text-link text-base font-semibold ml-2">{isPro ? 'Add expense' : 'Add expenses with Pro'}</Text>
+              {expensesTotal > 0 && (
+                <Text className="ml-auto text-secondary text-[15px]">Total {formatMoney(expensesTotal)}</Text>
+              )}
             </Pressable>
+          </Group>
+        </View>
+      </ScrollView>
 
-            <Pressable
-              onPress={() => setShowSchedulePicker(false)}
-              className="mt-3 p-3 active:opacity-70"
-            >
-              <Text className="text-slate-400 font-medium text-center">Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      )}
-
-      {/* Completion Summary Modal */}
-      {showCompletionModal && (
-        <Pressable
-          onPress={() => setShowCompletionModal(false)}
-          className="absolute inset-0 bg-black/60 justify-end"
+      {/* Next step */}
+      {nextStep && (
+        <View
+          className="absolute left-0 right-0 bottom-0 bg-bg border-t border-divider px-4 pt-3"
+          style={{ paddingBottom: insets.bottom + 12 }}
         >
-          <Pressable onPress={() => {}} className="bg-[#1E293B] rounded-t-2xl border-t border-[#334155] p-4 pb-8">
-            <View className="items-center mb-4">
-              <View className="w-16 h-16 rounded-full bg-[#22C55E]/20 items-center justify-center mb-3">
-                <Check size={32} color={GREEN} />
-              </View>
-              <Text className="text-white font-bold text-lg">Complete Job?</Text>
-              <Text className="text-slate-400 text-sm mt-1">Review the summary before completing</Text>
-            </View>
-
-            <View className="bg-[#0F172A] rounded-xl p-4 mb-4">
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500 text-sm">Job</Text>
-                <Text className="text-white text-sm font-medium">{getJobTypeLabel(settings.trade, job.type)}</Text>
-              </View>
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-slate-500 text-sm">Customer</Text>
-                <Text className="text-white text-sm font-medium">{customer.name}</Text>
-              </View>
-              {job.scheduledDate && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500 text-sm">Scheduled</Text>
-                  <Text className="text-slate-300 text-sm">{formatDateFull(job.scheduledDate)}</Text>
-                </View>
-              )}
-              {job.quote && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500 text-sm">Quote</Text>
-                  <Text className="text-[#14B8A6] text-sm font-bold">£{job.quote.total.toFixed(2)}</Text>
-                </View>
-              )}
-              {(job.parts ?? []).length > 0 && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500 text-sm">Parts ({(job.parts ?? []).length})</Text>
-                  <Text className="text-slate-300 text-sm">
-                    £{(job.parts ?? []).reduce((s, p) => s + p.quantity * p.unitCost, 0).toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {jobExpenses.length > 0 && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500 text-sm">Expenses ({jobExpenses.length})</Text>
-                  <Text className="text-slate-300 text-sm">
-                    £{jobExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {(job.photos ?? []).length > 0 && (
-                <View className="flex-row justify-between">
-                  <Text className="text-slate-500 text-sm">Photos</Text>
-                  <Text className="text-slate-300 text-sm">{(job.photos ?? []).length}</Text>
-                </View>
-              )}
-            </View>
-
-            <Pressable
-              onPress={confirmCompleteJob}
-              className="bg-[#22C55E] rounded-xl p-4 flex-row items-center justify-center active:opacity-80"
-            >
-              <Check size={18} color={WHITE} />
-              <Text className="text-white font-bold ml-2">Mark Complete</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setShowCompletionModal(false)}
-              className="mt-3 p-3 active:opacity-70"
-            >
-              <Text className="text-slate-400 font-medium text-center">Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
+          <PrimaryButton label={nextStep.label} onPress={nextStep.run} />
+        </View>
       )}
+
+      {/* Schedule */}
+      <Sheet visible={showSchedule} onClose={() => setShowSchedule(false)}>
+        <Text className="text-fg text-[17px] font-semibold text-center mb-4">Schedule job</Text>
+        <Segmented
+          className="mb-3 bg-bg"
+          options={[
+            {
+              key: 'date',
+              label: scheduleDate.toLocaleDateString(getRegion().locale, {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+              }),
+            },
+            { key: 'time', label: formatTime(hhmm(scheduleDate)) },
+          ]}
+          value={pickerMode}
+          onChange={setPickerMode}
+        />
+        <View className="bg-bg rounded-2xl mb-4 overflow-hidden items-center">
+          <DateTimePicker
+            value={scheduleDate}
+            mode={pickerMode}
+            display="spinner"
+            minimumDate={new Date()}
+            onChange={(_, d) => d && setScheduleDate(d)}
+            themeVariant={t.mode}
+            accentColor={t.link}
+            textColor={t.fg}
+            minuteInterval={15}
+          />
+        </View>
+        <PrimaryButton label="Confirm" onPress={confirmSchedule} />
+        <Pressable
+          onPress={() => setShowSchedule(false)}
+          className="min-h-[48px] items-center justify-center mt-1"
+          accessibilityRole="button"
+        >
+          <Text className="text-secondary text-base font-semibold">Cancel</Text>
+        </Pressable>
+      </Sheet>
+
+      {/* Mark done */}
+      <Sheet visible={showComplete} onClose={() => setShowComplete(false)}>
+        <Text className="text-fg text-[20px] font-semibold text-center">Mark this job done?</Text>
+        <Text className="text-secondary text-[15px] text-center mt-1 mb-4">Next you can create the invoice.</Text>
+        <View className="bg-bg rounded-2xl px-4 py-3 mb-4">
+          <Line label="Job" value={label} />
+          <Line label="Customer" value={customer.name} />
+          {job.quote && <Line label="Quote" value={formatMoney(job.quote.total)} />}
+          {parts.length > 0 && <Line label={`Parts (${parts.length})`} value={formatMoney(partsTotal)} />}
+          {jobExpenses.length > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatMoney(expensesTotal)} />}
+          {(job.photos ?? []).length > 0 && <Line label="Photos" value={String((job.photos ?? []).length)} />}
+        </View>
+        <PrimaryButton
+          label="Mark done"
+          onPress={async () => {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            updateJob(job.id, {
+              status: 'COMPLETED',
+              completedAt: new Date().toISOString(),
+            });
+            setShowComplete(false);
+          }}
+        />
+        <Pressable
+          onPress={() => setShowComplete(false)}
+          className="min-h-[48px] items-center justify-center mt-1"
+          accessibilityRole="button"
+        >
+          <Text className="text-secondary text-base font-semibold">Cancel</Text>
+        </Pressable>
+      </Sheet>
+
+      <UpgradePrompt visible={limitPrompt} onClose={() => setLimitPrompt(false)} feature="invoices" />
 
       {modal && (
         <ConfirmModal

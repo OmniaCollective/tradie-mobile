@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tradie Pro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#0E7C86}a:hover{color:#0B6770}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 60px 16px 36px; background: {{c.bg}}; color: {{c.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column; justify-content: space-between">
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; justify-content: flex-end">
+<button aria-label="Close" style="width: 44px; height: 44px; margin-right: -10px; border: 0; background: transparent; color: {{c.secondary}}; display: flex; align-items: center; justify-content: center">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 0 4px">
+<span style="font-size: 15px; font-weight: 800; letter-spacing: 0.14em; color: {{c.accentText}}">TRADIE PRO</span>
+<h1 style="margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em">Get paid and stay on top of tax</h1>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 0 4px">
+<sc-for list="{{benefits}}" as="b" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px"><path d="M20 6 9 17l-5-5"/></svg>
+<div style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{b.title}}</span><span style="font-size: 14px; color: {{c.secondary}}">{{b.detail}}</span></div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{plans}}" as="p" hint-placeholder-count="2">
+<button onClick="{{p.pick}}" aria-pressed="{{p.pressed}}" style="{{p.style}}">
+<span style="{{p.radio}}"></span>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px; text-align: left">
+<span style="font-size: 16px; font-weight: 600">{{p.name}}</span>
+<span style="font-size: 14px; color: {{c.secondary}}">{{p.detail}}</span>
+</span>
+<span style="font-size: 17px; font-weight: 700">{{p.price}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<button style="height: 52px; border: 0; border-radius: 12px; background: {{c.accent}}; color: {{c.onAccent}}; font: inherit; font-size: 17px; font-weight: 600">{{cta}}</button>
+<div style="display: flex; justify-content: center; gap: 20px; font-size: 14px">
+<a href="#" style="color: {{c.text}}; text-decoration: none; font-weight: 600; min-height: 44px; display: flex; align-items: center">Restore purchase</a>
+<a href="#" style="color: {{c.secondary}}; text-decoration: none; min-height: 44px; display: flex; align-items: center">Terms</a>
+<a href="#" style="color: {{c.secondary}}; text-decoration: none; min-height: 44px; display: flex; align-items: center">Privacy</a>
+</div>
+<p style="margin: 0; font-size: 12px; line-height: 1.45; text-align: center; color: {{c.secondary}}">Renews automatically until cancelled in your Apple ID settings. Free plan: 3 invoices a month.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { plan: 'yearly' }; }
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0F172A', surface: '#1E293B', divider: '#334155', text: '#F8FAFC', secondary: '#94A3B8', accent: '#00F5F5', accentText: '#00F5F5', onAccent: '#0F172A' },
+      light: { bg: '#F3F5F7', surface: '#FFFFFF', divider: '#E4E7EB', text: '#0B1220', secondary: '#5B6676', accent: '#00F5F5', accentText: '#0E7C86', onAccent: '#0F172A' }
+    };
+    const c = themes[this.props.mode ?? 'dark'] || themes.dark;
+    const options = [
+      { id: 'yearly', name: 'Yearly', detail: '£8.33 a month · 2 months free', price: '£99.99' },
+      { id: 'monthly', name: 'Monthly', detail: 'Cancel any time', price: '£9.99' }
+    ];
+    const plans = options.map((o) => {
+      const on = this.state.plan === o.id;
+      return {
+        ...o,
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ plan: o.id }),
+        style: 'display: flex; align-items: center; gap: 14px; width: 100%; min-height: 68px; padding: 12px 16px; box-sizing: border-box; border-radius: 14px; font: inherit; color: ' + c.text + '; background: ' + c.surface + '; border: 2px solid ' + (on ? c.accent : c.surface) + '; cursor: pointer',
+        radio: 'width: 20px; height: 20px; flex-shrink: 0; box-sizing: border-box; border-radius: 999px; border: ' + (on ? '6px solid ' + c.accent : '2px solid ' + c.divider)
+      };
+    });
+    const benefits = [
+      { title: 'Unlimited invoices', detail: 'Free plan is 3 a month' },
+      { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
+      { title: 'Expenses and receipts', detail: 'Tax-year exports for your accountant' },
+      { title: 'Add jobs by voice', detail: 'Unlimited voice jobs' }
+    ];
+    return { c, plans, benefits, cta: this.state.plan === 'yearly' ? 'Start Pro — £99.99 a year' : 'Start Pro — £9.99 a month' };
+  }
+}
+</script>
+</body>
+</html>

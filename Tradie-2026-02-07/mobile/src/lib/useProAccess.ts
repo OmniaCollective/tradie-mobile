@@ -1,115 +1,72 @@
 /**
- * Pro Access Hook
+ * Pro access and free-plan limits (offer agreed 2026-10-06, brand/BRAND-BRIEF.md).
  *
- * Provides centralized access control for Pro features with usage limits.
- * Free tier limits: 15 booking invites/month, 20 customers total
+ * Free: unlimited jobs, customers, quotes and booking invites; 3 invoices a
+ * calendar month; 3 voice jobs in total (counted on the server, see server/).
+ * Pro: unlimited invoices, tax set-aside and VAT tracker, expenses and receipts,
+ * tax-year exports, unlimited voice jobs.
  */
-
-import { useCallback, useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { hasEntitlement, isRevenueCatEnabled } from './revenuecatClient';
 import { useTradeStore } from './store';
 
-// Free tier limits
-export const FREE_TIER_LIMITS = {
-  bookingLinksPerMonth: 15,
-  maxCustomers: 20,
+export const FREE_LIMITS = {
+  invoicesPerMonth: 3,
+  voiceJobs: 3,
 } as const;
 
-export interface ProAccessState {
-  isPro: boolean;
-  isLoading: boolean;
-  // Usage stats
-  bookingLinksSentThisMonth: number;
-  totalCustomers: number;
-  // Limit checks
-  canSendBookingLink: boolean;
-  canAddCustomer: boolean;
-  // Remaining
-  bookingLinksRemaining: number;
-  customersRemaining: number;
+/** Shared React Query key, so a purchase can refresh every screen at once. */
+export const PRO_QUERY_KEY = ['proEntitlement'] as const;
+
+/** Dev-only switch to preview Pro screens without a purchase (set in .env, never in EAS). */
+const DEV_FORCE_PRO = __DEV__ && process.env.EXPO_PUBLIC_DEV_FORCE_PRO === '1';
+
+async function fetchIsPro(): Promise<boolean> {
+  if (DEV_FORCE_PRO) return true;
+  if (!isRevenueCatEnabled()) return false;
+  const result = await hasEntitlement('pro');
+  return result.ok ? result.data : false;
 }
 
-/**
- * Hook to check Pro access status and usage limits
- */
-export function useProAccess(): ProAccessState {
-  const bookingLinksSentThisMonth = useTradeStore((s) => s.bookingLinksSentThisMonth);
-  const totalCustomers = useTradeStore((s) => s.customers.length);
+export interface ProAccess {
+  isPro: boolean;
+  isLoading: boolean;
+  invoicesThisMonth: number;
+  /** Invoices a free user can still create this month (Infinity for Pro). */
+  invoicesLeft: number;
+  canCreateInvoice: boolean;
+}
 
-  // Query RevenueCat for entitlement status
+export function useProAccess(): ProAccess {
   const { data: isPro = false, isLoading } = useQuery({
-    queryKey: ['proEntitlement'],
-    queryFn: async () => {
-      if (!isRevenueCatEnabled()) {
-        return false;
-      }
-      const result = await hasEntitlement('pro');
-      return result.ok ? result.data : false;
-    },
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    refetchOnWindowFocus: true,
+    queryKey: PRO_QUERY_KEY,
+    queryFn: fetchIsPro,
+    staleTime: 1000 * 60 * 5,
   });
 
-  // Calculate limits
-  const canSendBookingLink = isPro || bookingLinksSentThisMonth < FREE_TIER_LIMITS.bookingLinksPerMonth;
-  const canAddCustomer = isPro || totalCustomers < FREE_TIER_LIMITS.maxCustomers;
+  const invoicesThisMonth = useTradeStore((s) => {
+    const now = new Date();
+    return s.invoices.filter((i) => {
+      const d = new Date(i.createdAt);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length;
+  });
 
-  const bookingLinksRemaining = isPro
-    ? Infinity
-    : Math.max(0, FREE_TIER_LIMITS.bookingLinksPerMonth - bookingLinksSentThisMonth);
-  const customersRemaining = isPro
-    ? Infinity
-    : Math.max(0, FREE_TIER_LIMITS.maxCustomers - totalCustomers);
+  const invoicesLeft = isPro ? Infinity : Math.max(0, FREE_LIMITS.invoicesPerMonth - invoicesThisMonth);
 
   return {
     isPro,
+    // While RevenueCat answers, don't block anyone: limits apply once we know.
     isLoading,
-    bookingLinksSentThisMonth,
-    totalCustomers,
-    canSendBookingLink,
-    canAddCustomer,
-    bookingLinksRemaining,
-    customersRemaining,
+    invoicesThisMonth,
+    invoicesLeft,
+    canCreateInvoice: isLoading || invoicesLeft > 0,
   };
 }
 
-/**
- * Hook to check if a specific feature requires Pro
- */
-export function useFeatureGate(feature: 'bookingLinks' | 'customers'): {
-  isAllowed: boolean;
-  isLoading: boolean;
-  reason?: string;
-} {
-  const { isPro, isLoading, canSendBookingLink, canAddCustomer, bookingLinksRemaining, customersRemaining } = useProAccess();
-
-  if (isLoading) {
-    return { isAllowed: true, isLoading: true };
-  }
-
-  if (isPro) {
-    return { isAllowed: true, isLoading: false };
-  }
-
-  switch (feature) {
-    case 'bookingLinks':
-      return {
-        isAllowed: canSendBookingLink,
-        isLoading: false,
-        reason: canSendBookingLink
-          ? undefined
-          : `You've used all ${FREE_TIER_LIMITS.bookingLinksPerMonth} booking invites this month`,
-      };
-    case 'customers':
-      return {
-        isAllowed: canAddCustomer,
-        isLoading: false,
-        reason: canAddCustomer
-          ? undefined
-          : `You've reached the ${FREE_TIER_LIMITS.maxCustomers} customer limit`,
-      };
-    default:
-      return { isAllowed: true, isLoading: false };
-  }
+/** Re-check Pro right away, e.g. after a purchase or restore. */
+export function useRefreshPro() {
+  const queryClient = useQueryClient();
+  return useCallback(() => queryClient.invalidateQueries({ queryKey: PRO_QUERY_KEY }), [queryClient]);
 }

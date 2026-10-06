@@ -11,11 +11,19 @@ module.exports = {
   theme: {
     // NOTE to AI: You can extend the theme with custom colors or styles here.
     extend: {
-      // For example, you can add a primary or secondary color here.
-      // colors: {
-      //   primary: "#INSERT_VALID_HEX_CODE",
-      //   secondary: "#INSERT_VALID_HEX_CODE",
-      // },
+      // Brand tokens (src/lib/theme.ts). Values come from CSS variables that
+      // ThemeRoot sets for light or dark mode, so one class works in both.
+      colors: {
+        bg: "rgb(var(--c-bg) / <alpha-value>)",
+        surface: "rgb(var(--c-surface) / <alpha-value>)",
+        divider: "rgb(var(--c-divider) / <alpha-value>)",
+        fg: "rgb(var(--c-fg) / <alpha-value>)",
+        secondary: "rgb(var(--c-secondary) / <alpha-value>)",
+        accent: "rgb(var(--c-accent) / <alpha-value>)",
+        "on-accent": "rgb(var(--c-on-accent) / <alpha-value>)",
+        link: "rgb(var(--c-link) / <alpha-value>)",
+        alert: "rgb(var(--c-alert) / <alpha-value>)",
+      },
       fontSize: {
         xs: "10px",
         sm: "12px",

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Choose your trade</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#0E7C86}a:hover{color:#0B6770}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 60px 16px 40px; background: {{c.bg}}; color: {{c.text}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column; justify-content: space-between">
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<button aria-label="Back" style="width: 44px; height: 44px; margin-left: -10px; border: 0; background: transparent; color: {{c.text}}; display: flex; align-items: center; justify-content: center">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+</button>
+<span style="font-size: 14px; color: {{c.secondary}}">Step 2 of 3</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 0 4px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em">What's your trade?</h1>
+<p style="margin: 0; font-size: 16px; line-height: 1.45; color: {{c.secondary}}">We'll set up your job types and starting prices. You can change them any time.</p>
+</div>
+
+<div style="background: {{c.surface}}; border-radius: 16px; padding: 0 16px">
+<label style="display: flex; align-items: center; gap: 14px; min-height: 56px">
+<input type="radio" name="trade" style="position: absolute; opacity: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.secondary}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+<span style="flex-grow: 1; font-size: 16px">Plumber</span>
+</label>
+<label style="display: flex; align-items: center; gap: 14px; min-height: 56px; border-top: 1px solid {{c.divider}}">
+<input type="radio" name="trade" checked style="position: absolute; opacity: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+<span style="flex-grow: 1; font-size: 16px; font-weight: 600">Electrician</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.accentText}}" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+</label>
+<label style="display: flex; align-items: center; gap: 14px; min-height: 56px; border-top: 1px solid {{c.divider}}">
+<input type="radio" name="trade" style="position: absolute; opacity: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.secondary}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+<span style="flex-grow: 1; font-size: 16px">Gardener</span>
+</label>
+<label style="display: flex; align-items: center; gap: 14px; min-height: 56px; border-top: 1px solid {{c.divider}}">
+<input type="radio" name="trade" style="position: absolute; opacity: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.secondary}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+<span style="flex-grow: 1; font-size: 16px">Cleaner</span>
+</label>
+<label style="display: flex; align-items: center; gap: 14px; min-height: 56px; border-top: 1px solid {{c.divider}}">
+<input type="radio" name="trade" style="position: absolute; opacity: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.secondary}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></svg>
+<span style="flex-grow: 1; font-size: 16px">Handyman</span>
+</label>
+<a href="#" style="display: flex; align-items: center; gap: 14px; min-height: 56px; border-top: 1px solid {{c.divider}}; text-decoration: none; color: {{c.accentText}}; font-size: 16px; font-weight: 600">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>More trades</a>
+</div>
+</div>
+
+<button style="height: 52px; border: 0; border-radius: 12px; background: {{c.accent}}; color: {{c.onAccent}}; font: inherit; font-size: 17px; font-weight: 600">Continue</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = {
+      dark: { bg: '#0F172A', surface: '#1E293B', divider: '#334155', text: '#F8FAFC', secondary: '#94A3B8', accent: '#00F5F5', accentText: '#00F5F5', onAccent: '#0F172A' },
+      light: { bg: '#F3F5F7', surface: '#FFFFFF', divider: '#E4E7EB', text: '#0B1220', secondary: '#5B6676', accent: '#00F5F5', accentText: '#0E7C86', onAccent: '#0F172A' }
+    };
+    return { c: themes[this.props.mode ?? 'dark'] || themes.dark };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,626 +1,336 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  Image,
-  ScrollView,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Mic,
+  FileText,
+  PoundSterling,
+  DollarSign,
   Wrench,
   Zap,
   Leaf,
   Sparkles,
-  ChevronRight,
-  ChevronDown,
+  Hammer,
   Dog,
   Droplets,
-  Hammer,
   Car,
   Plus,
-  User,
-  Building,
-  Phone,
-  PoundSterling,
-  ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronDown,
+  type LucideIcon,
 } from 'lucide-react-native';
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-  SlideInRight,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useTradeStore } from '@/lib/store';
-import { Trade, tradeConfigs } from '@/lib/trades';
-import { TURQUOISE, SLATE_400, SLATE_500, SLATE_600, WHITE } from '@/lib/theme';
+import { useTradeStore, useRegion, useSettings } from '@/lib/store';
+import { type Trade, getTradeConfig } from '@/lib/trades';
+import { COUNTRY_OPTIONS, type Country } from '@/lib/region';
+import { useAccount, useAuthStore } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
+import { Group, RowDivider, PrimaryButton, FieldRow, NumberFieldRow, SectionHeader, Segmented } from '@/components/ui';
+import { AppleSignInButton } from '@/components/AppleSignInButton';
+import { currencySymbol } from '@/lib/money';
 
-
-// Top trades shown as prominent cards
-const topTrades: Array<{ key: Trade; icon: React.ComponentType<{ size: number; color: string }> }> = [
+const TOP_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'plumber', icon: Wrench },
   { key: 'electrician', icon: Zap },
   { key: 'gardener', icon: Leaf },
   { key: 'cleaner', icon: Sparkles },
   { key: 'diy', icon: Hammer },
 ];
-
-// More trades shown when expanded
-const moreTrades: Array<{ key: Trade; icon: React.ComponentType<{ size: number; color: string }> }> = [
-  { key: 'dog_walker', icon: Dog },
-  { key: 'window_cleaner', icon: Droplets },
+const MORE_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'carpenter', icon: Hammer },
-  { key: 'car_valet', icon: Car },
+  { key: 'window_cleaner', icon: Droplets },
   { key: 'carpet_cleaner', icon: Sparkles },
+  { key: 'car_valet', icon: Car },
+  { key: 'dog_walker', icon: Dog },
 ];
 
-// Step indicator dots
-function StepIndicator({ currentStep }: { currentStep: number }) {
-  return (
-    <View className="flex-row items-center justify-center gap-2 mb-6">
-      {[0, 1, 2].map((step) => (
-        <View
-          key={step}
-          className={`h-1.5 rounded-full ${
-            step === currentStep
-              ? 'w-8 bg-[#14B8A6]'
-              : step < currentStep
-                ? 'w-4 bg-[#14B8A6]/40'
-                : 'w-4 bg-[#334155]'
-          }`}
-        />
-      ))}
-    </View>
-  );
-}
-
-// Step 1: Welcome + Name
-function StepName({
-  name,
-  onChangeName,
-  onNext,
-}: {
-  name: string;
-  onChangeName: (text: string) => void;
-  onNext: () => void;
-}) {
-  return (
-    <Animated.View
-      entering={FadeInDown.duration(500)}
-      className="flex-1 px-6"
-    >
-      {/* Logo */}
-      <View className="items-center mb-4 mt-2">
-        <Image
-          source={require('@/assets/tradie-logo.png')}
-          style={{ width: 140, height: 140 }}
-          resizeMode="contain"
-        />
-      </View>
-
-      <View className="items-center mb-2">
-        <Text className="text-slate-400 text-base text-center">
-          The all-in-one app for solo tradies.
-        </Text>
-      </View>
-
-      {/* Tagline */}
-      <View className="flex-row items-center justify-center mb-10">
-        {['QUOTE', 'BOOK', 'INVOICE'].map((word, i) => (
-          <React.Fragment key={word}>
-            <Text
-              className="text-[#14B8A6] font-bold text-sm"
-              style={{ letterSpacing: 2 }}
-            >
-              {word}
-            </Text>
-            {i < 2 && (
-              <Text className="text-slate-600 mx-3 font-light">|</Text>
-            )}
-          </React.Fragment>
-        ))}
-      </View>
-
-      {/* Name input */}
-      <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-        <Text className="text-white font-bold text-2xl mb-2">
-          What's your name?
-        </Text>
-        <Text className="text-slate-500 text-sm mb-6">
-          We'll use this to personalise your experience
-        </Text>
-
-        <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3 mb-8">
-          <User size={20} color={SLATE_500} />
-          <TextInput
-            className="flex-1 text-white text-lg ml-3"
-            placeholder="Your first name"
-            placeholderTextColor={SLATE_600}
-            value={name}
-            onChangeText={onChangeName}
-            autoFocus
-            returnKeyType="next"
-            onSubmitEditing={() => name.trim().length > 0 && onNext()}
-            autoCapitalize="words"
-          />
-        </View>
-      </Animated.View>
-
-      {/* Continue button */}
-      <Animated.View entering={FadeInUp.delay(400).duration(500)}>
-        <Pressable
-          onPress={onNext}
-          disabled={name.trim().length === 0}
-          className="active:opacity-90"
-        >
-          <LinearGradient
-            colors={name.trim().length > 0 ? ['#14B8A6', '#0D9488'] : ['#334155', '#1E293B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{
-              paddingVertical: 16,
-              borderRadius: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text
-              className={`font-bold text-lg mr-2 ${
-                name.trim().length > 0 ? 'text-white' : 'text-slate-500'
-              }`}
-            >
-              Continue
-            </Text>
-            <ArrowRight size={20} color={name.trim().length > 0 ? WHITE : SLATE_500} />
-          </LinearGradient>
-        </Pressable>
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
-// Step 2: Trade selection
-function StepTrade({
-  selectedTrade,
-  onSelectTrade,
-  onCustomTrade,
-}: {
-  selectedTrade: Trade | null;
-  onSelectTrade: (trade: Trade) => void;
-  onCustomTrade: () => void;
-}) {
-  const [showMore, setShowMore] = useState(false);
-
-  return (
-    <Animated.View
-      entering={SlideInRight.duration(400)}
-      className="flex-1 px-6"
-    >
-      <Animated.View entering={FadeInDown.duration(400)}>
-        <Text className="text-white font-bold text-2xl mb-2">
-          What's your trade?
-        </Text>
-        <Text className="text-slate-500 text-sm mb-6">
-          This sets up your job types and default pricing
-        </Text>
-      </Animated.View>
-
-      {/* Top trades - prominent cards */}
-      <View className="gap-3 mb-4">
-        {topTrades.map((trade, index) => {
-          const config = tradeConfigs[trade.key];
-          const Icon = trade.icon;
-          const isSelected = selectedTrade === trade.key;
-
-          return (
-            <Animated.View
-              key={trade.key}
-              entering={FadeInDown.delay(100 + index * 60).duration(400)}
-            >
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  onSelectTrade(trade.key);
-                }}
-                className="active:opacity-90"
-              >
-                <View
-                  className={`flex-row items-center rounded-xl border px-4 py-3.5 ${
-                    isSelected
-                      ? 'bg-[#14B8A6]/15 border-[#14B8A6]'
-                      : 'bg-[#1E293B] border-[#334155]'
-                  }`}
-                >
-                  <View
-                    className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${
-                      isSelected ? 'bg-[#14B8A6]/20' : 'bg-[#0F172A]'
-                    }`}
-                  >
-                    <Icon size={20} color={isSelected ? TURQUOISE : SLATE_400} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-white font-semibold text-base">
-                      {config.label}
-                    </Text>
-                    <Text className="text-slate-500 text-xs">
-                      {config.description}
-                    </Text>
-                  </View>
-                  {isSelected ? (
-                    <View className="w-7 h-7 rounded-full bg-[#14B8A6] items-center justify-center">
-                      <Check size={14} color={WHITE} />
-                    </View>
-                  ) : (
-                    <View className="w-7 h-7 rounded-full bg-[#0F172A] items-center justify-center">
-                      <ChevronRight size={14} color={SLATE_500} />
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-            </Animated.View>
-          );
-        })}
-      </View>
-
-      {/* More trades toggle */}
-      {!showMore ? (
-        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowMore(true);
-            }}
-          >
-            <View className="flex-row items-center justify-center py-3">
-              <Text className="text-[#14B8A6] font-medium text-sm mr-1">
-                More trades
-              </Text>
-              <ChevronDown size={16} color={TURQUOISE} />
-            </View>
-          </Pressable>
-        </Animated.View>
-      ) : (
-        <Animated.View entering={FadeInDown.duration(300)} className="gap-3 mb-4">
-          {moreTrades.map((trade, index) => {
-            const config = tradeConfigs[trade.key];
-            const Icon = trade.icon;
-            const isSelected = selectedTrade === trade.key;
-
-            return (
-              <Animated.View
-                key={trade.key}
-                entering={FadeInDown.delay(index * 50).duration(300)}
-              >
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    onSelectTrade(trade.key);
-                  }}
-                  className="active:opacity-90"
-                >
-                  <View
-                    className={`flex-row items-center rounded-xl border px-4 py-3.5 ${
-                      isSelected
-                        ? 'bg-[#14B8A6]/15 border-[#14B8A6]'
-                        : 'bg-[#1E293B] border-[#334155]'
-                    }`}
-                  >
-                    <View
-                      className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${
-                        isSelected ? 'bg-[#14B8A6]/20' : 'bg-[#0F172A]'
-                      }`}
-                    >
-                      <Icon size={20} color={isSelected ? TURQUOISE : SLATE_400} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-white font-semibold text-base">
-                        {config.label}
-                      </Text>
-                      <Text className="text-slate-500 text-xs">
-                        {config.description}
-                      </Text>
-                    </View>
-                    {isSelected ? (
-                      <View className="w-7 h-7 rounded-full bg-[#14B8A6] items-center justify-center">
-                        <Check size={14} color={WHITE} />
-                      </View>
-                    ) : (
-                      <View className="w-7 h-7 rounded-full bg-[#0F172A] items-center justify-center">
-                        <ChevronRight size={14} color={SLATE_500} />
-                      </View>
-                    )}
-                  </View>
-                </Pressable>
-              </Animated.View>
-            );
-          })}
-
-          {/* Custom trade */}
-          <Animated.View entering={FadeInDown.delay(moreTrades.length * 50).duration(300)}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onCustomTrade();
-              }}
-            >
-              <View className="flex-row items-center rounded-xl border border-dashed border-[#334155] px-4 py-3.5">
-                <View className="w-10 h-10 rounded-xl bg-[#0F172A] items-center justify-center mr-3">
-                  <Plus size={20} color={TURQUOISE} />
-                </View>
-                <Text className="text-slate-400 font-semibold text-base">
-                  Add your own trade
-                </Text>
-              </View>
-            </Pressable>
-          </Animated.View>
-        </Animated.View>
-      )}
-
-      <View className="mt-2 items-center">
-        <Text className="text-slate-600 text-xs">
-          You can change this later in Settings
-        </Text>
-      </View>
-    </Animated.View>
-  );
-}
-
-// Step 3: Quick business setup
-function StepBusiness({
-  businessName,
-  phone,
-  hourlyRate,
-  onChangeBusinessName,
-  onChangePhone,
-  onChangeHourlyRate,
-  onFinish,
-  onSkip,
-  ownerName,
-}: {
-  businessName: string;
-  phone: string;
-  hourlyRate: string;
-  onChangeBusinessName: (text: string) => void;
-  onChangePhone: (text: string) => void;
-  onChangeHourlyRate: (text: string) => void;
-  onFinish: () => void;
-  onSkip: () => void;
-  ownerName: string;
-}) {
-  return (
-    <Animated.View
-      entering={SlideInRight.duration(400)}
-      className="flex-1 px-6"
-    >
-      <Animated.View entering={FadeInDown.duration(400)}>
-        <Text className="text-white font-bold text-2xl mb-2">
-          Quick setup
-        </Text>
-        <Text className="text-slate-500 text-sm mb-6">
-          Just the essentials to get you started, {ownerName}
-        </Text>
-      </Animated.View>
-
-      {/* Business name */}
-      <Animated.View entering={FadeInDown.delay(100).duration(400)} className="mb-4">
-        <Text className="text-slate-400 text-sm font-medium mb-2">Business name</Text>
-        <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <Building size={18} color={SLATE_500} />
-          <TextInput
-            className="flex-1 text-white text-base ml-3"
-            placeholder="e.g. Paul's Plumbing"
-            placeholderTextColor={SLATE_600}
-            value={businessName}
-            onChangeText={onChangeBusinessName}
-            autoCapitalize="words"
-          />
-        </View>
-      </Animated.View>
-
-      {/* Phone */}
-      <Animated.View entering={FadeInDown.delay(200).duration(400)} className="mb-4">
-        <Text className="text-slate-400 text-sm font-medium mb-2">Phone number</Text>
-        <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <Phone size={18} color={SLATE_500} />
-          <TextInput
-            className="flex-1 text-white text-base ml-3"
-            placeholder="07xxx xxxxxx"
-            placeholderTextColor={SLATE_600}
-            value={phone}
-            onChangeText={onChangePhone}
-            keyboardType="phone-pad"
-          />
-        </View>
-      </Animated.View>
-
-      {/* Hourly rate */}
-      <Animated.View entering={FadeInDown.delay(300).duration(400)} className="mb-8">
-        <Text className="text-slate-400 text-sm font-medium mb-2">Hourly rate</Text>
-        <View className="flex-row items-center bg-[#1E293B] rounded-xl border border-[#334155] px-4 py-3">
-          <PoundSterling size={18} color={SLATE_500} />
-          <TextInput
-            className="flex-1 text-white text-base ml-3"
-            placeholder="60"
-            placeholderTextColor={SLATE_600}
-            value={hourlyRate}
-            onChangeText={onChangeHourlyRate}
-            keyboardType="numeric"
-          />
-          <Text className="text-slate-500 text-sm">/hour</Text>
-        </View>
-      </Animated.View>
-
-      {/* Finish button */}
-      <Animated.View entering={FadeInUp.delay(400).duration(400)}>
-        <Pressable onPress={onFinish} className="active:opacity-90">
-          <LinearGradient
-            colors={['#14B8A6', '#0D9488']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{
-              paddingVertical: 16,
-              borderRadius: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text className="text-white font-bold text-lg mr-2">
-              Let's go!
-            </Text>
-            <ArrowRight size={20} color={WHITE} />
-          </LinearGradient>
-        </Pressable>
-
-        {/* Skip */}
-        <Pressable onPress={onSkip} className="mt-4 py-3">
-          <Text className="text-slate-500 text-center text-sm">
-            Skip — I'll set this up later
-          </Text>
-        </Pressable>
-      </Animated.View>
-    </Animated.View>
-  );
-}
+const benefits = (country: Country): { icon: LucideIcon; title: string; body: string }[] => [
+  { icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' },
+  { icon: FileText, title: 'Quote and invoice in a tap', body: 'Professional PDFs from your own prices' },
+  country === 'US'
+    ? { icon: DollarSign, title: 'Your tax, worked out', body: 'Federal and self-employment tax to set aside' }
+    : { icon: PoundSterling, title: 'Your tax, worked out', body: 'Income Tax and NI to set aside, live' },
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { setTrade, updateSettings, completeOnboarding } = useTradeStore();
-  const [step, setStep] = useState(0);
-  const [navigating, setNavigating] = useState(false);
+  const insets = useSafeAreaInsets();
+  const t = useTheme();
+  const account = useAccount();
+  const setTrade = useTradeStore((s) => s.setTrade);
+  const updateSettings = useTradeStore((s) => s.updateSettings);
+  const completeOnboarding = useTradeStore((s) => s.completeOnboarding);
+  const setCountry = useTradeStore((s) => s.setCountry);
+  // Starts as the phone's region; the tradie can change it on the details step.
+  const { country, postcodeLabel } = useRegion();
+  const isUS = country === 'US';
+  // Rates start as the trade's defaults and are edited in place, like in Account.
+  const { hourlyRate, minimumCharge } = useSettings();
 
-  // Step 1 state
-  const [ownerName, setOwnerName] = useState('');
-
-  // Step 2 state
-  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
-
-  // Step 3 state
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [trade, setTradeChoice] = useState<Trade | null>(null);
+  const [showMore, setShowMore] = useState(false);
+  const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phone, setPhone] = useState('');
-  const [hourlyRate, setHourlyRate] = useState('');
+  const [postcode, setPostcode] = useState('');
 
-  const handleNameNext = useCallback(() => {
-    if (ownerName.trim().length === 0) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const goToTrade = () => {
+    // Apple shares the name on first sign-in; use it so they don't type it again.
+    if (!name && useAuthStore.getState().account?.name) setName(useAuthStore.getState().account!.name!);
     setStep(1);
-  }, [ownerName]);
+  };
 
-  const handleSelectTrade = useCallback(
-    (trade: Trade) => {
-      if (navigating) return;
-      setSelectedTrade(trade);
-      setTrade(trade);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const finish = (withDetails: boolean) => {
+    const updates: Parameters<typeof updateSettings>[0] = { ownerName: name.trim() || account?.name || '' };
+    if (withDetails) {
+      if (businessName.trim()) updates.businessName = businessName.trim();
+      if (phone.trim()) updates.phone = phone.trim();
+      if (postcode.trim()) updates.postcode = postcode.trim().toUpperCase();
+    }
+    updateSettings(updates);
+    setCountry(country); // saves the choice, so a later change of phone region doesn't move them
+    completeOnboarding();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.replace('/(tabs)');
+  };
 
-      // Move to step 3 after brief delay
-      setTimeout(() => {
-        setStep(2);
-      }, 300);
-    },
-    [navigating, setTrade]
-  );
-
-  const handleCustomTrade = useCallback(() => {
-    handleSelectTrade('custom');
-  }, [handleSelectTrade]);
-
-  const finishOnboarding = useCallback(
-    (skipSetup: boolean) => {
-      if (navigating) return;
-      setNavigating(true);
-
-      // Save owner name always
-      const updates: Record<string, string | number> = {
-        ownerName: ownerName.trim(),
-      };
-
-      if (!skipSetup) {
-        if (businessName.trim()) updates.businessName = businessName.trim();
-        if (phone.trim()) updates.phone = phone.trim();
-        if (hourlyRate.trim()) {
-          const rate = parseInt(hourlyRate, 10);
-          if (!isNaN(rate) && rate > 0) updates.hourlyRate = rate;
-        }
-      }
-
-      updateSettings(updates);
-      completeOnboarding();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace('/(tabs)');
-    },
-    [navigating, ownerName, businessName, phone, hourlyRate, updateSettings, completeOnboarding, router]
-  );
-
-  return (
-    <SafeAreaView className="flex-1 bg-[#0F172A]">
-      {/* Subtle top gradient */}
-      <LinearGradient
-        colors={['#14B8A620', '#0F172A00']}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 300,
-        }}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  const back = (
+    <View className="flex-row items-center justify-between mb-6">
+      <Pressable
+        onPress={() => setStep((s) => (s === 2 ? 1 : 0))}
+        className="w-11 h-11 -ml-2.5 items-center justify-center"
+        accessibilityRole="button"
+        accessibilityLabel="Back"
       >
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Step indicator */}
-          <View className="pt-4">
-            <StepIndicator currentStep={step} />
+        <ChevronLeft size={24} color={t.fg} strokeWidth={2} />
+      </Pressable>
+      <Text className="text-secondary text-sm">Step {step + 1} of 3</Text>
+    </View>
+  );
+
+  // ── 1. Welcome ────────────────────────────────────────────────────────────
+  if (step === 0) {
+    return (
+      <View
+        className="flex-1 bg-bg px-6 justify-between"
+        style={{ paddingTop: insets.top + 56, paddingBottom: insets.bottom + 24 }}
+      >
+        <View>
+          <Text className="text-link text-[17px] font-extrabold tracking-[2.4px] mb-4">TRADIE</Text>
+          <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight">Quotes, jobs and invoices. Sorted.</Text>
+          <Text className="text-secondary text-[17px] leading-6 mt-4">
+            Built for solo traders. Know what to set aside for tax as you go.
+          </Text>
+
+          <View className="mt-10 gap-5">
+            {benefits(country).map(({ icon: Icon, title, body }) => (
+              <View key={title} className="flex-row">
+                <Icon size={24} color={t.link} strokeWidth={2} />
+                <View className="ml-3.5 flex-1">
+                  <Text className="text-fg text-base font-semibold">{title}</Text>
+                  <Text className="text-secondary text-[15px]">{body}</Text>
+                </View>
+              </View>
+            ))}
           </View>
+        </View>
 
-          {step === 0 && (
-            <StepName
-              name={ownerName}
-              onChangeName={setOwnerName}
-              onNext={handleNameNext}
-            />
-          )}
+        <View>
+          <AppleSignInButton onSignedIn={goToTrade} />
+          <Pressable
+            onPress={() => {
+              useAuthStore.getState().skipSignIn();
+              goToTrade();
+            }}
+            className="min-h-[48px] items-center justify-center mt-2"
+            accessibilityRole="button"
+          >
+            <Text className="text-fg text-base font-semibold">Not now</Text>
+          </Pressable>
+          <Text className="text-secondary text-xs text-center leading-5 mt-1">
+            Signing in keeps Pro on a new phone and lets voice work. Your jobs stay on your phone.{' '}
+            <Text className="text-link" onPress={() => Linking.openURL('https://builtbyomnia.com/tradie/privacy-policy')}>
+              Privacy
+            </Text>
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
-          {step === 1 && (
-            <StepTrade
-              selectedTrade={selectedTrade}
-              onSelectTrade={handleSelectTrade}
-              onCustomTrade={handleCustomTrade}
-            />
-          )}
-
-          {step === 2 && (
-            <StepBusiness
-              businessName={businessName}
-              phone={phone}
-              hourlyRate={hourlyRate}
-              onChangeBusinessName={setBusinessName}
-              onChangePhone={setPhone}
-              onChangeHourlyRate={setHourlyRate}
-              onFinish={() => finishOnboarding(false)}
-              onSkip={() => finishOnboarding(true)}
-              ownerName={ownerName.trim().split(' ')[0]}
-            />
-          )}
+  // ── 2. Trade ──────────────────────────────────────────────────────────────
+  if (step === 1) {
+    const list = showMore ? [...TOP_TRADES, ...MORE_TRADES] : TOP_TRADES;
+    return (
+      <View className="flex-1 bg-bg">
+        <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 140 }}>
+          {back}
+          <Text className="text-fg text-[28px] font-bold tracking-tight mx-1">What’s your trade?</Text>
+          <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">
+            We’ll set up your job types and starting prices. You can change them any time.
+          </Text>
+          <Group>
+            {list.map(({ key, icon: Icon }, i) => {
+              const selected = trade === key;
+              return (
+                <View key={key}>
+                  {i > 0 && <RowDivider />}
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setTradeChoice(key);
+                    }}
+                    className="flex-row items-center px-4 min-h-[56px] active:opacity-70"
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <Icon size={20} color={selected ? t.link : t.secondary} strokeWidth={2} />
+                    <View className="flex-1 ml-3.5 py-2">
+                      <Text className={selected ? 'text-fg text-base font-semibold' : 'text-fg text-base'}>
+                        {getTradeConfig(key, country).label}
+                      </Text>
+                      <Text className="text-secondary text-[13px]">{getTradeConfig(key, country).description}</Text>
+                    </View>
+                    {selected && <Check size={20} color={t.link} strokeWidth={2.25} />}
+                  </Pressable>
+                </View>
+              );
+            })}
+            <RowDivider />
+            {showMore ? (
+              <Pressable
+                onPress={() => setTradeChoice('custom')}
+                className="flex-row items-center px-4 min-h-[56px] active:opacity-70"
+                accessibilityRole="radio"
+                accessibilityState={{ checked: trade === 'custom' }}
+              >
+                <Plus size={20} color={t.link} strokeWidth={2} />
+                <Text className="flex-1 text-link text-base font-semibold ml-3.5">Something else</Text>
+                {trade === 'custom' && <Check size={20} color={t.link} strokeWidth={2.25} />}
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => setShowMore(true)}
+                className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+                accessibilityRole="button"
+              >
+                <ChevronDown size={20} color={t.link} strokeWidth={2} />
+                <Text className="text-link text-base font-semibold ml-3.5">More trades</Text>
+              </Pressable>
+            )}
+          </Group>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+          <PrimaryButton
+            label="Continue"
+            disabled={!trade}
+            onPress={() => {
+              if (!trade) return;
+              setTrade(trade);
+              setStep(2);
+            }}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // ── 3. Details ────────────────────────────────────────────────────────────
+  return (
+    <View className="flex-1 bg-bg">
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 180 }}
+      >
+        {back}
+        <Text className="text-fg text-[28px] font-bold tracking-tight mx-1">Your details</Text>
+        <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">These go on your quotes and invoices.</Text>
+        <Group>
+          <View className="flex-row items-center px-4 min-h-[52px] py-2">
+            <Text className="flex-1 text-fg text-base">Country</Text>
+            <Segmented options={COUNTRY_OPTIONS} value={country} onChange={setCountry} className="w-32 bg-bg" />
+          </View>
+          <RowDivider />
+          <FieldRow
+            label="Your name"
+            value={name}
+            onChangeText={setName}
+            placeholder="First and last"
+            autoCapitalize="words"
+            width="w-44"
+          />
+          <RowDivider />
+          <FieldRow
+            label="Business name"
+            value={businessName}
+            onChangeText={setBusinessName}
+            placeholder={isUS ? 'As on your truck' : 'As on your van'}
+            autoCapitalize="words"
+            width="w-44"
+          />
+          <RowDivider />
+          <FieldRow
+            label="Phone"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder={isUS ? '(555) 555-0100' : '07700 900000'}
+            keyboardType="phone-pad"
+            width="w-40"
+          />
+          <RowDivider />
+          <FieldRow
+            label={isUS ? 'Base ZIP code' : 'Base postcode'}
+            hint="Where your day starts"
+            value={postcode}
+            onChangeText={(v) => setPostcode(v.toUpperCase())}
+            placeholder={isUS ? '94103' : 'SE1 7TP'}
+            autoCapitalize="characters"
+            keyboardType={isUS ? 'number-pad' : 'default'}
+            width="w-28"
+          />
+        </Group>
+        <Text className="text-secondary text-[13px] mx-1 mt-2">
+          Your {postcodeLabel} lets Tradie suggest times that keep your driving down.
+        </Text>
+
+        <View className="mt-8">
+          <SectionHeader title="Your rates" />
+        </View>
+        <Group>
+          <NumberFieldRow
+            label="Hourly rate"
+            prefix={currencySymbol()}
+            value={hourlyRate}
+            onChangeNumber={(n) => updateSettings({ hourlyRate: n })}
+            width="w-20"
+          />
+          <RowDivider />
+          <NumberFieldRow
+            label="Minimum charge"
+            prefix={currencySymbol()}
+            value={minimumCharge}
+            onChangeNumber={(n) => updateSettings({ minimumCharge: n })}
+            width="w-20"
+          />
+        </Group>
+        <Text className="text-secondary text-[13px] mx-1 mt-2">
+          Starting rates for your trade. Set prices for each job type in Account.
+        </Text>
+      </ScrollView>
+      <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+        <PrimaryButton label="Let’s go" onPress={() => finish(true)} />
+        <Pressable
+          onPress={() => finish(false)}
+          className="min-h-[48px] items-center justify-center mt-1"
+          accessibilityRole="button"
+        >
+          <Text className="text-secondary text-base font-semibold">Skip for now</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }

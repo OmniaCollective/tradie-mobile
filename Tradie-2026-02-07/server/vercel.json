@@ -1,0 +1,7 @@
+{
+  "regions": ["lhr1"],
+  "functions": {
+    "api/voice/transcribe.ts": { "maxDuration": 30 },
+    "api/voice/extract.ts": { "maxDuration": 30 }
+  }
+}

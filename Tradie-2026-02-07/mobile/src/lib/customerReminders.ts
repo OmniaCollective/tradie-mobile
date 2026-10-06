@@ -9,7 +9,8 @@ import * as SMS from 'expo-sms';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Job, Customer, BusinessSettings } from './store';
-import { formatTime, formatDateFull } from './dates';
+import { formatTime, formatDateFull, toDateKey } from './dates';
+import { formatMoney } from './money';
 
 const SENT_REMINDERS_KEY = 'tradie-sent-reminders';
 const QUOTE_FOLLOWUPS_KEY = 'tradie-quote-followups';
@@ -149,7 +150,7 @@ export async function sendQuoteFollowup(
 
   const quoteTotal = job.quote?.total.toFixed(2) || '0.00';
 
-  const message = `Hi ${customer.name},\n\nJust following up on your ${jobTypeLabel.toLowerCase()} quote for £${quoteTotal}.\n\nYour quote is expiring soon. Would you like to go ahead and book?\n\nReply YES to confirm, or let us know if you have any questions.\n\n${businessName}`;
+  const message = `Hi ${customer.name},\n\nJust following up on your ${jobTypeLabel.toLowerCase()} quote for ${formatMoney(Number(quoteTotal))}.\n\nYour quote is expiring soon. Would you like to go ahead and book?\n\nReply YES to confirm, or let us know if you have any questions.\n\n${businessName}`;
 
   try {
     const { result } = await SMS.sendSMSAsync([customer.phone], message);
@@ -201,7 +202,7 @@ export function isQuoteExpired(job: Job): boolean {
 export function getJobsNeedingDayBeforeReminder(jobs: Job[]): Job[] {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = toDateKey(tomorrow);
 
   return jobs.filter(
     (job) =>
@@ -214,7 +215,7 @@ export function getJobsNeedingDayBeforeReminder(jobs: Job[]): Job[] {
  * Get jobs that need morning-of reminders sent
  */
 export function getJobsNeedingMorningReminder(jobs: Job[]): Job[] {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toDateKey();
 
   return jobs.filter(
     (job) =>

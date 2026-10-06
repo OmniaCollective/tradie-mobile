@@ -1,403 +1,242 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import {
-  X,
-  Check,
-  Zap,
-  Send,
-  Users,
-  Infinity,
-} from 'lucide-react-native';
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
+import { X, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import {
-  getOfferings,
-  purchasePackage,
-  restorePurchases,
-  isRevenueCatEnabled,
-} from '@/lib/revenuecatClient';
-import type { PurchasesPackage } from 'react-native-purchases';
+import type { PurchasesPackage, PurchasesIntroPrice } from 'react-native-purchases';
+import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { FREE_LIMITS, useRefreshPro } from '@/lib/useProAccess';
+import { formatMoney } from '@/lib/money';
+import { useTheme } from '@/lib/theme';
+import { cn } from '@/lib/cn';
+import { PrimaryButton } from '@/components/ui';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { TURQUOISE, DARK_BG, YELLOW, WHITE } from '@/lib/theme';
 
+type Plan = 'yearly' | 'monthly';
 
-// Only list what Pro actually unlocks today (App Store guideline 2.3.1)
-const PRO_FEATURES = [
-  {
-    icon: Send,
-    title: 'Unlimited Booking Invites',
-    description: 'No monthly cap on invites to customers',
-  },
-  {
-    icon: Users,
-    title: 'Unlimited Customers',
-    description: 'Free plan is limited to 20 customers',
-  },
+// Only what Pro actually unlocks today (App Store guideline 2.3.1).
+const BENEFITS = [
+  { title: 'Unlimited invoices', detail: `Free plan is ${FREE_LIMITS.invoicesPerMonth} a month` },
+  { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
+  { title: 'Expenses and receipts', detail: 'Tax-year exports for your accountant' },
+  { title: 'Add jobs by voice', detail: 'Unlimited voice jobs' },
 ];
 
-type PlanType = 'monthly' | 'yearly' | 'lifetime';
+const TERMS_URL = 'https://builtbyomnia.com/tradie/terms-of-service';
+const PRIVACY_URL = 'https://builtbyomnia.com/tradie/privacy-policy';
+
+/** "1 week", "3 days", "1 month" for a free trial. */
+function trialLength(intro: PurchasesIntroPrice): string {
+  const unit = intro.periodUnit.toLowerCase();
+  const n = intro.periodNumberOfUnits;
+  return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+
+async function loadPackages(): Promise<{ monthly: PurchasesPackage | null; yearly: PurchasesPackage | null }> {
+  const result = await getOfferings();
+  if (!result.ok) throw new Error(result.reason);
+  const available = result.data.current?.availablePackages ?? [];
+  return {
+    monthly: available.find((p) => p.identifier === '$rc_monthly') ?? null,
+    yearly: available.find((p) => p.identifier === '$rc_annual') ?? null,
+  };
+}
 
 export default function PaywallScreen() {
   const router = useRouter();
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('yearly');
-  const [loading, setLoading] = useState(true);
-  const [purchasing, setPurchasing] = useState(false);
-  const [modal, setModal] = useState<{ title: string; message: string; variant?: 'default' | 'success' | 'error' | 'warning'; onDismissAction?: () => void } | null>(null);
-  const [packages, setPackages] = useState<{
-    monthly: PurchasesPackage | null;
-    yearly: PurchasesPackage | null;
-    lifetime: PurchasesPackage | null;
-  }>({ monthly: null, yearly: null, lifetime: null });
+  const insets = useSafeAreaInsets();
+  const t = useTheme();
+  const refreshPro = useRefreshPro();
+  const [plan, setPlan] = useState<Plan>('yearly');
+  const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
+  const [modal, setModal] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'warning'; done?: boolean } | null>(null);
 
-  const handleOfferings = (result: Awaited<ReturnType<typeof getOfferings>>) => {
-    if (result.ok && result.data.current) {
-      const availablePackages = result.data.current.availablePackages;
-      setPackages({
-        monthly: availablePackages.find(p => p.identifier === '$rc_monthly') || null,
-        yearly: availablePackages.find(p => p.identifier === '$rc_annual') || null,
-        lifetime: availablePackages.find(p => p.identifier === '$rc_lifetime') || null,
-      });
-    } else if (!result.ok && result.reason === 'not_configured') {
-      setModal({ title: 'Subscriptions Unavailable', message: 'In-app purchases are not available right now. Please try again later.', variant: 'error', onDismissAction: () => router.back() });
-    } else if (!result.ok) {
-      if (__DEV__) console.log('Failed to load offerings:', result);
-    }
-    setLoading(false);
-  };
+  const offerings = useQuery({
+    queryKey: ['paywall-packages'],
+    queryFn: loadPackages,
+    enabled: isRevenueCatEnabled(),
+    retry: 1,
+  });
+  const packages = offerings.data;
+  const selected = packages?.[plan] ?? null;
+  const ready = !!packages && (!!packages.monthly || !!packages.yearly);
 
-  useEffect(() => {
-    getOfferings().then(handleOfferings);
-  }, []);
+  const monthly = packages?.monthly?.product;
+  const yearly = packages?.yearly?.product;
+  const freeMonths = monthly && yearly ? Math.round(12 - yearly.price / monthly.price) : 0;
 
-  const handlePurchase = async () => {
-    const pkg = selectedPlan === 'monthly'
-      ? packages.monthly
-      : selectedPlan === 'yearly'
-        ? packages.yearly
-        : packages.lifetime;
+  const options: { key: Plan; name: string; detail: string; price: string; pkg: PurchasesPackage | null | undefined }[] = [
+    {
+      key: 'yearly',
+      name: 'Yearly',
+      detail: yearly
+        ? [
+            yearly.introPrice?.price === 0 ? `${trialLength(yearly.introPrice)} free` : null,
+            `${formatMoney(yearly.price / 12)} a month`,
+            freeMonths >= 1 ? `${freeMonths} months free` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '',
+      price: yearly?.priceString ?? '',
+      pkg: packages?.yearly,
+    },
+    {
+      key: 'monthly',
+      name: 'Monthly',
+      detail: monthly?.introPrice?.price === 0 ? `${trialLength(monthly.introPrice)} free · cancel any time` : 'Cancel any time',
+      price: monthly?.priceString ?? '',
+      pkg: packages?.monthly,
+    },
+  ];
 
-    if (!pkg) {
-      if (__DEV__) console.log('[Paywall] No package found for plan:', selectedPlan, 'packages:', {
-        monthly: !!packages.monthly,
-        yearly: !!packages.yearly,
-        lifetime: !!packages.lifetime,
-      });
-      setModal({ title: 'Unavailable', message: 'This subscription plan is not available right now. Please try again later.', variant: 'error' });
+  const ctaLabel = (() => {
+    if (!selected) return 'Start Pro';
+    const intro = selected.product.introPrice;
+    if (intro?.price === 0) return `Start ${trialLength(intro)} free trial`;
+    return `Start Pro — ${selected.product.priceString} a ${plan === 'yearly' ? 'year' : 'month'}`;
+  })();
+
+  const buy = async () => {
+    if (!selected) return;
+    setBusy('buy');
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const result = await purchasePackage(selected);
+    setBusy(null);
+    if (result.ok) {
+      // Refresh Pro everywhere straight away, not after the 5-minute cache.
+      await refreshPro();
+      if (result.data.entitlements.active.pro) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setModal({ title: 'Welcome to Tradie Pro', message: 'Everything is unlocked.', variant: 'success', done: true });
+      } else {
+        setModal({
+          title: 'Confirming your purchase',
+          message: 'Apple has taken the payment and Pro should appear in a moment. If it doesn’t, tap Restore purchase.',
+          variant: 'warning',
+        });
+      }
       return;
     }
-
-    setPurchasing(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const result = await purchasePackage(pkg);
-    if (result.ok) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setModal({ title: 'Welcome to Pro!', message: 'You now have access to all premium features.', variant: 'success', onDismissAction: () => router.back() });
-    } else if (result.reason === 'sdk_error') {
-      const errorMessage = result.error instanceof Error ? result.error.message : 'Purchase failed';
-      // Don't show error for user cancellation
-      if (!errorMessage.includes('cancel') && !errorMessage.includes('Cancel')) {
-        setModal({ title: 'Purchase Failed', message: 'Something went wrong with the purchase. Please try again.', variant: 'error' });
-      }
-    } else if (result.reason === 'not_configured') {
-      setModal({ title: 'Unavailable', message: 'In-app purchases are not available right now. Please try again later.', variant: 'error' });
-    }
-    setPurchasing(false);
+    if ((result.error as { userCancelled?: boolean } | undefined)?.userCancelled) return;
+    setModal({
+      title: 'Purchase didn’t go through',
+      message: result.reason === 'not_configured' ? 'In-app purchases aren’t available right now.' : 'You haven’t been charged. Please try again.',
+      variant: 'error',
+    });
   };
 
-  const handleRestore = async () => {
-    setLoading(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
+  const restore = async () => {
+    setBusy('restore');
     const result = await restorePurchases();
-    if (result.ok) {
-      const hasProEntitlement = result.data.entitlements.active?.['pro'];
-      if (hasProEntitlement) {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setModal({ title: 'Restored!', message: 'Your Pro subscription has been restored.', variant: 'success', onDismissAction: () => router.back() });
-      } else {
-        setModal({ title: 'No Subscription Found', message: "We couldn't find an active subscription to restore.", variant: 'warning' });
-      }
-    } else {
-      setModal({ title: 'Error', message: 'Failed to restore purchases. Please try again.', variant: 'error' });
+    setBusy(null);
+    if (!result.ok) {
+      setModal({ title: 'Couldn’t restore', message: 'Check your connection and try again.', variant: 'error' });
+      return;
     }
-    setLoading(false);
+    await refreshPro();
+    if (result.data.entitlements.active.pro) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setModal({ title: 'Pro restored', message: 'Everything is unlocked again.', variant: 'success', done: true });
+    } else {
+      setModal({ title: 'No subscription found', message: 'This Apple ID doesn’t have an active Tradie Pro subscription.', variant: 'warning' });
+    }
   };
-
-  const monthlyPrice = packages.monthly?.product.priceString || '£19.99';
-  const yearlyPrice = packages.yearly?.product.priceString || '£99.00';
-  const lifetimePrice = packages.lifetime?.product.priceString || '£199.00';
-  const yearlyMonthly = packages.yearly?.product.price
-    ? `£${(packages.yearly.product.price / 12).toFixed(2)}`
-    : '£8.25';
-
-  // Check for trial period
-  const monthlyTrial = packages.monthly?.product.introPrice;
-  const yearlyTrial = packages.yearly?.product.introPrice;
-  const hasMonthlyTrial = monthlyTrial?.price === 0;
-  const hasYearlyTrial = yearlyTrial?.price === 0;
-
-  // Calculate savings
-  const monthlyAmount = packages.monthly?.product.price;
-  const yearlyAmount = packages.yearly?.product.price;
-  const yearlySavings = monthlyAmount && yearlyAmount
-    ? Math.round((1 - yearlyAmount / (monthlyAmount * 12)) * 100)
-    : Math.round((1 - (99 / (19.99 * 12))) * 100);
 
   return (
-    <View className="flex-1 bg-[#0F172A]">
-      <LinearGradient
-        colors={['#0F172A', '#134E4A', '#0F172A']}
-        locations={[0, 0.5, 1]}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400 }}
-      />
-
-      <SafeAreaView className="flex-1">
-        {/* Close Button */}
-        <Pressable
-          onPress={() => router.back()}
-          className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 items-center justify-center"
-        >
-          <X size={20} color={WHITE} />
-        </Pressable>
-
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <Animated.View
-            entering={FadeInDown.delay(100).duration(600)}
-            className="items-center pt-8 pb-6 px-6"
+    <View className="flex-1 bg-bg">
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 260 }}>
+        <View className="flex-row justify-end">
+          <Pressable
+            onPress={() => router.back()}
+            className="w-11 h-11 -mr-2.5 items-center justify-center"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
           >
-            <Text className="text-white font-bold text-3xl text-center">
-              Upgrade to Pro
-            </Text>
-            <Text className="text-slate-400 text-center mt-2 text-base">
-              Unlock the full power of TRADIE
-            </Text>
-          </Animated.View>
+            <X size={24} color={t.secondary} strokeWidth={2} />
+          </Pressable>
+        </View>
 
-          {/* Features */}
-          <Animated.View
-            entering={FadeInDown.delay(200).duration(600)}
-            className="px-6 mb-6"
-          >
-            <View className="bg-white/5 rounded-2xl border border-white/10 p-4">
-              {PRO_FEATURES.map((feature, index) => (
-                <View
-                  key={feature.title}
-                  className={`flex-row items-center py-3 ${
-                    index < PRO_FEATURES.length - 1 ? 'border-b border-white/5' : ''
-                  }`}
-                >
-                  <View className="w-10 h-10 rounded-xl bg-[#14B8A6]/20 items-center justify-center mr-4">
-                    <feature.icon size={20} color={TURQUOISE} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-white font-semibold">{feature.title}</Text>
-                    <Text className="text-slate-500 text-sm">{feature.description}</Text>
-                  </View>
-                  <Check size={18} color={TURQUOISE} />
-                </View>
-              ))}
+        <View className="mx-1 mb-6">
+          <Text className="text-link text-[15px] font-extrabold tracking-[2px]">TRADIE PRO</Text>
+          <Text className="text-fg text-[28px] leading-[32px] font-bold tracking-tight mt-2">Get paid and stay on top of tax</Text>
+        </View>
+
+        <View className="mx-1 gap-3.5 mb-8">
+          {BENEFITS.map((b) => (
+            <View key={b.title} className="flex-row">
+              <Check size={20} color={t.link} strokeWidth={2.25} style={{ marginTop: 1 }} />
+              <View className="ml-3">
+                <Text className="text-fg text-base font-semibold">{b.title}</Text>
+                <Text className="text-secondary text-sm">{b.detail}</Text>
+              </View>
             </View>
-          </Animated.View>
+          ))}
+        </View>
 
-          {/* Pricing Plans */}
-          <Animated.View
-            entering={FadeInDown.delay(300).duration(600)}
-            className="px-6 mb-6"
-          >
-            <Text className="text-white font-semibold text-lg mb-4">Choose Your Plan</Text>
-
-            {/* Lifetime Plan */}
-            <Pressable
-              onPress={() => {
-                setSelectedPlan('lifetime');
-                Haptics.selectionAsync();
-              }}
-              className={`rounded-2xl border-2 p-4 mb-3 relative overflow-hidden ${
-                selectedPlan === 'lifetime'
-                  ? 'border-[#FCD34D] bg-[#FCD34D]/10'
-                  : 'border-white/10 bg-white/5'
-              }`}
-            >
-              {/* Best Value Badge */}
-              <View className="absolute top-0 right-0 bg-[#FCD34D] px-3 py-1 rounded-bl-xl">
-                <Text className="text-[#0F172A] text-xs font-bold">BEST VALUE</Text>
-              </View>
-
-              <View className="flex-row items-center">
-                <View
-                  className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 ${
-                    selectedPlan === 'lifetime'
-                      ? 'border-[#FCD34D] bg-[#FCD34D]'
-                      : 'border-slate-500'
-                  }`}
-                >
-                  {selectedPlan === 'lifetime' && <Check size={14} color={DARK_BG} />}
-                </View>
-                <View className="flex-1">
-                  <View className="flex-row items-center">
-                    <Text className="text-white font-bold text-lg">Lifetime</Text>
-                    <Infinity size={16} color={YELLOW} className="ml-2" />
-                  </View>
-                  <Text className="text-slate-400 text-sm">
-                    Pay once, own forever
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-white font-bold text-xl">{lifetimePrice}</Text>
-                  <Text className="text-slate-500 text-xs">one-time</Text>
-                </View>
-              </View>
+        {!isRevenueCatEnabled() ? (
+          <Text className="text-secondary text-[15px] text-center">Subscriptions are available in the iPhone app.</Text>
+        ) : offerings.isLoading ? (
+          <View className="py-8 items-center">
+            <ActivityIndicator color={t.link} />
+          </View>
+        ) : !ready ? (
+          <View className="py-4 items-center">
+            <Text className="text-secondary text-[15px] text-center mb-2">Plans couldn’t load. Check your connection.</Text>
+            <Pressable onPress={() => offerings.refetch()} className="min-h-[44px] justify-center" accessibilityRole="button">
+              <Text className="text-link text-[15px] font-semibold">Try again</Text>
             </Pressable>
+          </View>
+        ) : (
+          <View className="gap-2.5">
+            {options
+              .filter((o) => o.pkg)
+              .map((o) => {
+                const on = plan === o.key;
+                return (
+                  <Pressable
+                    key={o.key}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setPlan(o.key);
+                    }}
+                    className={cn('flex-row items-center bg-surface rounded-2xl px-4 min-h-[68px] border-2', on ? 'border-accent' : 'border-surface')}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                  >
+                    <View className={cn('w-5 h-5 rounded-full', on ? 'border-[6px] border-accent' : 'border-2 border-divider')} />
+                    <View className="flex-1 ml-3.5">
+                      <Text className="text-fg text-base font-semibold">{o.name}</Text>
+                      <Text className="text-secondary text-sm">{o.detail}</Text>
+                    </View>
+                    <Text className="text-fg text-[17px] font-bold">{o.price}</Text>
+                  </Pressable>
+                );
+              })}
+          </View>
+        )}
+      </ScrollView>
 
-            {/* Yearly Plan */}
-            <Pressable
-              onPress={() => {
-                setSelectedPlan('yearly');
-                Haptics.selectionAsync();
-              }}
-              className={`rounded-2xl border-2 p-4 mb-3 relative overflow-hidden ${
-                selectedPlan === 'yearly'
-                  ? 'border-[#14B8A6] bg-[#14B8A6]/10'
-                  : 'border-white/10 bg-white/5'
-              }`}
-            >
-              {/* Save Badge */}
-              <View className="absolute top-0 right-0 bg-[#14B8A6] px-3 py-1 rounded-bl-xl">
-                <Text className="text-white text-xs font-bold">SAVE {yearlySavings}%</Text>
-              </View>
-
-              <View className="flex-row items-center">
-                <View
-                  className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 ${
-                    selectedPlan === 'yearly'
-                      ? 'border-[#14B8A6] bg-[#14B8A6]'
-                      : 'border-slate-500'
-                  }`}
-                >
-                  {selectedPlan === 'yearly' && <Check size={14} color={WHITE} />}
-                </View>
-                <View className="flex-1">
-                  <Text className="text-white font-bold text-lg">Yearly</Text>
-                  <Text className="text-slate-400 text-sm">
-                    {hasYearlyTrial ? '1 month free, then ' : ''}{yearlyMonthly}/month
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-white font-bold text-xl">{yearlyPrice}</Text>
-                  <Text className="text-slate-500 text-xs">/year</Text>
-                </View>
-              </View>
-            </Pressable>
-
-            {/* Monthly Plan */}
-            <Pressable
-              onPress={() => {
-                setSelectedPlan('monthly');
-                Haptics.selectionAsync();
-              }}
-              className={`rounded-2xl border-2 p-4 ${
-                selectedPlan === 'monthly'
-                  ? 'border-[#14B8A6] bg-[#14B8A6]/10'
-                  : 'border-white/10 bg-white/5'
-              }`}
-            >
-              <View className="flex-row items-center">
-                <View
-                  className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 ${
-                    selectedPlan === 'monthly'
-                      ? 'border-[#14B8A6] bg-[#14B8A6]'
-                      : 'border-slate-500'
-                  }`}
-                >
-                  {selectedPlan === 'monthly' && <Check size={14} color={WHITE} />}
-                </View>
-                <View className="flex-1">
-                  <Text className="text-white font-bold text-lg">Monthly</Text>
-                  <Text className="text-slate-400 text-sm">
-                    {hasMonthlyTrial ? '1 month free trial' : 'Cancel anytime'}
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-white font-bold text-xl">{monthlyPrice}</Text>
-                  <Text className="text-slate-500 text-xs">/month</Text>
-                </View>
-              </View>
-            </Pressable>
-          </Animated.View>
-
-          {/* CTA Button */}
-          <Animated.View
-            entering={FadeInUp.delay(400).duration(600)}
-            className="px-6"
-          >
-            <Pressable
-              onPress={handlePurchase}
-              disabled={purchasing || loading}
-              className="rounded-2xl overflow-hidden active:opacity-90"
-            >
-              <LinearGradient
-                colors={selectedPlan === 'lifetime' ? ['#FCD34D', '#F59E0B'] : ['#14B8A6', '#0D9488']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ paddingVertical: 18, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
-              >
-                {purchasing ? (
-                  <ActivityIndicator color={selectedPlan === 'lifetime' ? DARK_BG : WHITE} />
-                ) : (
-                  <>
-                    <Zap size={20} color={selectedPlan === 'lifetime' ? DARK_BG : WHITE} fill={selectedPlan === 'lifetime' ? DARK_BG : WHITE} />
-                    <Text className={`font-bold text-lg ml-2 ${selectedPlan === 'lifetime' ? 'text-[#0F172A]' : 'text-white'}`}>
-                      {selectedPlan === 'lifetime'
-                        ? 'Get Lifetime Access'
-                        : (selectedPlan === 'monthly' && hasMonthlyTrial) || (selectedPlan === 'yearly' && hasYearlyTrial)
-                          ? 'Start Free Trial'
-                          : 'Start Pro Now'}
-                    </Text>
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
-
-            {/* Restore Purchases */}
-            <Pressable
-              onPress={handleRestore}
-              disabled={loading}
-              className="mt-4 py-3"
-            >
-              <Text className="text-slate-400 text-center text-sm">
-                Already subscribed? <Text className="text-[#14B8A6] font-medium">Restore Purchase</Text>
-              </Text>
-            </Pressable>
-
-            {/* Terms */}
-            <Text className="text-slate-600 text-xs text-center mt-4 px-4">
-              {selectedPlan === 'lifetime'
-                ? 'One-time payment. Lifetime access to all Pro features.'
-                : (selectedPlan === 'monthly' && hasMonthlyTrial) || (selectedPlan === 'yearly' && hasYearlyTrial)
-                  ? 'Free for 1 month, then auto-renews. Cancel anytime before the trial ends to avoid being charged.'
-                  : 'Payment will be charged to your Apple ID account. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.'}
-            </Text>
-          </Animated.View>
-        </ScrollView>
-      </SafeAreaView>
+      <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
+        <PrimaryButton label={ctaLabel} onPress={buy} loading={busy === 'buy'} disabled={!selected || busy !== null} />
+        <View className="flex-row justify-center gap-5 mt-1">
+          <Pressable onPress={restore} disabled={busy !== null} className="min-h-[44px] justify-center" accessibilityRole="button">
+            <Text className="text-fg text-sm font-semibold">{busy === 'restore' ? 'Restoring…' : 'Restore purchase'}</Text>
+          </Pressable>
+          <Pressable onPress={() => Linking.openURL(TERMS_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
+            <Text className="text-secondary text-sm">Terms</Text>
+          </Pressable>
+          <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
+            <Text className="text-secondary text-sm">Privacy</Text>
+          </Pressable>
+        </View>
+        <Text className="text-secondary text-xs text-center leading-4">
+          Renews automatically until cancelled in your Apple ID settings at least 24 hours before the end of the period.
+          Free plan: {FREE_LIMITS.invoicesPerMonth} invoices a month.
+        </Text>
+      </View>
 
       {modal && (
         <ConfirmModal
@@ -405,10 +244,11 @@ export default function PaywallScreen() {
           title={modal.title}
           message={modal.message}
           variant={modal.variant}
+          confirmText={modal.done ? 'Done' : 'OK'}
           onDismiss={() => {
-            const action = modal.onDismissAction;
+            const done = modal.done;
             setModal(null);
-            action?.();
+            if (done) router.back();
           }}
         />
       )}

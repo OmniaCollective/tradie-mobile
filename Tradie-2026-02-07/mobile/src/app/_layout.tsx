@@ -1,13 +1,15 @@
-import { DarkTheme, ThemeProvider } from 'expo-router/react-navigation';
+import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { View } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { DARK_BG, TURQUOISE, TEXT_PRIMARY } from '@/lib/theme';
+import { palettes, themeVars, useColorMode } from '@/lib/theme';
+import { useAuthSync } from '@/lib/auth';
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
@@ -20,18 +22,18 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 
-const TradieDarkTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: DARK_BG,
-    card: DARK_BG,
-    primary: TURQUOISE,
-  },
-};
-
 function RootLayoutNav() {
   const router = useRouter();
+  useAuthSync();
+  const mode = useColorMode();
+  const p = palettes[mode];
+  const navigationTheme = useMemo(() => {
+    const base = mode === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: { ...base.colors, background: p.bg, card: p.bg, text: p.fg, border: p.divider, primary: p.link },
+    };
+  }, [mode, p]);
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   useEffect(() => {
@@ -67,7 +69,10 @@ function RootLayoutNav() {
   }, []);
 
   return (
-    <ThemeProvider value={TradieDarkTheme}>
+    // themeVars feeds the token classes (bg-bg, text-fg, …) for the current mode.
+    <View style={[{ flex: 1, backgroundColor: p.bg }, themeVars[mode]]}>
+    <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+    <ThemeProvider value={navigationTheme}>
       <Stack>
         <Stack.Screen
           name="onboarding"
@@ -77,27 +82,14 @@ function RootLayoutNav() {
         />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
-          name="send-link"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
           name="job/[id]"
           options={{
             headerShown: true,
-            headerTitle: 'Job Details',
+            headerTitle: 'Job',
             headerBackTitle: 'Back',
-            headerStyle: { backgroundColor: DARK_BG },
-            headerTintColor: TEXT_PRIMARY,
+            headerStyle: { backgroundColor: p.bg },
+            headerTintColor: p.fg,
             headerShadowVisible: false,
-          }}
-        />
-        <Stack.Screen
-          name="book/[id]"
-          options={{
-            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -115,6 +107,13 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="suggest-times"
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="paywall"
           options={{
             presentation: 'modal',
@@ -123,6 +122,7 @@ function RootLayoutNav() {
         />
       </Stack>
     </ThemeProvider>
+    </View>
   );
 }
 
@@ -135,7 +135,6 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardProvider>
-          <StatusBar style="light" />
           <RootLayoutNav />
         </KeyboardProvider>
       </GestureHandlerRootView>

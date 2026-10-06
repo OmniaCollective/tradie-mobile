@@ -5,10 +5,10 @@
  * missing configuration. The app will work fine whether or not RevenueCat is configured.
  *
  * Environment Variables:
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
- * These are automatically injected into the workspace by the Vibecode service once the user sets up RevenueCat in the Payments tab.
+ * - EXPO_PUBLIC_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
+ * - EXPO_PUBLIC_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
+ * - EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
+ * Set these in EAS (production environment) and in the local .env file.
  *
  * Platform Support:
  * - iOS/Android: Fully supported via app stores
@@ -31,9 +31,9 @@ import Purchases, {
 const isWeb = Platform.OS === "web";
 
 // Check for environment keys
-const testKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY;
-const appleKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY;
-const googleKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY;
+const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
+const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
 
 // Use __DEV__ and Platform to determine which key to use
 const getApiKey = (): string | undefined => {
@@ -213,6 +213,17 @@ export const restorePurchases = (): Promise<
 export const setUserId = (userId: string): Promise<RevenueCatResult<void>> => {
   return guardRevenueCatUsage("setUserId", async () => {
     await Purchases.logIn(userId);
+  });
+};
+
+/**
+ * Attach the signed-in person's name and email to their RevenueCat customer,
+ * so they're identifiable in the RevenueCat dashboard.
+ */
+export const setUserDetails = (details: { email?: string; displayName?: string }): Promise<RevenueCatResult<void>> => {
+  return guardRevenueCatUsage("setUserDetails", async () => {
+    if (details.email) await Purchases.setEmail(details.email);
+    if (details.displayName) await Purchases.setDisplayName(details.displayName);
   });
 };
 

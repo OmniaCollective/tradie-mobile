@@ -1,10 +1,8 @@
 import React, { useSyncExternalStore } from 'react';
 import { Redirect, Tabs } from 'expo-router';
-import { Home, Calendar, FileText, Settings } from 'lucide-react-native';
-import { View } from 'react-native';
-import { TURQUOISE, DARK_BG, BORDER, SLATE_500, TEXT_PRIMARY } from '@/lib/theme';
-import { useTradeStore } from '@/lib/store';
-
+import { House, Calendar, PoundSterling, DollarSign, UserRound } from 'lucide-react-native';
+import { useTheme } from '@/lib/theme';
+import { useTradeStore, useRegion } from '@/lib/store';
 
 export default function TabLayout() {
   const hasHydrated = useSyncExternalStore(
@@ -12,6 +10,8 @@ export default function TabLayout() {
     () => useTradeStore.persist.hasHydrated(),
   );
   const hasCompletedOnboarding = useTradeStore((s) => s.hasCompletedOnboarding);
+  const t = useTheme();
+  const MoneyIcon = useRegion().country === 'US' ? DollarSign : PoundSterling;
 
   // Wait for saved data to load before deciding, so existing users never flash onboarding
   if (!hasHydrated) return null;
@@ -20,11 +20,11 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: TURQUOISE,
-        tabBarInactiveTintColor: SLATE_500,
+        tabBarActiveTintColor: t.link,
+        tabBarInactiveTintColor: t.secondary,
         tabBarStyle: {
-          backgroundColor: DARK_BG,
-          borderTopColor: BORDER,
+          backgroundColor: t.surface,
+          borderTopColor: t.divider,
           borderTopWidth: 1,
           height: 88,
           paddingBottom: 16,
@@ -36,9 +36,9 @@ export default function TabLayout() {
           fontWeight: '600',
         },
         headerStyle: {
-          backgroundColor: DARK_BG,
+          backgroundColor: t.bg,
         },
-        headerTintColor: TEXT_PRIMARY,
+        headerTintColor: t.fg,
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 18,
@@ -49,29 +49,33 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          title: 'Home',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <House size={24} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: 'Calendar',
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+          title: 'Jobs',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <Calendar size={24} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="finances"
         options={{
-          title: 'Finances',
-          tabBarIcon: ({ color, size }) => <FileText size={size} color={color} />,
+          title: 'Money',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <MoneyIcon size={24} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          title: 'Account',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <UserRound size={24} color={color} strokeWidth={2} />,
         }}
       />
     </Tabs>

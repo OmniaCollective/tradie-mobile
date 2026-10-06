@@ -1,0 +1,16 @@
+{
+  "name": "tradie-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jose": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vercel/node": "^5.0.0",
+    "typescript": "^5.9.0"
+  }
+}

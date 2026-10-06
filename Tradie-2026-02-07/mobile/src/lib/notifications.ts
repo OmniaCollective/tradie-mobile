@@ -2,7 +2,9 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TURQUOISE } from './theme';
+import { palettes } from './theme';
+import { getRegion } from './store';
+import { formatMoney } from './money';
 
 const PUSH_TOKEN_KEY = 'tradie-push-token';
 
@@ -73,7 +75,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       name: 'New Bookings',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: TURQUOISE,
+      lightColor: palettes.light.accent,
       sound: 'default',
     });
 
@@ -148,11 +150,11 @@ export async function sendNewBookingNotification(
   jobType: string,
   urgency: string
 ): Promise<void> {
-  const urgencyEmoji = urgency === 'emergency' ? '🚨' : urgency === 'urgent' ? '⚡' : '📋';
+  const urgencyLabel = urgency === 'emergency' ? 'Emergency request' : urgency === 'urgent' ? 'Urgent request' : 'New booking request';
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: `${urgencyEmoji} New Booking Request`,
+      title: urgencyLabel,
       body: `${customerName} needs ${jobType.toLowerCase().replace(/_/g, ' ')}`,
       data: { type: 'new_booking' } as NotificationData,
       sound: 'default',
@@ -169,7 +171,7 @@ export async function sendBookingConfirmedNotification(
   scheduledDate: string,
   scheduledTime: string
 ): Promise<void> {
-  const formattedDate = new Date(scheduledDate).toLocaleDateString('en-GB', {
+  const formattedDate = new Date(scheduledDate).toLocaleDateString(getRegion().locale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -177,7 +179,7 @@ export async function sendBookingConfirmedNotification(
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '✅ Booking Confirmed',
+      title: 'Job booked',
       body: `${customerName} confirmed for ${formattedDate} at ${scheduledTime}`,
       data: { type: 'booking_confirmed' } as NotificationData,
       sound: 'default',
@@ -195,8 +197,8 @@ export async function sendPaymentReceivedNotification(
 ): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '💰 Payment Received',
-      body: `${customerName} paid £${amount.toFixed(2)}`,
+      title: 'Payment received',
+      body: `${customerName} paid ${formatMoney(amount)}`,
       data: { type: 'payment_received' } as NotificationData,
       sound: 'default',
     },

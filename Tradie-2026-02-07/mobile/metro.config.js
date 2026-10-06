@@ -29,7 +29,6 @@ config.resolver.useWatchman = false;
 // Configure asset and source extensions.
 const { assetExts, sourceExts } = config.resolver;
 
-// SVG transformer is configured by withVibecodeMetro
 config.transformer = {
   ...config.transformer,
   getTransformOptions: async () => ({

@@ -1,5 +1,5 @@
 <stack>
-  Expo SDK 55, React Native 0.83.2, React 19.2, npm (not bun).
+  Expo SDK 57, React Native 0.86.3, React 19.2, npm (not bun).
   React Query for server/async state.
   NativeWind + Tailwind v3 for styling.
   react-native-reanimated v4 for animations (preferred over Animated from react-native).
@@ -84,21 +84,20 @@
 </data>
 
 <design>
-  Don't hold back. This is mobile — design for touch, thumb zones, glanceability.
-  Inspiration: iOS, Instagram, Airbnb, Coinbase, polished habit trackers.
+  Brand system v4 is approved (2026-10-06): read ../brand/BRAND-BRIEF.md before any UI work.
+  Light and dark mode both supported; the phone's setting decides.
 
-  <avoid>
-    Purple gradients on white, generic centered layouts, predictable patterns.
-    Web-like designs on mobile. Overused fonts (Space Grotesk, Inter).
-  </avoid>
-
-  <do>
-    Cohesive themes with dominant colors and sharp accents.
-    High-impact animations: progress bars, button feedback, haptics.
-    Depth via gradients and patterns, not flat solids.
-    Install `@expo-google-fonts/{font-name}` for fonts (eg: `@expo-google-fonts/inter`)
-    Use @react-native-menu/menu for context menus and dropdowns (native feel).
-  </do>
+  <rules>
+    Colours: only the token classes from tailwind.config.js — bg-bg, bg-surface, border-divider,
+    text-fg, text-secondary, bg-accent + text-on-accent (primary button), text-link, text-alert.
+    Never raw hex in className. For icon colours use useTheme() from src/lib/theme.ts.
+    One cyan accent (#00F5F5, navy text on it). Red (alert) only for overdue, emergency, delete.
+    Statuses are grey words + a line icon; only Paid (link colour) and Overdue/Emergency (alert) carry colour.
+    Icons: lucide-react-native, line only, strokeWidth 2, sizes 16 / 20 / 24. Never on coloured tiles, never emoji. Money = PoundSterling (DollarSign when the tradie's country is US).
+    Layout: 16px screen edge, grouped lists with 16px corners and no border, 12px button corners, 48px buttons, 44px minimum tap target.
+    One primary button per screen. No gradients, no shadows on cards, no floating action button.
+    Section titles in sentence case, not uppercase labels.
+  </rules>
 </design>
 
 <mistakes>
@@ -168,7 +167,6 @@
 
 <skills>
 You have access to a few skills in the `.claude/skills` folder. Use them to your advantage.
-- ai-apis-like-chatgpt: Use this skill when the user asks you to make an app that requires an AI API.
 - expo-docs: Use this skill when the user asks you to use an Expo SDK module or package that you might not know much about.
 - frontend-app-design: Use this skill when the user asks you to design a frontend app component or screen.
 </skills>

@@ -1,9 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import { Invoice, Job, Customer, BusinessSettings, Expense, EXPENSE_CATEGORY_LABELS } from './store';
-import { getJobTypeLabel } from './trades';
+import { Invoice, Job, Customer, BusinessSettings, Expense, EXPENSE_CATEGORY_LABELS, getRegion, getJobTypeLabel } from './store';
 import { getTaxYearBounds } from './taxEstimator';
+import { toDateKey } from './dates';
+import type { USTaxEstimate } from './usTaxEstimator';
+import { formatMoney } from './money';
 
 // Footer on shared PDFs — every invoice/quote a customer sees links back to the app
 const APP_STORE_URL = 'https://apps.apple.com/gb/app/id6758908408';
@@ -27,8 +29,8 @@ export const getDateRange = (preset: DatePreset): DateRange | null => {
     const from = new Date(now.getFullYear(), now.getMonth(), 1);
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     return {
-      from: from.toISOString().split('T')[0],
-      to: to.toISOString().split('T')[0],
+      from: toDateKey(from),
+      to: toDateKey(to),
     };
   }
 
@@ -37,16 +39,20 @@ export const getDateRange = (preset: DatePreset): DateRange | null => {
     const from = new Date(now.getFullYear(), quarter * 3, 1);
     const to = new Date(now.getFullYear(), quarter * 3 + 3, 0);
     return {
-      from: from.toISOString().split('T')[0],
-      to: to.toISOString().split('T')[0],
+      from: toDateKey(from),
+      to: toDateKey(to),
     };
   }
 
   if (preset === 'tax_year') {
-    const { start, end } = getTaxYearBounds(now);
+    // UK tax year runs 6 April – 5 April; the US tax year is the calendar year.
+    const { start, end } =
+      getRegion().country === 'US'
+        ? { start: new Date(now.getFullYear(), 0, 1), end: new Date(now.getFullYear(), 11, 31) }
+        : getTaxYearBounds(now);
     return {
-      from: start.toISOString().split('T')[0],
-      to: end.toISOString().split('T')[0],
+      from: toDateKey(start),
+      to: toDateKey(end),
     };
   }
 
@@ -55,10 +61,10 @@ export const getDateRange = (preset: DatePreset): DateRange | null => {
 
 export const getPresetLabel = (preset: DatePreset): string => {
   switch (preset) {
-    case 'this_month': return 'This Month';
-    case 'this_quarter': return 'This Quarter';
-    case 'tax_year': return 'Tax Year';
-    case 'all': return 'All Time';
+    case 'this_month': return 'This month';
+    case 'this_quarter': return 'This quarter';
+    case 'tax_year': return getRegion().country === 'US' ? `Tax year ${new Date().getFullYear()}` : 'This tax year';
+    case 'all': return 'All time';
   }
 };
 
@@ -173,6 +179,8 @@ interface TaxSummaryCsvContext {
   getJob: (id: string) => Job | undefined;
   getCustomer: (id: string) => Customer | undefined;
   settings: BusinessSettings;
+  /** Set for US users; the summary then uses US federal figures. */
+  usTax?: USTaxEstimate | null;
   taxEstimate: {
     grossIncome: number;
     totalExpenses: number;
@@ -189,22 +197,41 @@ interface TaxSummaryCsvContext {
 export const exportTaxSummaryCsv = async (ctx: TaxSummaryCsvContext): Promise<void> => {
   const { taxEstimate: t } = ctx;
 
-  // Summary section
-  const summary = [
-    'Tax Summary',
-    '',
-    `Gross Income,£${t.grossIncome.toFixed(2)}`,
-    `Total Expenses,£${t.totalExpenses.toFixed(2)}`,
-    `Taxable Profit,£${t.taxableProfit.toFixed(2)}`,
-    '',
-    `Income Tax,£${t.incomeTax.toFixed(2)}`,
-    `Class 4 NI,£${t.class4NI.toFixed(2)}`,
-    `Total Tax,£${t.totalTax.toFixed(2)}`,
-    `CIS Deductions,£${t.cisDeductions.toFixed(2)}`,
-    `Tax Owed,£${t.taxOwed.toFixed(2)}`,
-    '',
-    '',
-  ];
+  // Summary section — plain numbers (no thousands commas) so the CSV columns stay intact.
+  const n = (x: number) => x.toFixed(2);
+  const currency = getRegion().country === 'US' ? 'USD' : 'GBP';
+  const us = ctx.usTax;
+  const summary = us
+    ? [
+        `Tax Summary (${currency}) — federal estimate for tax year ${us.taxYear}; state tax not included`,
+        '',
+        `Gross Income,${n(us.grossIncome)}`,
+        `Business Expenses,${n(us.businessExpenses)}`,
+        `Net Profit,${n(us.netProfit)}`,
+        '',
+        `Self-Employment Tax,${n(us.selfEmploymentTax)}`,
+        `Federal Income Tax,${n(us.incomeTax)}`,
+        `Standard Deduction,${n(us.standardDeduction)}`,
+        `Qualified Business Income Deduction,${n(us.qbiDeduction)}`,
+        `Total Estimated Tax,${n(us.totalTax)}`,
+        '',
+        '',
+      ]
+    : [
+        `Tax Summary (${currency})`,
+        '',
+        `Gross Income,${n(t.grossIncome)}`,
+        `Total Expenses,${n(t.totalExpenses)}`,
+        `Taxable Profit,${n(t.taxableProfit)}`,
+        '',
+        `Income Tax,${n(t.incomeTax)}`,
+        `Class 4 NI,${n(t.class4NI)}`,
+        `Total Tax,${n(t.totalTax)}`,
+        `CIS Deductions,${n(t.cisDeductions)}`,
+        `Tax Owed,${n(t.taxOwed)}`,
+        '',
+        '',
+      ];
 
   // Income section
   let filteredInvoices = ctx.invoices.filter((inv) => inv.status === 'paid');
@@ -287,7 +314,7 @@ export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
 
   const lineItem = (label: string, amount: number) =>
     amount > 0
-      ? `<tr><td style="padding:8px 0;border-bottom:1px solid #334155;color:#CBD5E1">${label}</td><td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;color:#F8FAFC">£${amount.toFixed(2)}</td></tr>`
+      ? `<tr><td style="padding:8px 0;border-bottom:1px solid #E4E7EB;color:#5B6676">${label}</td><td style="padding:8px 0;border-bottom:1px solid #E4E7EB;text-align:right;color:#0B1220">${formatMoney(amount)}</td></tr>`
       : '';
 
   const validUntil = q.validUntil
@@ -299,19 +326,19 @@ export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#0F172A; color:#F8FAFC; }
+  body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#0B1220; }
   .header { display:flex; justify-content:space-between; margin-bottom:32px; }
-  .title { font-size:28px; font-weight:800; color:#14B8A6; }
-  .label { font-size:12px; color:#64748B; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
-  .value { font-size:14px; color:#CBD5E1; line-height:1.5; }
-  .card { background:#1E293B; border:1px solid #334155; border-radius:12px; padding:20px; margin-bottom:20px; }
+  .title { font-size:28px; font-weight:800; color:#0E7C86; }
+  .label { font-size:12px; color:#5B6676; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  .value { font-size:14px; color:#0B1220; line-height:1.5; }
+  .card { background:#F3F5F7; border:1px solid #E4E7EB; border-radius:12px; padding:20px; margin-bottom:20px; }
   table { width:100%; border-collapse:collapse; }
   .total-row td { padding:12px 0; font-weight:700; font-size:18px; }
-  .total-amount { color:#14B8A6; }
-  .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; background:#14B8A633; color:#14B8A6; }
-  .footer { margin-top:32px; text-align:center; color:#64748B; font-size:12px; }
-  .powered { margin-top:6px; text-align:center; color:#94A3B8; font-size:10px; }
-  .powered a { color:#14B8A6; text-decoration:none; }
+  .total-amount { color:#0E7C86; }
+  .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; background:#0E7C861A; color:#0E7C86; }
+  .footer { margin-top:32px; text-align:center; color:#5B6676; font-size:12px; }
+  .powered { margin-top:6px; text-align:center; color:#5B6676; font-size:10px; }
+  .powered a { color:#0E7C86; text-decoration:none; }
 </style>
 </head>
 <body>
@@ -323,7 +350,7 @@ export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
     <div style="text-align:right">
       <div class="label">Quote</div>
       <div class="value">${formatDate(q.createdAt)}</div>
-      ${validUntil ? `<div class="value" style="color:#64748B;font-size:12px">${validUntil}</div>` : ''}
+      ${validUntil ? `<div class="value" style="color:#5B6676;font-size:12px">${validUntil}</div>` : ''}
     </div>
   </div>
 
@@ -348,7 +375,7 @@ export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
 
   <div class="card">
     <div class="label" style="margin-bottom:12px">Job: ${jobLabel}</div>
-    ${job.description ? `<div class="value" style="margin-bottom:12px;color:#94A3B8">${job.description}</div>` : ''}
+    ${job.description ? `<div class="value" style="margin-bottom:12px;color:#5B6676">${job.description}</div>` : ''}
     <table>
       ${lineItem('Labour', q.labour)}
       ${lineItem('Materials', q.materials)}
@@ -356,8 +383,8 @@ export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
       ${lineItem('Emergency Surcharge', q.emergencySurcharge)}
       ${q.vat > 0 ? lineItem(`VAT (${settings.vatRate}%)`, q.vat) : ''}
       <tr class="total-row">
-        <td style="border-top:2px solid #14B8A6;padding-top:12px">Total</td>
-        <td class="total-amount" style="text-align:right;border-top:2px solid #14B8A6;padding-top:12px">£${q.total.toFixed(2)}</td>
+        <td style="border-top:2px solid #0E7C86;padding-top:12px">Total</td>
+        <td class="total-amount" style="text-align:right;border-top:2px solid #0E7C86;padding-top:12px">${formatMoney(q.total)}</td>
       </tr>
     </table>
   </div>
@@ -385,7 +412,7 @@ interface PdfContext {
 }
 
 const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
+  new Date(iso).toLocaleDateString(getRegion().locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -398,7 +425,7 @@ export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
 
   const lineItem = (label: string, amount: number) =>
     amount > 0
-      ? `<tr><td style="padding:8px 0;border-bottom:1px solid #334155;color:#CBD5E1">${label}</td><td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;color:#F8FAFC">£${amount.toFixed(2)}</td></tr>`
+      ? `<tr><td style="padding:8px 0;border-bottom:1px solid #E4E7EB;color:#5B6676">${label}</td><td style="padding:8px 0;border-bottom:1px solid #E4E7EB;text-align:right;color:#0B1220">${formatMoney(amount)}</td></tr>`
       : '';
 
   const html = `
@@ -406,19 +433,19 @@ export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#0F172A; color:#F8FAFC; }
+  body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#0B1220; }
   .header { display:flex; justify-content:space-between; margin-bottom:32px; }
-  .title { font-size:28px; font-weight:800; color:#14B8A6; }
-  .label { font-size:12px; color:#64748B; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
-  .value { font-size:14px; color:#CBD5E1; line-height:1.5; }
-  .card { background:#1E293B; border:1px solid #334155; border-radius:12px; padding:20px; margin-bottom:20px; }
+  .title { font-size:28px; font-weight:800; color:#0E7C86; }
+  .label { font-size:12px; color:#5B6676; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  .value { font-size:14px; color:#0B1220; line-height:1.5; }
+  .card { background:#F3F5F7; border:1px solid #E4E7EB; border-radius:12px; padding:20px; margin-bottom:20px; }
   table { width:100%; border-collapse:collapse; }
   .total-row td { padding:12px 0; font-weight:700; font-size:18px; }
-  .total-amount { color:#14B8A6; }
+  .total-amount { color:#0E7C86; }
   .status { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
-  .footer { margin-top:32px; text-align:center; color:#64748B; font-size:12px; }
-  .powered { margin-top:6px; text-align:center; color:#94A3B8; font-size:10px; }
-  .powered a { color:#14B8A6; text-decoration:none; }
+  .footer { margin-top:32px; text-align:center; color:#5B6676; font-size:12px; }
+  .powered { margin-top:6px; text-align:center; color:#5B6676; font-size:10px; }
+  .powered a { color:#0E7C86; text-decoration:none; }
 </style>
 </head>
 <body>
@@ -462,13 +489,13 @@ export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
       ${lineItem('Emergency Surcharge', q.emergencySurcharge)}
       ${q.vat > 0 ? lineItem(`VAT (${settings.vatRate}%)`, q.vat) : ''}
       <tr class="total-row">
-        <td style="border-top:2px solid #14B8A6;padding-top:12px">Total</td>
-        <td class="total-amount" style="text-align:right;border-top:2px solid #14B8A6;padding-top:12px">£${q.total.toFixed(2)}</td>
+        <td style="border-top:2px solid #0E7C86;padding-top:12px">Total</td>
+        <td class="total-amount" style="text-align:right;border-top:2px solid #0E7C86;padding-top:12px">${formatMoney(q.total)}</td>
       </tr>
     </table>
   </div>
 
-  ${invoice.paidAt ? `<div style="text-align:center;margin-top:16px"><span class="status" style="background:#22C55E33;color:#22C55E">PAID — ${formatDate(invoice.paidAt)}</span></div>` : ''}
+  ${invoice.paidAt ? `<div style="text-align:center;margin-top:16px"><span class="status" style="background:#0E7C861A;color:#0E7C86">PAID — ${formatDate(invoice.paidAt)}</span></div>` : ''}
 
   <div class="footer">Generated by ${settings.businessName || 'TRADIE'}</div>
   <div class="powered">${POWERED_BY_HTML}</div>

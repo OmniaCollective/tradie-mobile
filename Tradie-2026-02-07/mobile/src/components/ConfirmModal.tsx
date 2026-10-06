@@ -1,9 +1,13 @@
+/**
+ * Bottom-sheet dialog for messages and confirmations (brand system v4).
+ * Normal confirms use the cyan button; destructive ones ("error" with an
+ * onConfirm) use alert-red text, never a red fill.
+ */
 import React from 'react';
-import { View, Text, Pressable, Modal } from 'react-native';
-import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
-import { TURQUOISE, GREEN, RED, AMBER } from '@/lib/theme';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+import { View, Text, Pressable } from 'react-native';
+import { CircleCheck, CircleAlert } from 'lucide-react-native';
+import { useTheme } from '@/lib/theme';
+import { PrimaryButton, Sheet } from '@/components/ui';
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -17,13 +21,6 @@ interface ConfirmModalProps {
   variant?: 'default' | 'success' | 'error' | 'warning';
 }
 
-const variantColors = {
-  default: TURQUOISE,
-  success: GREEN,
-  error: RED,
-  warning: AMBER,
-};
-
 export function ConfirmModal({
   visible,
   title,
@@ -35,81 +32,51 @@ export function ConfirmModal({
   onDismiss,
   variant = 'default',
 }: ConfirmModalProps) {
-  const accentColor = variantColors[variant];
-  const hasActions = onConfirm || onCancel;
+  const t = useTheme();
+  const destructive = variant === 'error' && !!onConfirm;
+  const Icon = variant === 'success' ? CircleCheck : variant === 'error' || variant === 'warning' ? CircleAlert : null;
+  const iconColor = variant === 'success' ? t.link : t.alert;
+
+  const confirm = () => {
+    onConfirm?.();
+    onDismiss();
+  };
+  const cancel = () => {
+    onCancel?.();
+    onDismiss();
+  };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
-    >
-      <View className="flex-1 justify-end">
-        {/* Backdrop */}
-        <AnimatedPressable
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
-          onPress={onDismiss}
-          className="absolute inset-0 bg-black/60"
-        />
+    <Sheet visible={visible} onClose={onDismiss}>
+      <View className="pt-1 px-1">
+        {Icon && (
+          <View className="items-center mb-3">
+            <Icon size={24} color={iconColor} strokeWidth={2} />
+          </View>
+        )}
+        <Text className="text-fg text-[20px] font-semibold text-center mb-2" accessibilityRole="header">
+          {title}
+        </Text>
+        <Text className="text-secondary text-[15px] leading-6 text-center mb-6">{message}</Text>
 
-        {/* Content */}
-        <Animated.View
-          entering={SlideInDown.springify().damping(20).stiffness(200)}
-          exiting={SlideOutDown.duration(200)}
-          className="bg-[#1E293B] rounded-t-3xl px-6 pt-6 pb-10 border-t border-[#334155]"
-        >
-          {/* Handle */}
-          <View className="w-10 h-1 rounded-full bg-[#334155] self-center mb-5" />
+        {destructive ? (
+          <Pressable
+            onPress={confirm}
+            className="h-[52px] rounded-xl bg-bg items-center justify-center active:opacity-70"
+            accessibilityRole="button"
+          >
+            <Text className="text-alert text-[17px] font-semibold">{confirmText || 'Delete'}</Text>
+          </Pressable>
+        ) : (
+          <PrimaryButton label={confirmText || 'OK'} onPress={onConfirm ? confirm : onDismiss} />
+        )}
 
-          <Text className="text-white font-bold text-xl mb-2">{title}</Text>
-          <Text className="text-slate-400 text-base leading-6 mb-6">{message}</Text>
-
-          {hasActions ? (
-            <View className="gap-3">
-              {onConfirm && (
-                <Pressable
-                  onPress={() => {
-                    onConfirm();
-                    onDismiss();
-                  }}
-                  className="rounded-xl p-4 items-center active:opacity-80"
-                  style={{ backgroundColor: accentColor }}
-                >
-                  <Text className="text-white font-bold text-base">
-                    {confirmText || 'OK'}
-                  </Text>
-                </Pressable>
-              )}
-              {onCancel && (
-                <Pressable
-                  onPress={() => {
-                    onCancel();
-                    onDismiss();
-                  }}
-                  className="rounded-xl p-4 items-center bg-[#334155] active:opacity-80"
-                >
-                  <Text className="text-slate-300 font-medium text-base">
-                    {cancelText || 'Cancel'}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          ) : (
-            <Pressable
-              onPress={onDismiss}
-              className="rounded-xl p-4 items-center active:opacity-80"
-              style={{ backgroundColor: accentColor }}
-            >
-              <Text className="text-white font-bold text-base">
-                {confirmText || 'OK'}
-              </Text>
-            </Pressable>
-          )}
-        </Animated.View>
+        {(onCancel || destructive) && (
+          <Pressable onPress={cancel} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+            <Text className="text-secondary text-base font-semibold">{cancelText || 'Cancel'}</Text>
+          </Pressable>
+        )}
       </View>
-    </Modal>
+    </Sheet>
   );
 }

@@ -1,339 +1,359 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-} from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  MapPin,
-  Wrench,
-  Play,
-} from 'lucide-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useTradeStore, useJobs, Job } from '@/lib/store';
-import { getJobTypeLabel } from '@/lib/trades';
-import { FAB } from '@/components/FAB';
-import { formatTime } from '@/lib/dates';
-import { TURQUOISE, GREEN, EMERALD, ORANGE, SLATE_500, TEXT_PRIMARY, WHITE } from '@/lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChevronLeft, ChevronRight, Plus, Circle, CircleCheck, Trash2, Mic, CalendarClock } from 'lucide-react-native';
+import { useTradeStore, useJobs, useTodos, useSettings, type Job, getRegion, OfferedSlot } from '@/lib/store';
+import { getJobTypeLabel } from '@/lib/store';
+import { formatTime, toDateKey, parseDate } from '@/lib/dates';
+import { useTheme } from '@/lib/theme';
+import { cn } from '@/lib/cn';
+import { Group, RowDivider, SectionHeader, PrimaryButton } from '@/components/ui';
+import { JobStatus } from '@/components/JobStatus';
+import { activeOffer, formatSlot, slotDate } from '@/lib/booking';
 
-
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// UK weeks start on Monday.
+const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
+const TODOS_SHOWN = 5;
 
-export default function CalendarScreen() {
+export default function JobsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const t = useTheme();
   const jobs = useJobs();
-  const { getCustomer, updateJob, settings } = useTradeStore();
+  const todos = useTodos();
+  const settings = useSettings();
+  const getCustomer = useTradeStore((s) => s.getCustomer);
+  const updateJob = useTradeStore((s) => s.updateJob);
+  const addTodo = useTradeStore((s) => s.addTodo);
+  const toggleTodo = useTradeStore((s) => s.toggleTodo);
+  const deleteTodo = useTradeStore((s) => s.deleteTodo);
 
-  const today = new Date();
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [selectedDate, setSelectedDate] = useState<string>(
-    today.toISOString().split('T')[0]
-  );
+  const [todayKey] = useState(() => toDateKey());
+  const [month, setMonth] = useState(() => new Date().getMonth());
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [selected, setSelected] = useState(todayKey);
+  const [newTodo, setNewTodo] = useState('');
+  const [showAllTodos, setShowAllTodos] = useState(false);
 
-  // Get calendar days for current month
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
+  const days = useMemo(() => {
+    const first = new Date(year, month, 1);
+    const lead = (first.getDay() + 6) % 7; // Monday = 0
+    return Array.from({ length: 42 }, (_, i) => {
+      const date = new Date(year, month, 1 - lead + i);
+      return {
+        key: toDateKey(date),
+        day: date.getDate(),
+        inMonth: date.getMonth() === month,
+      };
+    });
+  }, [month, year]);
 
-    const days: Array<{ date: string; day: number; isCurrentMonth: boolean }> = [];
-
-    // Previous month days
-    const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
-    for (let i = startingDay - 1; i >= 0; i--) {
-      const day = prevMonthLastDay - i;
-      const date = new Date(currentYear, currentMonth - 1, day);
-      days.push({
-        date: date.toISOString().split('T')[0],
-        day,
-        isCurrentMonth: false,
-      });
-    }
-
-    // Current month days
-    for (let i = 1; i <= daysInMonth; i++) {
-      const date = new Date(currentYear, currentMonth, i);
-      days.push({
-        date: date.toISOString().split('T')[0],
-        day: i,
-        isCurrentMonth: true,
-      });
-    }
-
-    // Next month days to fill the grid
-    const remainingDays = 42 - days.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      const date = new Date(currentYear, currentMonth + 1, i);
-      days.push({
-        date: date.toISOString().split('T')[0],
-        day: i,
-        isCurrentMonth: false,
-      });
-    }
-
-    return days;
-  }, [currentMonth, currentYear]);
-
-  // Get jobs count by date — show ALL statuses that have a scheduled date
   const jobsByDate = useMemo(() => {
     const map: Record<string, Job[]> = {};
-    jobs.forEach((job) => {
-      if (job.scheduledDate) {
-        if (!map[job.scheduledDate]) {
-          map[job.scheduledDate] = [];
-        }
-        map[job.scheduledDate].push(job);
-      }
-    });
+    for (const job of jobs) {
+      if (job.scheduledDate) (map[job.scheduledDate] ??= []).push(job);
+    }
     return map;
   }, [jobs]);
 
-  // Get jobs for selected date
-  const selectedDateJobs = useMemo(() => {
-    return (jobsByDate[selectedDate] || []).sort((a, b) => {
-      const timeA = a.scheduledTime || '00:00';
-      const timeB = b.scheduledTime || '00:00';
-      return timeA.localeCompare(timeB);
-    });
-  }, [jobsByDate, selectedDate]);
-
-  const goToPrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
-    } else {
-      setCurrentMonth(currentMonth - 1);
+  // Times offered to customers stay pencilled in until they reply.
+  const offersByDate = useMemo(() => {
+    const map: Record<string, { job: Job; slot: OfferedSlot }[]> = {};
+    for (const job of jobs) {
+      for (const slot of activeOffer(job)) (map[slot.date] ??= []).push({ job, slot });
     }
+    return map;
+  }, [jobs]);
+
+  const dayOffers = useMemo(
+    () => [...(offersByDate[selected] ?? [])].sort((a, b) => a.slot.time.localeCompare(b.slot.time)),
+    [offersByDate, selected],
+  );
+
+  const dayJobs = useMemo(
+    () => [...(jobsByDate[selected] ?? [])].sort((a, b) => (a.scheduledTime || '').localeCompare(b.scheduledTime || '')),
+    [jobsByDate, selected],
+  );
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month + delta, 1);
+    setMonth(d.getMonth());
+    setYear(d.getFullYear());
   };
 
-  const goToNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(currentMonth + 1);
-    }
+  const submitTodo = () => {
+    const text = newTodo.trim();
+    if (!text) return;
+    addTodo(text);
+    setNewTodo('');
   };
 
-
-  const isToday = (dateStr: string) => {
-    return dateStr === today.toISOString().split('T')[0];
-  };
-
-  const handleStartJob = (jobId: string) => {
-    updateJob(jobId, { status: 'IN_PROGRESS' });
-  };
+  const selectedLabel =
+    selected === todayKey
+      ? 'Today'
+      : parseDate(selected).toLocaleDateString(getRegion().locale, {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        });
+  const visibleTodos = showAllTodos ? todos : todos.slice(0, TODOS_SHOWN);
 
   return (
-    <View className="flex-1">
-    <ScrollView className="flex-1 bg-[#0F172A]">
-      <View className="px-4 pb-8">
-        {/* Month Navigation */}
-        <Animated.View
-          entering={FadeInDown.delay(100).duration(400)}
-          className="flex-row items-center justify-between mb-4"
-        >
+    <ScrollView
+      className="flex-1 bg-bg"
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        paddingTop: insets.top + 16,
+        paddingBottom: 32,
+        paddingHorizontal: 16,
+      }}
+    >
+      {/* Header */}
+      <View className="flex-row items-center justify-between mb-5">
+        <Text className="text-fg text-[28px] font-bold tracking-tight">Jobs</Text>
+        <PrimaryButton compact icon={Plus} label="New job" onPress={() => router.push(`/add-job?date=${selected}`)} />
+      </View>
+
+      {/* Calendar */}
+      <Group className="px-2 pb-2 mb-8">
+        <View className="flex-row items-center justify-between px-1">
           <Pressable
-            onPress={goToPrevMonth}
-            className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center active:opacity-70"
+            onPress={() => shiftMonth(-1)}
+            className="w-11 h-11 items-center justify-center active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel="Previous month"
           >
-            <ChevronLeft size={20} color={TEXT_PRIMARY} />
+            <ChevronLeft size={20} color={t.fg} strokeWidth={2} />
           </Pressable>
-          <Text className="text-white font-bold text-lg">
-            {MONTHS[currentMonth]} {currentYear}
+          <Text className="text-fg text-[17px] font-semibold">
+            {MONTHS[month]} {year}
           </Text>
           <Pressable
-            onPress={goToNextMonth}
-            className="w-10 h-10 rounded-full bg-[#1E293B] items-center justify-center active:opacity-70"
+            onPress={() => shiftMonth(1)}
+            className="w-11 h-11 items-center justify-center active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel="Next month"
           >
-            <ChevronRight size={20} color={TEXT_PRIMARY} />
+            <ChevronRight size={20} color={t.fg} strokeWidth={2} />
           </Pressable>
-        </Animated.View>
+        </View>
 
-        {/* Calendar Grid */}
-        <Animated.View
-          entering={FadeInDown.delay(200).duration(400)}
-          className="bg-[#1E293B] rounded-2xl border border-[#334155] p-3 mb-6"
-        >
-          {/* Day Headers */}
-          <View className="flex-row mb-2">
-            {DAYS.map((day) => (
-              <View key={day} className="flex-1 items-center py-2">
-                <Text className="text-slate-500 text-xs font-medium">{day}</Text>
-              </View>
-            ))}
-          </View>
+        <View className="flex-row">
+          {WEEKDAYS.map((d, i) => (
+            <Text key={i} className="flex-1 text-center text-secondary text-xs font-medium py-1.5">
+              {d}
+            </Text>
+          ))}
+        </View>
 
-          {/* Calendar Days */}
-          <View className="flex-row flex-wrap">
-            {calendarDays.map((item, index) => {
-              const dateJobs = jobsByDate[item.date] ?? [];
-              const hasJobs = dateJobs.length > 0;
-              const isSelected = item.date === selectedDate;
-              const isTodayDate = isToday(item.date);
-
-              // Dot color: green if all jobs on that date are done, turquoise if any active
-              const allCompleted = hasJobs && dateJobs.every((j) =>
-                j.status === 'COMPLETED' || j.status === 'INVOICED' || j.status === 'PAID'
-              );
-              const dotColor = allCompleted ? GREEN : TURQUOISE;
-
-              return (
-                <Pressable
-                  key={index}
-                  onPress={() => setSelectedDate(item.date)}
-                  className="w-[14.28%] aspect-square items-center justify-center"
-                >
-                  <View
-                    className={`w-10 h-10 rounded-full items-center justify-center ${
+        <View className="flex-row flex-wrap">
+          {days.map((d) => {
+            const isSelected = d.key === selected;
+            const isToday = d.key === todayKey;
+            const hasJobs = (jobsByDate[d.key]?.length ?? 0) > 0;
+            const hasOffers = !hasJobs && (offersByDate[d.key]?.length ?? 0) > 0;
+            return (
+              <Pressable
+                key={d.key}
+                onPress={() => setSelected(d.key)}
+                className="w-[14.2857%] h-11 items-center justify-center"
+                accessibilityRole="button"
+                accessibilityLabel={`${d.day}${hasJobs ? ', has jobs' : hasOffers ? ', times pencilled in' : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                <View className={cn('w-9 h-9 rounded-full items-center justify-center', isSelected && 'bg-accent')}>
+                  <Text
+                    className={cn(
+                      'text-[15px]',
                       isSelected
-                        ? 'bg-[#14B8A6]'
-                        : isTodayDate
-                        ? 'bg-[#334155]'
-                        : ''
-                    }`}
+                        ? 'text-on-accent font-semibold'
+                        : isToday
+                          ? 'text-link font-bold'
+                          : d.inMonth
+                            ? 'text-fg'
+                            : 'text-secondary opacity-50',
+                    )}
                   >
-                    <Text
-                      className={`text-sm font-medium ${
-                        isSelected
-                          ? 'text-white'
-                          : item.isCurrentMonth
-                          ? 'text-white'
-                          : 'text-slate-600'
-                      }`}
+                    {d.day}
+                  </Text>
+                </View>
+                {hasJobs && !isSelected && <View className="absolute bottom-0.5 w-1 h-1 rounded-full bg-secondary" />}
+                {hasOffers && !isSelected && (
+                  <View className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full border border-secondary" />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Group>
+
+      {/* Selected day */}
+      <View className="mb-8">
+        <SectionHeader title={selectedLabel} />
+        {dayJobs.length === 0 && dayOffers.length === 0 ? (
+          <Group className="p-4">
+            <Text className="text-secondary text-[15px]">No jobs this day.</Text>
+          </Group>
+        ) : (
+          <Group>
+            {dayJobs.map((job, i) => {
+              const customer = getCustomer(job.customerId);
+              return (
+                <View key={job.id}>
+                  {i > 0 && <RowDivider />}
+                  <View className="flex-row items-center pr-4">
+                    <Pressable
+                      onPress={() => router.push(`/job/${job.id}`)}
+                      className="flex-1 flex-row items-center pl-4 py-3 active:opacity-70"
+                      accessibilityRole="button"
                     >
-                      {item.day}
-                    </Text>
-                    {hasJobs && !isSelected && (
-                      <View
-                        className="absolute bottom-1 w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: dotColor }}
-                      />
+                      <Text className="text-fg text-sm font-semibold w-[72px]">{formatTime(job.scheduledTime)}</Text>
+                      <View className="flex-1 mr-2">
+                        <Text className="text-fg text-base font-medium" numberOfLines={1}>
+                          {getJobTypeLabel(settings.trade, job.type)}
+                        </Text>
+                        <Text className="text-secondary text-sm" numberOfLines={1}>
+                          {customer?.name ?? 'Unknown customer'}
+                        </Text>
+                        <View className="mt-1">
+                          <JobStatus job={job} />
+                        </View>
+                      </View>
+                    </Pressable>
+                    {job.status === 'SCHEDULED' ? (
+                      <Pressable
+                        onPress={() => updateJob(job.id, { status: 'IN_PROGRESS' })}
+                        hitSlop={8}
+                        className="min-h-[44px] justify-center pl-2"
+                        accessibilityRole="button"
+                        accessibilityLabel="Start job"
+                      >
+                        <Text className="text-link text-[15px] font-semibold">Start</Text>
+                      </Pressable>
+                    ) : (
+                      <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
                     )}
                   </View>
-                </Pressable>
+                </View>
               );
             })}
-          </View>
-        </Animated.View>
-
-        {/* Selected Date Jobs */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-          <Text className="text-slate-400 text-sm font-semibold mb-3 uppercase tracking-wide">
-            {isToday(selectedDate)
-              ? 'Today'
-              : new Date(selectedDate).toLocaleDateString('en-GB', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                })}
-          </Text>
-
-          {selectedDateJobs.length === 0 ? (
-            <View className="bg-[#1E293B] rounded-2xl border border-[#334155] p-6 items-center">
-              <Text className="text-slate-500">No jobs scheduled</Text>
-            </View>
-          ) : (
-            <View className="gap-3">
-              {selectedDateJobs.map((job) => {
-                const customer = getCustomer(job.customerId);
-                const isDone = job.status === 'COMPLETED' || job.status === 'INVOICED' || job.status === 'PAID';
-
-                const statusBannerConfig: Record<string, { bg: string; dot: string; label: string }> = {
-                  IN_PROGRESS: { bg: 'bg-[#14B8A6]/20', dot: 'bg-[#14B8A6]', label: 'In Progress' },
-                  COMPLETED: { bg: 'bg-[#22C55E]/20', dot: 'bg-[#22C55E]', label: 'Completed' },
-                  INVOICED: { bg: 'bg-[#F97316]/20', dot: 'bg-[#F97316]', label: 'Invoiced' },
-                  PAID: { bg: 'bg-[#10B981]/20', dot: 'bg-[#10B981]', label: 'Paid' },
-                };
-                const banner = statusBannerConfig[job.status];
-                const statusTextColor: Record<string, string> = {
-                  IN_PROGRESS: TURQUOISE,
-                  COMPLETED: GREEN,
-                  INVOICED: ORANGE,
-                  PAID: EMERALD,
-                };
-
-                return (
+            {dayOffers.map(({ job, slot }, i) => {
+              const customer = getCustomer(job.customerId);
+              return (
+                <View key={`${job.id}-${slot.time}`}>
+                  {(i > 0 || dayJobs.length > 0) && <RowDivider />}
                   <Pressable
-                    key={job.id}
                     onPress={() => router.push(`/job/${job.id}`)}
-                    className="bg-[#1E293B] rounded-2xl border border-[#334155] overflow-hidden active:opacity-80"
+                    className="flex-row items-center px-4 py-3 active:opacity-70"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pencilled in: ${formatSlot(slotDate(slot))}, ${customer?.name ?? ''}`}
                   >
-                    {banner && (
-                      <View className={`${banner.bg} px-4 py-2 border-b border-[#334155]`}>
-                        <View className="flex-row items-center">
-                          <View className={`w-2 h-2 rounded-full ${banner.dot} mr-2`} />
-                          <Text style={{ color: statusTextColor[job.status] }} className="font-semibold text-sm">
-                            {banner.label}
-                          </Text>
-                        </View>
+                    <Text className="text-secondary text-sm font-semibold w-[72px]">{formatTime(slot.time)}</Text>
+                    <View className="flex-1 mr-2">
+                      <Text className="text-secondary text-base" numberOfLines={1}>
+                        {getJobTypeLabel(settings.trade, job.type)}
+                      </Text>
+                      <Text className="text-secondary text-sm" numberOfLines={1}>
+                        {customer?.name ?? 'Unknown customer'}
+                      </Text>
+                      <View className="flex-row items-center mt-1">
+                        <CalendarClock size={14} color={t.secondary} strokeWidth={2} />
+                        <Text className="text-secondary text-[13px] font-medium ml-1">Pencilled in · waiting for reply</Text>
                       </View>
-                    )}
-                    <View className="p-4">
-                      <View className="flex-row items-start">
-                        <View className="w-12 h-12 rounded-xl bg-[#0F172A] items-center justify-center mr-3">
-                          <Wrench size={20} color={isDone ? GREEN : TURQUOISE} />
-                        </View>
-                        <View className="flex-1">
-                          <View className="flex-row items-center justify-between">
-                            <Text className="text-white font-bold text-base">
-                              {getJobTypeLabel(settings.trade, job.type)}
-                            </Text>
-                            <View className="flex-row items-center">
-                              <Clock size={14} color={SLATE_500} />
-                              <Text className="text-slate-400 text-sm ml-1">
-                                {formatTime(job.scheduledTime)}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text className="text-slate-400 text-sm mt-1">
-                            {customer?.name || 'Unknown'}
-                          </Text>
-                          <View className="flex-row items-center mt-2">
-                            <MapPin size={14} color={SLATE_500} />
-                            <Text className="text-slate-500 text-xs ml-1">
-                              {customer ? `${customer.address}, ${customer.postcode}` : ''}
-                            </Text>
-                          </View>
-
-                          {job.quote && (
-                            <Text className="text-[#14B8A6] font-bold text-base mt-2">
-                              £{job.quote.total.toFixed(2)}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-
-                      {job.status === 'SCHEDULED' && (
-                        <Pressable
-                          onPress={() => handleStartJob(job.id)}
-                          className="bg-[#14B8A6] rounded-xl p-3 mt-4 flex-row items-center justify-center active:opacity-80"
-                        >
-                          <Play size={18} color={WHITE} />
-                          <Text className="text-white font-bold ml-2">Start Job</Text>
-                        </Pressable>
-                      )}
                     </View>
+                    <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
                   </Pressable>
-                );
-              })}
+                </View>
+              );
+            })}
+          </Group>
+        )}
+      </View>
+
+      {/* To-do */}
+      <View>
+        <SectionHeader title="To-do" />
+        <Group>
+          <View className="flex-row items-center px-4 py-2">
+            <TextInput
+              className="flex-1 text-fg text-base py-2.5"
+              placeholder="Add a reminder"
+              placeholderTextColor={t.secondary}
+              value={newTodo}
+              onChangeText={setNewTodo}
+              onSubmitEditing={submitTodo}
+              returnKeyType="done"
+              submitBehavior="submit"
+              accessibilityLabel="New to-do"
+            />
+            <Pressable
+              onPress={submitTodo}
+              disabled={!newTodo.trim()}
+              className={cn('w-11 h-11 items-center justify-center', !newTodo.trim() && 'opacity-40')}
+              accessibilityRole="button"
+              accessibilityLabel="Add to-do"
+            >
+              <Plus size={20} color={t.link} strokeWidth={2} />
+            </Pressable>
+          </View>
+          {visibleTodos.map((todo) => (
+            <View key={todo.id}>
+              <RowDivider />
+              <View className="flex-row items-center pl-2 pr-1">
+                <Pressable
+                  onPress={() => toggleTodo(todo.id)}
+                  className="w-11 h-11 items-center justify-center"
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: todo.completed }}
+                >
+                  {todo.completed ? (
+                    <CircleCheck size={20} color={t.link} strokeWidth={2} />
+                  ) : (
+                    <Circle size={20} color={t.secondary} strokeWidth={2} />
+                  )}
+                </Pressable>
+                <Text className={cn('flex-1 text-base', todo.completed ? 'text-secondary line-through' : 'text-fg')}>
+                  {todo.text}
+                </Text>
+                {todo.isVoiceNote && <Mic size={16} color={t.secondary} strokeWidth={2} />}
+                <Pressable
+                  onPress={() => deleteTodo(todo.id)}
+                  className="w-11 h-11 items-center justify-center active:opacity-60"
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete to-do"
+                >
+                  <Trash2 size={16} color={t.secondary} strokeWidth={2} />
+                </Pressable>
+              </View>
             </View>
+          ))}
+          {todos.length > TODOS_SHOWN && (
+            <>
+              <RowDivider />
+              <Pressable onPress={() => setShowAllTodos((v) => !v)} className="px-4 py-3" accessibilityRole="button">
+                <Text className="text-link text-[15px]">
+                  {showAllTodos ? 'Show less' : `Show ${todos.length - TODOS_SHOWN} more`}
+                </Text>
+              </Pressable>
+            </>
           )}
-        </Animated.View>
+        </Group>
       </View>
     </ScrollView>
-    <FAB onPress={() => router.push(`/add-job?date=${selectedDate}`)} />
-    </View>
   );
 }

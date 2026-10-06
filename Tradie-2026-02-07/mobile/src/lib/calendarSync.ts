@@ -5,11 +5,13 @@
  * Creates events with job details, customer info, and location for navigation.
  */
 
-import * as Calendar from 'expo-calendar';
+// SDK 57 made the old function API throw when imported from 'expo-calendar'; it lives on in /legacy.
+import * as Calendar from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Job, Customer } from './store';
-import { TURQUOISE } from './theme';
+import { palettes } from './theme';
+import { formatMoney } from './money';
 
 const CALENDAR_NAME = 'TRADIE Jobs';
 const CALENDAR_ID_KEY = 'tradie-calendar-id';
@@ -68,7 +70,7 @@ async function getOrCreateCalendar(): Promise<string | null> {
 
     const calendarId = await Calendar.createCalendarAsync({
       title: CALENDAR_NAME,
-      color: TURQUOISE,
+      color: palettes.light.accent,
       entityType: Calendar.EntityTypes.EVENT,
       sourceId: defaultCalendarSource.id,
       source: defaultCalendarSource,
@@ -172,7 +174,7 @@ export async function syncJobToCalendar(
       '',
       job.description || '',
       '',
-      job.quote ? `Quote: £${job.quote.total.toFixed(2)}` : '',
+      job.quote ? `Quote: ${formatMoney(job.quote.total)}` : '',
     ]
       .filter(Boolean)
       .join('\n');
@@ -296,4 +298,35 @@ export async function isCalendarSyncEnabled(): Promise<boolean> {
 
   const calendarId = await AsyncStorage.getItem(CALENDAR_ID_KEY);
   return !!calendarId;
+}
+
+/**
+ * Busy times from the person's own calendars (not Tradie's), for "Suggest times".
+ * Events marked "free" are ignored; all-day busy events block the whole day.
+ * Returns [] without asking for permission if calendar access isn't granted.
+ */
+export async function getBusyCalendarTimes(from: Date, to: Date): Promise<{ start: Date; end: Date }[]> {
+  if (Platform.OS === 'web') return [];
+  try {
+    if (!(await hasCalendarPermissions())) return [];
+    const tradieCalendarId = await AsyncStorage.getItem(CALENDAR_ID_KEY);
+    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const ids = calendars.map((c) => c.id).filter((id) => id !== tradieCalendarId);
+    if (ids.length === 0) return [];
+    const events = await Calendar.getEventsAsync(ids, from, to);
+    return events
+      .filter((e) => e.availability !== Calendar.Availability.FREE)
+      .map((e) => {
+        const start = new Date(e.startDate);
+        const end = new Date(e.endDate);
+        if (e.allDay) {
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+        }
+        return { start, end };
+      });
+  } catch (error) {
+    if (__DEV__) console.error('[Calendar] Could not read busy times:', error);
+    return [];
+  }
 }
