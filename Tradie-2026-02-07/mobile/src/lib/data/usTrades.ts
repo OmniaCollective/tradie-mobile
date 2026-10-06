@@ -1,7 +1,9 @@
 /**
- * US wording and starting prices (USD) for each trade. Each job type keeps the same
- * meaning as its UK counterpart in trades.ts (same `type` key), so switching country
- * renames a job rather than turning it into a different one.
+ * US wording and starting prices (USD) for each trade. Job types keep the same
+ * meaning as their UK counterpart in trades.ts (same `type` key), so switching country
+ * renames a job rather than turning it into a different one. Exception: the plumber's
+ * Boiler Service and Radiator Issue become Water Heater Flush and Sump Pump Repair,
+ * because most US homes don't have boilers.
  *
  * Prices are starting points a tradie edits in Account → Job prices.
  */
@@ -17,8 +19,8 @@ export const US_TRADES: Record<Trade, USTrade> = {
       { type: 'service_2', label: 'Leaky Faucet', basePrice: 150, estimatedHours: 0.5 },
       { type: 'service_3', label: 'Burst Pipe', basePrice: 350, estimatedHours: 2 },
       { type: 'service_4', label: 'Toilet Repair', basePrice: 175, estimatedHours: 1 },
-      { type: 'service_5', label: 'Boiler Service', basePrice: 200, estimatedHours: 1.5 },
-      { type: 'service_6', label: 'Radiator Repair', basePrice: 175, estimatedHours: 1 },
+      { type: 'service_5', label: 'Water Heater Flush', basePrice: 150, estimatedHours: 1 },
+      { type: 'service_6', label: 'Sump Pump Repair', basePrice: 250, estimatedHours: 1.5 },
       { type: 'service_7', label: 'Water Heater Repair', basePrice: 250, estimatedHours: 1.5 },
       { type: 'service_8', label: 'General Plumbing', basePrice: 150, estimatedHours: 1 },
       { type: 'emergency', label: 'Emergency Call-out', basePrice: 300, estimatedHours: 2 },
@@ -86,7 +88,7 @@ export const US_TRADES: Record<Trade, USTrade> = {
       { type: 'service_8', label: 'General Pet Care', basePrice: 30, estimatedHours: 1 },
       { type: 'emergency', label: 'Emergency Walk', basePrice: 50, estimatedHours: 1 },
     ],
-    defaultHourlyRate: 30,
+    defaultHourlyRate: 40,
     defaultMinimumCharge: 25,
   },
   window_cleaner: {
