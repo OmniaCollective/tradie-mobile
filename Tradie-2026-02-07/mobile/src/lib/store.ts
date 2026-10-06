@@ -103,11 +103,12 @@ export const OFFER_HOLD_HOURS = 48;
 
 export interface Invoice {
   id: string;
+  /** Sequential, shown as INV-0001. Follows on from the last invoice, as HMRC expects. */
+  number: number;
   jobId: string;
   customerId: string;
   quote: Quote;
   status: 'pending' | 'sent' | 'paid';
-  stripePaymentLink?: string;
   sentAt?: string;
   paidAt?: string;
   cisDeducted?: boolean;
@@ -196,6 +197,12 @@ export interface BusinessSettings {
   country?: Country;
   /** US federal filing status for the tax estimate. */
   usFilingStatus?: USFilingStatus;
+  /** Turned off in Account: booked jobs aren't added to the iPhone calendar. */
+  calendarSyncOff?: boolean;
+  /** How customers pay: bank details in the UK, Zelle/Venmo/check in the US. Printed on invoices. */
+  paymentDetails: string;
+  /** Days a customer has to pay. Sets the due date on invoices and when one counts as overdue. */
+  paymentTermsDays: number;
 }
 
 export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
@@ -221,7 +228,7 @@ export const defaultPricingPresets: PricingPreset[] = [
 ];
 
 const defaultSettings: BusinessSettings = {
-  businessName: 'TRADIE',
+  businessName: '',
   ownerName: '',
   phone: '',
   email: '',
@@ -243,6 +250,8 @@ const defaultSettings: BusinessSettings = {
   onlyIncomeSource: true,
   otherAnnualIncome: 0,
   cisRegistered: false,
+  paymentDetails: '',
+  paymentTermsDays: 14,
   cisRate: 20,
   workingHours: {
     start: '08:00',
@@ -455,17 +464,20 @@ export const useTradeStore = create<TradeStore>()(
         const job = get().jobs.find((j) => j.id === jobId);
         if (!job || !job.quote) return null;
 
-        const { settings } = get();
+        const { settings, invoices } = get();
         const id = generateId();
+        // CIS only exists in the UK.
+        const cis = settings.cisRegistered && regionFor(settings.country).country === 'GB';
         const invoice: Invoice = {
           id,
+          number: invoices.reduce((max, inv) => Math.max(max, inv.number ?? 0), 0) + 1,
           jobId,
           customerId: job.customerId,
           quote: job.quote,
           status: 'pending',
           // Auto-apply CIS deduction if CIS registered
-          cisDeducted: settings.cisRegistered || undefined,
-          cisDeductionAmount: settings.cisRegistered
+          cisDeducted: cis || undefined,
+          cisDeductionAmount: cis
             ? Math.round(job.quote.total * (settings.cisRate / 100) * 100) / 100
             : undefined,
           createdAt: new Date().toISOString(),
@@ -684,8 +696,8 @@ export const useTradeStore = create<TradeStore>()(
         // Subtotal before VAT
         const subtotal = labour + materials + travel + emergencySurcharge;
 
-        // VAT — only apply if VAT registered
-        const vat = settings.vatRegistered ? subtotal * (settings.vatRate / 100) : 0;
+        // VAT — only for VAT-registered UK traders (US sales tax isn't handled)
+        const vat = settings.vatRegistered && regionFor(settings.country).country === 'GB' ? subtotal * (settings.vatRate / 100) : 0;
 
         // Total
         const total = subtotal + vat;
@@ -706,7 +718,7 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persisted: any, version: number) => {
         if (version === 0) {
@@ -763,6 +775,20 @@ export const useTradeStore = create<TradeStore>()(
           // Anyone with saved data from an earlier version has already set up the app
           persisted.hasCompletedOnboarding = true;
         }
+        if (version < 7) {
+          // 'TRADIE' was a placeholder business name, never the tradie's own
+          if (persisted.settings) {
+            if (persisted.settings.businessName === 'TRADIE') persisted.settings.businessName = '';
+            if (persisted.settings.paymentDetails === undefined) persisted.settings.paymentDetails = '';
+            if (persisted.settings.paymentTermsDays === undefined) persisted.settings.paymentTermsDays = 14;
+          }
+          // Number existing invoices in the order they were made
+          if (Array.isArray(persisted.invoices)) {
+            const order = [...persisted.invoices].sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const numbers = new Map(order.map((inv: any, i: number) => [inv.id, i + 1]));
+            persisted.invoices = persisted.invoices.map((inv: any) => ({ ...inv, number: numbers.get(inv.id) }));
+          }
+        }
         if (version < 2) {
           // Clear sample data for clean new-user experience
           const sampleIds = ['cust1', 'cust2', 'cust3', 'job1', 'job2', 'job3', 'job4', 'inv1', 'todo1', 'todo2'];
@@ -791,6 +817,14 @@ export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
 export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
 export const useSettings = () => useTradeStore(useShallow((s) => s.settings));
+
+/** The name customers see: the business name, or the tradie's own name if there isn't one. */
+export const businessDisplayName = (settings: Pick<BusinessSettings, 'businessName' | 'ownerName'>): string =>
+  settings.businessName.trim() || settings.ownerName.trim();
+
+/** INV-0001 */
+export const invoiceNumberLabel = (invoice: Pick<Invoice, 'number' | 'id'>): string =>
+  invoice.number ? `INV-${String(invoice.number).padStart(4, '0')}` : `#${invoice.id.slice(0, 8).toUpperCase()}`;
 
 /** Currency, date style and tax wording for the tradie's country. */
 export const useRegion = (): RegionInfo => regionFor(useTradeStore((s) => s.settings.country));

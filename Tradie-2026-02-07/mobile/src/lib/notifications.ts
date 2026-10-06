@@ -1,246 +1,90 @@
+/**
+ * Local reminders scheduled on the phone. There is no push server, so nothing
+ * here registers for remote notifications. Permission is asked for the first
+ * time a reminder is set up, not at launch.
+ */
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { palettes } from './theme';
-import { getRegion } from './store';
-import { formatMoney } from './money';
 
-const PUSH_TOKEN_KEY = 'tradie-push-token';
-
-// Configure how notifications are handled when app is in foreground
+// Show reminders even when Tradie is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
 export interface NotificationData extends Record<string, unknown> {
-  type: 'new_booking' | 'booking_confirmed' | 'job_reminder' | 'payment_received';
+  type: 'job_reminder' | 'daily_reminder';
   jobId?: string;
-  customerId?: string;
-  message?: string;
 }
 
-/**
- * Request permission and register for push notifications
- */
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  let token: string | null = null;
+const DAILY_REMINDER_ID = 'daily-reminder';
+const jobReminderId = (jobId: string) => `job-reminder-${jobId}`;
 
-  // Check if we're on a physical device
-  if (!Device.isDevice) {
-    if (__DEV__) console.log('Push notifications require a physical device');
-    return null;
-  }
-
-  // Check existing permissions
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  // Request permission if not already granted
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    if (__DEV__) console.log('Push notification permission not granted');
-    return null;
-  }
-
-  // Get the Expo push token
-  try {
-    const pushTokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: undefined, // Uses the project ID from app.json automatically
-    });
-    token = pushTokenData.data;
-
-    // Store the token locally
-    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-
-    if (__DEV__) console.log('Push token:', token);
-  } catch (error) {
-    if (__DEV__) console.error('Error getting push token:', error);
-    return null;
-  }
-
-  // Configure Android-specific notification channel
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('bookings', {
-      name: 'New Bookings',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: palettes.light.accent,
-      sound: 'default',
-    });
-
+/** Asks for permission if it hasn't been decided yet. Returns whether reminders can be shown. */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const current = await Notifications.getPermissionsAsync();
+  const granted = current.granted || (current.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);
+  if (granted && Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('reminders', {
-      name: 'Job Reminders',
+      name: 'Reminders',
       importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
     });
   }
-
-  return token;
+  return granted;
 }
 
 /**
- * Get the stored push token
+ * Reminder an hour before a booked job. Each job has one reminder: booking it
+ * again replaces the old one rather than adding a second.
  */
-export async function getStoredPushToken(): Promise<string | null> {
+export async function scheduleJobReminder(jobId: string, customerName: string, jobType: string, start: Date): Promise<void> {
+  const at = new Date(start.getTime() - 60 * 60 * 1000);
+  await Notifications.cancelScheduledNotificationAsync(jobReminderId(jobId)).catch(() => {});
+  if (at <= new Date() || !(await ensureNotificationPermission())) return;
+  await Notifications.scheduleNotificationAsync({
+    identifier: jobReminderId(jobId),
+    content: {
+      title: 'Job in 1 hour',
+      body: `${jobType} for ${customerName}`,
+      data: { type: 'job_reminder', jobId } satisfies NotificationData,
+      sound: 'default',
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+  });
+}
+
+/** Whether the 6pm "message tomorrow's customers" nudge is on. */
+export async function isDailyReminderOn(): Promise<boolean> {
   try {
-    return await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    return scheduled.some((n) => n.identifier === DAILY_REMINDER_ID);
   } catch {
-    return null;
+    return false; // not available (web preview)
   }
 }
 
-/**
- * Schedule a local notification for job reminder
- */
-export async function scheduleJobReminder(
-  jobId: string,
-  customerName: string,
-  jobType: string,
-  scheduledDate: Date,
-  scheduledTime: string
-): Promise<string | null> {
-  // Schedule notification 1 hour before the job
-  const triggerDate = new Date(scheduledDate);
-  const [hours, minutes] = scheduledTime.split(':').map(Number);
-  triggerDate.setHours(hours - 1, minutes, 0, 0);
-
-  // Don't schedule if the reminder time has already passed
-  if (triggerDate <= new Date()) {
-    return null;
-  }
-
-  try {
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Upcoming Job Reminder',
-        body: `${jobType} for ${customerName} starts in 1 hour`,
-        data: { type: 'job_reminder', jobId } as NotificationData,
-        sound: 'default',
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: triggerDate,
-      },
-    });
-
-    if (__DEV__) console.log('Scheduled reminder:', notificationId);
-    return notificationId;
-  } catch (error) {
-    if (__DEV__) console.error('Error scheduling notification:', error);
-    return null;
-  }
-}
-
-/**
- * Send a local notification for a new booking
- */
-export async function sendNewBookingNotification(
-  customerName: string,
-  jobType: string,
-  urgency: string
-): Promise<void> {
-  const urgencyLabel = urgency === 'emergency' ? 'Emergency request' : urgency === 'urgent' ? 'Urgent request' : 'New booking request';
-
+/** Turns the 6pm nudge on or off. Returns the resulting state (off if permission was refused). */
+export async function setDailyReminder(on: boolean): Promise<boolean> {
+  await Notifications.cancelScheduledNotificationAsync(DAILY_REMINDER_ID).catch(() => {});
+  if (!on || !(await ensureNotificationPermission())) return false;
   await Notifications.scheduleNotificationAsync({
+    identifier: DAILY_REMINDER_ID,
     content: {
-      title: urgencyLabel,
-      body: `${customerName} needs ${jobType.toLowerCase().replace(/_/g, ' ')}`,
-      data: { type: 'new_booking' } as NotificationData,
-      sound: 'default',
+      title: 'Tomorrow’s jobs',
+      body: 'Check tomorrow’s jobs and text your customers a reminder.',
+      data: { type: 'daily_reminder' } satisfies NotificationData,
     },
-    trigger: null, // Immediate notification
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 18, minute: 0 },
   });
+  return true;
 }
 
-/**
- * Send notification when booking is confirmed
- */
-export async function sendBookingConfirmedNotification(
-  customerName: string,
-  scheduledDate: string,
-  scheduledTime: string
-): Promise<void> {
-  const formattedDate = new Date(scheduledDate).toLocaleDateString(getRegion().locale, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Job booked',
-      body: `${customerName} confirmed for ${formattedDate} at ${scheduledTime}`,
-      data: { type: 'booking_confirmed' } as NotificationData,
-      sound: 'default',
-    },
-    trigger: null,
-  });
-}
-
-/**
- * Send notification when payment is received
- */
-export async function sendPaymentReceivedNotification(
-  customerName: string,
-  amount: number
-): Promise<void> {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Payment received',
-      body: `${customerName} paid ${formatMoney(amount)}`,
-      data: { type: 'payment_received' } as NotificationData,
-      sound: 'default',
-    },
-    trigger: null,
-  });
-}
-
-/**
- * Cancel all scheduled notifications
- */
-export async function cancelAllNotifications(): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-}
-
-/**
- * Cancel a specific notification
- */
-export async function cancelNotification(notificationId: string): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(notificationId);
-}
-
-/**
- * Get all scheduled notifications
- */
-export async function getScheduledNotifications() {
-  return await Notifications.getAllScheduledNotificationsAsync();
-}
-
-/**
- * Add listener for notification received while app is foregrounded
- */
-export function addNotificationReceivedListener(
-  callback: (notification: Notifications.Notification) => void
-) {
-  return Notifications.addNotificationReceivedListener(callback);
-}
-
-/**
- * Add listener for notification response (user tapped notification)
- */
-export function addNotificationResponseListener(
-  callback: (response: Notifications.NotificationResponse) => void
-) {
+export function addNotificationResponseListener(callback: (response: Notifications.NotificationResponse) => void) {
   return Notifications.addNotificationResponseReceivedListener(callback);
 }

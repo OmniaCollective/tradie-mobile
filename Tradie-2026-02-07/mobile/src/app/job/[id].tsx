@@ -22,10 +22,11 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
-import { useTradeStore, useJobExpenses, EXPENSE_CATEGORY_LABELS, getRegion, getJobTypeLabel } from '@/lib/store';
+import { useTradeStore, useJobExpenses, EXPENSE_CATEGORY_LABELS, getRegion, getJobTypeLabel, businessDisplayName } from '@/lib/store';
 import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions } from '@/lib/calendarSync';
 import { activeOffer, offerExpired, formatSlot, slotDate, scheduleJob, confirmationMessage } from '@/lib/booking';
-import type { OfferedSlot } from '@/lib/store';
+import type { OfferedSlot, BusinessSettings } from '@/lib/store';
+import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { sendCustomerReminder, sendQuoteFollowup, isQuoteExpiringSoon } from '@/lib/customerReminders';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
@@ -60,6 +61,7 @@ export default function JobDetailScreen() {
   const job = useTradeStore((s) => s.jobs.find((j) => j.id === id));
   const customer = useTradeStore((s) => (job ? s.customers.find((c) => c.id === job.customerId) : undefined));
   const settings = useTradeStore((s) => s.settings);
+  const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
   const updateJob = useTradeStore((s) => s.updateJob);
   const createInvoice = useTradeStore((s) => s.createInvoice);
   const addPart = useTradeStore((s) => s.addPart);
@@ -147,8 +149,11 @@ export default function JobDetailScreen() {
     const when = slotDate(slot);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await scheduleJob(job, customer, when);
+    // The job is booked either way; the confirmation text is signed, so it waits for a name.
     if (customer.phone && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
-      await SMS.sendSMSAsync([customer.phone], confirmationMessage(customer, when));
+      requireDetails('message', async () => {
+        await SMS.sendSMSAsync([customer.phone], confirmationMessage(customer, when));
+      });
     }
   };
 
@@ -199,26 +204,31 @@ export default function JobDetailScreen() {
     }
   };
 
-  const handleRemindCustomer = async () => {
-    setBusy('reminder');
-    const type = job.scheduledDate === toDateKey() ? 'morning_of' : 'day_before';
-    if (await sendCustomerReminder(customer, job, label, settings.businessName || 'TRADIE', type)) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    setBusy(null);
-  };
+  // Each of these asks for any missing business details first, then sends.
+  const handleRemindCustomer = () =>
+    requireDetails('message', async (current) => {
+      setBusy('reminder');
+      const type = job.scheduledDate === toDateKey() ? 'morning_of' : 'day_before';
+      if (await sendCustomerReminder(customer, job, label, businessDisplayName(current), type)) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setBusy(null);
+    });
 
-  const handleQuoteFollowup = async () => {
-    setBusy('reminder');
-    if (await sendQuoteFollowup(customer, job, label, settings.businessName || 'TRADIE')) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    setBusy(null);
-  };
+  const handleQuoteFollowup = () =>
+    requireDetails('message', async (current) => {
+      setBusy('reminder');
+      if (await sendQuoteFollowup(customer, job, label, businessDisplayName(current))) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setBusy(null);
+    });
 
-  const handleShareQuote = async () => {
+  const handleShareQuote = () => requireDetails('quote', (current) => shareQuote(current));
+
+  const shareQuote = async (current: BusinessSettings) => {
     try {
-      await exportQuotePdf({ job, customer, settings });
+      await exportQuotePdf({ job, customer, settings: current });
     } catch (error) {
       if (__DEV__) console.error('Quote PDF error:', error);
       setModal({
@@ -802,6 +812,7 @@ export default function JobDetailScreen() {
           onDismiss={() => setModal(null)}
         />
       )}
+      {detailsPrompt}
     </>
   );
 }

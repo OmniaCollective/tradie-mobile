@@ -10,6 +10,7 @@ import { useTradeStore, getJobTypeLabel } from '@/lib/store';
 import { buildSuggestions, formatSlot, offerMessage, toSlot, type SuggestResult, type TravelNote } from '@/lib/booking';
 import type { Suggestion } from '@/lib/scheduling';
 import { useAccount } from '@/lib/auth';
+import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, PrimaryButton, FieldRow, Sheet } from '@/components/ui';
@@ -37,6 +38,7 @@ export default function SuggestTimesScreen() {
   const trade = useTradeStore((s) => s.settings.trade);
   const updateJob = useTradeStore((s) => s.updateJob);
   const updateCustomer = useTradeStore((s) => s.updateCustomer);
+  const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
 
   // Recalculates when the customer's postcode changes or the person signs in.
   const query = useQuery({
@@ -51,7 +53,7 @@ export default function SuggestTimesScreen() {
   const load = () => query.refetch();
   // The person's own picks, tied to the result they were made from.
   const [pick, setPick] = useState<{ from: SuggestResult; list: Suggestion[] } | null>(null);
-  const chosen = result ? (pick?.from === result ? pick.list : result.suggestions) : [];
+  const chosen = useMemo(() => (result ? (pick?.from === result ? pick.list : result.suggestions) : []), [result, pick]);
   const setChosen = (update: (cur: Suggestion[]) => Suggestion[]) => result && setPick({ from: result, list: update(chosen) });
   const [showMore, setShowMore] = useState(false);
   const [postcode, setPostcode] = useState('');
@@ -81,15 +83,21 @@ export default function SuggestTimesScreen() {
     updateJob(job.id, { offeredSlots: times.map((s) => toSlot(s.start)), offeredAt: new Date().toISOString() });
   };
 
-  const send = async () => {
-    if (!times.length) return;
+  // The text is signed with the tradie's name, so ask for it first if it's missing.
+  const send = () => {
+    if (times.length) requireDetails('message', () => sendTimes());
+  };
+
+  const sendTimes = async () => {
+    // Built now rather than at render, so a name added a moment ago is in it.
+    const text = offerMessage(customer, label, times.map((s) => s.start));
     setSending(true);
     try {
       if (customer.phone && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
-        const { result: r } = await SMS.sendSMSAsync([customer.phone], message);
+        const { result: r } = await SMS.sendSMSAsync([customer.phone], text);
         if (r === 'cancelled') return;
       } else {
-        const r = await Share.share({ message });
+        const r = await Share.share({ message: text });
         if (r.action === Share.dismissedAction) return;
       }
       saveOffer();
@@ -264,6 +272,7 @@ export default function SuggestTimesScreen() {
           ))}
         </ScrollView>
       </Sheet>
+      {detailsPrompt}
     </View>
   );
 }

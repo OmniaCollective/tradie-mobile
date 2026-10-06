@@ -10,8 +10,6 @@ import { useTheme } from '@/lib/theme';
 import { formatMoney } from '@/lib/money';
 import { Group, RowDivider, SectionHeader, PrimaryButton, SecondaryButton } from '@/components/ui';
 
-/** No payment terms are stored yet, so a sent invoice counts as overdue after this many days. */
-const OVERDUE_AFTER_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const money = formatMoney;
@@ -58,7 +56,7 @@ export default function HomeScreen() {
     const now = new Date(nowMs);
     const unpaid = invoices.filter((i) => i.status !== 'paid');
     const overdue = unpaid.filter(
-      (i) => i.sentAt && nowMs - new Date(i.sentAt).getTime() > OVERDUE_AFTER_DAYS * DAY_MS,
+      (i) => i.sentAt && nowMs - new Date(i.sentAt).getTime() > (settings.paymentTermsDays ?? 14) * DAY_MS,
     );
     const paidThisMonth = invoices.filter((i) => {
       if (i.status !== 'paid' || !i.paidAt) return false;
@@ -71,7 +69,7 @@ export default function HomeScreen() {
       paidTotal: paidThisMonth.reduce((sum, i) => sum + i.quote.total, 0),
       paidCount: paidThisMonth.length,
     };
-  }, [invoices, nowMs]);
+  }, [invoices, nowMs, settings.paymentTermsDays]);
 
   const inProgress = jobs.find((j) => j.status === 'IN_PROGRESS');
   const upcoming = useMemo(

@@ -218,6 +218,7 @@ export function generateSampleData() {
   // Invoice for job0 (PAID)
   const invoice0: Invoice = {
     id: generateId(),
+    number: 1,
     jobId: job0.id,
     customerId: customers[0].id,
     quote: job0.quote!,
@@ -230,6 +231,7 @@ export function generateSampleData() {
   // Invoice for job1 (INVOICED — sent but not paid)
   const invoice1: Invoice = {
     id: generateId(),
+    number: 2,
     jobId: job1.id,
     customerId: customers[1].id,
     quote: job1.quote!,
@@ -241,6 +243,7 @@ export function generateSampleData() {
   // Invoice for job2 (PAID — boiler service)
   const invoice2: Invoice = {
     id: generateId(),
+    number: 3,
     jobId: job2.id,
     customerId: customers[2].id,
     quote: job2.quote!,

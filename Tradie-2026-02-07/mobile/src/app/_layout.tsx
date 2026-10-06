@@ -5,16 +5,11 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { palettes, themeVars, useColorMode } from '@/lib/theme';
 import { useAuthSync } from '@/lib/auth';
-import {
-  registerForPushNotificationsAsync,
-  addNotificationResponseListener,
-  addNotificationReceivedListener,
-} from '@/lib/notifications';
+import { addNotificationResponseListener } from '@/lib/notifications';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -34,39 +29,15 @@ function RootLayoutNav() {
       colors: { ...base.colors, background: p.bg, card: p.bg, text: p.fg, border: p.divider, primary: p.link },
     };
   }, [mode, p]);
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  // Tapping a reminder opens the job, or the Jobs tab for the daily nudge.
   useEffect(() => {
-    // Register for push notifications
-    registerForPushNotificationsAsync().then((token) => {
-      if (token) {
-        if (__DEV__) console.log('[Notifications] Push token registered:', token);
-      }
-    });
-
-    // Handle notification received while app is in foreground
-    notificationListener.current = addNotificationReceivedListener((notification) => {
-      if (__DEV__) console.log('[Notifications] Received:', notification.request.content.title);
-    });
-
-    // Handle notification responses (when user taps notification)
-    responseListener.current = addNotificationResponseListener((response) => {
+    const subscription = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
-
-      // Navigate based on notification type
-      if (data?.jobId) {
-        router.push(`/job/${data.jobId}`);
-      } else if (data?.type === 'new_booking') {
-        router.push('/(tabs)');
-      }
+      if (typeof data?.jobId === 'string') router.push(`/job/${data.jobId}`);
+      else if (data?.type === 'daily_reminder') router.push('/(tabs)/calendar');
     });
-
-    return () => {
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => subscription.remove();
+  }, [router]);
 
   return (
     // themeVars feeds the token classes (bg-bg, text-fg, …) for the current mode.

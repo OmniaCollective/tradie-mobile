@@ -3,9 +3,8 @@
  * Both the date picker and "book an offered time" go through scheduleJob, so
  * confirmations, reminders and calendar sync always behave the same.
  */
-import { useTradeStore, OFFER_HOLD_HOURS, type Job, type Customer, type OfferedSlot, getRegion } from './store';
-import { getJobTypeLabel } from './store';
-import { scheduleJobReminder, sendBookingConfirmedNotification } from './notifications';
+import { useTradeStore, OFFER_HOLD_HOURS, type Job, type Customer, type OfferedSlot, getRegion, getJobTypeLabel } from './store';
+import { scheduleJobReminder } from './notifications';
 import { syncJobToCalendar, hasCalendarPermissions, getBusyCalendarTimes } from './calendarSync';
 import { suggestTimes, rankTimes, type BusyBlock, type Suggestion } from './scheduling';
 import { apiPost, getSessionToken } from './api';
@@ -44,7 +43,7 @@ export function offerExpired(job: Pick<Job, 'offeredSlots' | 'offeredAt' | 'sche
   return !!job.offeredSlots?.length && !!job.offeredAt && !job.scheduledDate && activeOffer(job, now).length === 0;
 }
 
-/** Books the job, clears any pencilled-in times, notifies, reminds and syncs to the calendar. */
+/** Books the job, clears any pencilled-in times, sets a reminder and syncs to the calendar. */
 export async function scheduleJob(job: Job, customer: Customer, when: Date): Promise<void> {
   const { date, time } = toSlot(when);
   const store = useTradeStore.getState();
@@ -60,10 +59,9 @@ export async function scheduleJob(job: Job, customer: Customer, when: Date): Pro
       if (__DEV__) console.warn(`[Booking] ${what} failed:`, error);
     }
   };
-  await attempt('confirmation notification', () => sendBookingConfirmedNotification(customer.name, date, time));
-  await attempt('job reminder', () => scheduleJobReminder(job.id, customer.name, label, when, time));
+  await attempt('job reminder', () => scheduleJobReminder(job.id, customer.name, label, when));
   await attempt('calendar sync', async () => {
-    if (await hasCalendarPermissions()) {
+    if (!store.settings.calendarSyncOff && (await hasCalendarPermissions())) {
       await syncJobToCalendar({ ...job, status: 'SCHEDULED', scheduledDate: date, scheduledTime: time }, customer, label);
     }
   });
@@ -156,7 +154,7 @@ export function offerMessage(customer: Customer, jobLabel: string, times: Date[]
   const { settings } = useTradeStore.getState();
   const first = customer.name.trim().split(/\s+/)[0];
   const me = settings.ownerName?.trim().split(/\s+/)[0];
-  const business = settings.businessName && settings.businessName !== 'TRADIE' ? settings.businessName : '';
+  const business = settings.businessName.trim();
   const from = me && business ? `it's ${me} from ${business}` : me ? `it's ${me}` : business ? `it's ${business}` : '';
   const choices = times.map((t, i) => `${i + 1}) ${formatSlot(t)}`).join('\n');
   const reply = times.length === 1 ? 'Just reply yes' : `Just reply ${times.map((_, i) => i + 1).join(times.length === 2 ? ' or ' : ', ').replace(/, (\d)$/, ' or $1')}`;

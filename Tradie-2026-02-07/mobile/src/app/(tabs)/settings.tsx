@@ -14,11 +14,11 @@ import {
   type JobType,
   type USFilingStatus,
 } from '@/lib/store';
-import { COUNTRY_OPTIONS, type Country } from '@/lib/region';
+import { COUNTRY_OPTIONS } from '@/lib/region';
 import { mileageRate } from '@/lib/data/usTax2026';
 import { requestCalendarPermissions, hasCalendarPermissions, syncAllJobsToCalendar } from '@/lib/calendarSync';
 import { getJobTypeLabel } from '@/lib/store';
-import { scheduleReminderCheck } from '@/lib/customerReminders';
+import { isDailyReminderOn, setDailyReminder } from '@/lib/notifications';
 import { useProAccess } from '@/lib/useProAccess';
 import { useAccount, signOut, deleteAccount } from '@/lib/auth';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
@@ -35,6 +35,7 @@ import {
   Disclosure,
   Segmented,
   ChoiceRow,
+  TextAreaRow,
 } from '@/components/ui';
 import { currencySymbol } from '@/lib/money';
 
@@ -81,8 +82,10 @@ export default function AccountScreen() {
   } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
 
+  // Both switches show what's really set up on the phone, not what was last tapped.
   useEffect(() => {
-    hasCalendarPermissions().then(setCalendarEnabled);
+    hasCalendarPermissions().then((allowed) => setCalendarEnabled(allowed && !useTradeStore.getState().settings.calendarSyncOff));
+    isDailyReminderOn().then(setDailyReminders);
   }, []);
 
   const toggle = (s: Section) => setOpen((cur) => (cur === s ? null : s));
@@ -90,6 +93,7 @@ export default function AccountScreen() {
 
   const handleCalendarToggle = async (value: boolean) => {
     if (!value) {
+      set({ calendarSyncOff: true });
       setCalendarEnabled(false);
       return;
     }
@@ -102,6 +106,7 @@ export default function AccountScreen() {
       });
       return;
     }
+    set({ calendarSyncOff: false });
     setCalendarEnabled(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSyncing(true);
@@ -117,9 +122,17 @@ export default function AccountScreen() {
   };
 
   const handleDailyReminders = async (value: boolean) => {
-    setDailyReminders(value);
+    const on = await setDailyReminder(value);
+    setDailyReminders(on);
     if (!value) return;
-    await scheduleReminderCheck();
+    if (!on) {
+      setModal({
+        title: 'Notifications are off',
+        message: 'Allow notifications for Tradie in the iPhone Settings app, then try again.',
+        variant: 'warning',
+      });
+      return;
+    }
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setModal({
       title: 'Daily reminders on',
@@ -238,6 +251,13 @@ export default function AccountScreen() {
             width="w-48"
           />
           <RowDivider />
+          <TextAreaRow
+            label="Business address"
+            value={settings.address}
+            onChangeText={(v) => set({ address: v })}
+            placeholder={isUS ? '123 Main Street, Springfield, IL' : '12 High Street, London'}
+          />
+          <RowDivider />
           <FieldRow
             label={isUS ? 'Base ZIP code' : 'Base postcode'}
             value={settings.postcode}
@@ -248,6 +268,36 @@ export default function AccountScreen() {
             width="w-28"
           />
         </Group>
+
+        {/* Getting paid */}
+        <SectionHeader title="Getting paid" />
+        <Group className="mb-2">
+          <TextAreaRow
+            label="Payment details"
+            hint="Printed on every invoice"
+            value={settings.paymentDetails}
+            onChangeText={(v) => set({ paymentDetails: v })}
+            placeholder={
+              isUS
+                ? 'Zelle: you@example.com\nChecks payable to Your Business'
+                : 'Bank: Your Bank\nName: Your Business\nSort code: 00-00-00\nAccount: 12345678'
+            }
+          />
+          <RowDivider />
+          <NumberFieldRow
+            label="Payment due"
+            hint="Days after you send the invoice"
+            suffix="days"
+            decimal={false}
+            value={settings.paymentTermsDays}
+            fallback={14}
+            onChangeNumber={(n) => set({ paymentTermsDays: n })}
+            width="w-12"
+          />
+        </Group>
+        <Text className="text-secondary text-[13px] mx-1 mb-8">
+          Invoices show the due date, and unpaid ones count as overdue after it.
+        </Text>
 
         {/* Pricing and tax */}
         <SectionHeader title="Pricing and tax" />

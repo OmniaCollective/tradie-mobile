@@ -231,32 +231,6 @@ export async function syncJobToCalendar(
 }
 
 /**
- * Remove a job from the device calendar
- */
-export async function removeJobFromCalendar(jobId: string): Promise<boolean> {
-  try {
-    const syncedEvents = await getSyncedEvents();
-    const syncedEvent = syncedEvents.find((e) => e.jobId === jobId);
-
-    if (!syncedEvent) {
-      return true; // Nothing to remove
-    }
-
-    await Calendar.deleteEventAsync(syncedEvent.eventId);
-
-    // Remove from mapping
-    const updatedSyncedEvents = syncedEvents.filter((e) => e.jobId !== jobId);
-    await saveSyncedEvents(updatedSyncedEvents);
-
-    if (__DEV__) console.log('[Calendar] Removed event for job:', jobId);
-    return true;
-  } catch (error) {
-    if (__DEV__) console.error('[Calendar] Error removing job:', error);
-    return false;
-  }
-}
-
-/**
  * Sync all scheduled jobs to the device calendar
  */
 export async function syncAllJobsToCalendar(
@@ -287,17 +261,6 @@ export async function syncAllJobsToCalendar(
   }
 
   return { synced, failed };
-}
-
-/**
- * Check if calendar sync is enabled (user has granted permission and has a calendar)
- */
-export async function isCalendarSyncEnabled(): Promise<boolean> {
-  const hasPermission = await hasCalendarPermissions();
-  if (!hasPermission) return false;
-
-  const calendarId = await AsyncStorage.getItem(CALENDAR_ID_KEY);
-  return !!calendarId;
 }
 
 /**

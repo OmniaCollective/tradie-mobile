@@ -1,12 +1,22 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Share, ActivityIndicator, RefreshControl, TextInput, Switch } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, Trash2, Paperclip, CircleCheck, Lock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { useTradeStore, useInvoices, useExpenses, useSettings, useRegion, type Invoice, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
-import { sendPaymentReceivedNotification } from '@/lib/notifications';
-import { paymentsApi, ONLINE_PAYMENTS_ENABLED } from '@/lib/paymentsApi';
+import {
+  useTradeStore,
+  useInvoices,
+  useExpenses,
+  useSettings,
+  useRegion,
+  getJobTypeLabel,
+  type Invoice,
+  type Job,
+  type Customer,
+  type BusinessSettings,
+  EXPENSE_CATEGORY_LABELS,
+} from '@/lib/store';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { TaxExplainer } from '@/components/TaxExplainer';
 import {
@@ -22,7 +32,7 @@ import { calculateTaxEstimate, calculateRolling12MonthTurnover } from '@/lib/tax
 import { calculateUSTax } from '@/lib/usTaxEstimator';
 import { formatDate, parseDate } from '@/lib/dates';
 import { formatMoney, formatPounds, currencySymbol } from '@/lib/money';
-import { getJobTypeLabel } from '@/lib/store';
+import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { useProAccess, FREE_LIMITS } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -44,6 +54,7 @@ export default function MoneyScreen() {
   const invoices = useInvoices();
   const expenses = useExpenses();
   const settings = useSettings();
+  const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
   const { isPro, invoicesLeft } = useProAccess();
   const getCustomer = useTradeStore((s) => s.getCustomer);
   const getJob = useTradeStore((s) => s.getJob);
@@ -54,7 +65,6 @@ export default function MoneyScreen() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('income');
   const [loadingInvoiceId, setLoadingInvoiceId] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState<{
     title: string;
     message: string;
@@ -147,31 +157,6 @@ export default function MoneyScreen() {
 
   // ── Invoice actions ────────────────────────────────────────────────────────
 
-  const checkAllPaymentStatuses = useCallback(async () => {
-    if (!ONLINE_PAYMENTS_ENABLED) return;
-    for (const invoice of invoices.filter((i) => i.status === 'sent')) {
-      try {
-        const result = await paymentsApi.checkPaymentStatus(invoice.id);
-        if (result.success && result.status === 'paid') {
-          updateInvoice(invoice.id, {
-            status: 'paid',
-            paidAt: result.paidAt || new Date().toISOString(),
-          });
-          const customer = getCustomer(invoice.customerId);
-          if (customer) await sendPaymentReceivedNotification(customer.name, invoice.quote.total);
-        }
-      } catch (error) {
-        if (__DEV__) console.error('Error checking payment status:', error);
-      }
-    }
-  }, [invoices, getCustomer, updateInvoice]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await checkAllPaymentStatuses();
-    setRefreshing(false);
-  }, [checkAllPaymentStatuses]);
-
   const handleSendInvoice = async (invoice: Invoice) => {
     const customer = getCustomer(invoice.customerId);
     if (!customer) {
@@ -182,91 +167,26 @@ export default function MoneyScreen() {
       });
       return;
     }
-    if (!settings.businessName || settings.businessName === 'TRADIE') {
-      setModal({
-        title: 'Add your business name',
-        message: 'Your business name goes on every invoice. Add it in Account before sending.',
-        variant: 'warning',
-      });
-      return;
-    }
-    if (!settings.email && !settings.phone) {
-      setModal({
-        title: 'Add a way to reach you',
-        message: 'Add your email or phone number in Account so customers can contact you about invoices.',
-        variant: 'warning',
-      });
-      return;
-    }
+    // Missing business details are asked for first, then the invoice goes out as a PDF.
+    requireDetails('invoice', (current) => sendInvoicePdf(invoice, customer, current));
+  };
 
+  const sendInvoicePdf = async (invoice: Invoice, customer: Customer, current: BusinessSettings) => {
     setLoadingInvoiceId(invoice.id);
-
-    // Without the payments backend, the invoice goes out as a PDF.
-    if (!ONLINE_PAYMENTS_ENABLED) {
-      try {
-        const job = getJob(invoice.jobId);
-        if (!job) throw new Error('Job not found');
-        await exportInvoicePdf({ invoice, job, customer, settings });
-        updateInvoice(invoice.id, {
-          status: 'sent',
-          sentAt: invoice.sentAt ?? new Date().toISOString(),
-        });
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (error) {
-        if (__DEV__) console.error('Error sending invoice PDF:', error);
-        setModal({
-          title: 'Couldn’t create the PDF',
-          message: 'Please try again.',
-          variant: 'error',
-        });
-      } finally {
-        setLoadingInvoiceId(null);
-      }
-      return;
-    }
-
     try {
-      let paymentLink = invoice.stripePaymentLink;
-      const userId = `user_${settings.businessName.replace(/\s/g, '_')}_${settings.phone.replace(/\s/g, '')}`;
-      if (!paymentLink) {
-        const result = await paymentsApi.createInvoice({
-          id: invoice.id,
-          jobId: invoice.jobId,
-          customerId: invoice.customerId,
-          customerName: customer.name,
-          customerEmail: customer.email,
-          customerPhone: customer.phone || undefined,
-          customerAddress: customer.address ? `${customer.address}, ${customer.postcode}` : undefined,
-          businessName: settings.businessName,
-          businessEmail: settings.email || undefined,
-          businessPhone: settings.phone || undefined,
-          labour: invoice.quote.labour,
-          materials: invoice.quote.materials,
-          travel: invoice.quote.travel,
-          emergencySurcharge: invoice.quote.emergencySurcharge,
-          vat: invoice.quote.vat,
-          total: invoice.quote.total,
-          userId,
-        });
-        if (!result.success || !result.paymentLink) throw new Error(result.error || 'Failed to create payment link');
-        paymentLink = result.paymentLink;
-        updateInvoice(invoice.id, { stripePaymentLink: paymentLink });
-      }
-      await Share.share({
-        message: `Hi ${customer.name},\n\nPlease find your invoice for ${money(invoice.quote.total)} from ${settings.businessName}.\n\nPay securely here: ${paymentLink}\n\nThank you for your business!`,
-        title: `Invoice from ${settings.businessName}`,
-      });
-      await paymentsApi.markInvoiceSent(invoice.id);
+      const job = getJob(invoice.jobId);
+      if (!job) throw new Error('Job not found');
+      await exportInvoicePdf({ invoice, job, customer, settings: current });
       updateInvoice(invoice.id, {
         status: 'sent',
-        sentAt: new Date().toISOString(),
+        sentAt: invoice.sentAt ?? new Date().toISOString(),
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      if (__DEV__) console.error('Error sending invoice:', error);
+      if (__DEV__) console.error('Error sending invoice PDF:', error);
       setModal({
-        title: 'Couldn’t send',
-        message: 'Check your internet connection and try again.',
+        title: 'Couldn’t create the PDF',
+        message: 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -275,7 +195,6 @@ export default function MoneyScreen() {
   };
 
   const confirmMarkPaid = async (invoiceId: string, cisDeducted: boolean, cisDeductionAmount: number) => {
-    const invoice = invoices.find((i) => i.id === invoiceId);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateInvoice(invoiceId, {
       status: 'paid',
@@ -283,8 +202,6 @@ export default function MoneyScreen() {
       cisDeducted: cisDeducted || undefined,
       cisDeductionAmount: cisDeducted ? cisDeductionAmount : undefined,
     });
-    const customer = invoice ? getCustomer(invoice.customerId) : undefined;
-    if (customer && invoice) await sendPaymentReceivedNotification(customer.name, invoice.quote.total);
     setCisModal(null);
   };
 
@@ -298,13 +215,17 @@ export default function MoneyScreen() {
     await confirmMarkPaid(invoice.id, false, 0);
   };
 
-  const handleSharePdf = async (invoice: Invoice) => {
+  const handleSharePdf = (invoice: Invoice) => {
     const job = getJob(invoice.jobId);
     const customer = getCustomer(invoice.customerId);
     if (!job || !customer) return;
+    requireDetails('invoice', (current) => shareInvoicePdf(invoice, job, customer, current));
+  };
+
+  const shareInvoicePdf = async (invoice: Invoice, job: Job, customer: Customer, current: BusinessSettings) => {
     setLoadingInvoiceId(invoice.id);
     try {
-      await exportInvoicePdf({ invoice, job, customer, settings });
+      await exportInvoicePdf({ invoice, job, customer, settings: current });
     } catch (error) {
       if (__DEV__) console.error('PDF export error:', error);
       setModal({
@@ -323,7 +244,7 @@ export default function MoneyScreen() {
     try {
       const dateRange = getDateRange(preset);
       if (exportType === 'expenses') {
-        await exportExpensesCsv({ expenses, dateRange });
+        await exportExpensesCsv({ expenses, settings, dateRange });
       } else if (exportType === 'tax_summary') {
         await exportTaxSummaryCsv({
           invoices,
@@ -446,11 +367,6 @@ export default function MoneyScreen() {
           paddingBottom: 32,
           paddingHorizontal: 16,
         }}
-        refreshControl={
-          ONLINE_PAYMENTS_ENABLED ? (
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={t.link} />
-          ) : undefined
-        }
       >
         {/* Header */}
         <View className="flex-row items-center justify-between mb-5">
@@ -788,6 +704,7 @@ export default function MoneyScreen() {
           onDismiss={() => setModal(null)}
         />
       )}
+      {detailsPrompt}
     </>
   );
 }

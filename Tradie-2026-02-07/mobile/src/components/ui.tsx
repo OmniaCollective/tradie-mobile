@@ -250,6 +250,40 @@ export function FieldRow({
   );
 }
 
+/** Multi-line text in a settings group: label above, text below (addresses, bank details). */
+export function TextAreaRow({
+  label,
+  hint,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+}) {
+  const t = useTheme();
+  return (
+    <View className="px-4 pt-3 pb-2">
+      <Text className="text-fg text-base">{label}</Text>
+      {hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
+      <TextInput
+        className="text-fg text-base py-2 min-h-[64px]"
+        style={{ textAlignVertical: 'top' }}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={t.secondary}
+        multiline
+        scrollEnabled={false}
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
+
 /** Settings row with an on/off switch. */
 export function ToggleRow({
   label,

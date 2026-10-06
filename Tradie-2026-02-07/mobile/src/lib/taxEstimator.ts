@@ -1,12 +1,6 @@
-import { Invoice, Expense, BusinessSettings } from './store';
-
-// UK income tax (England/Wales/NI). Bands frozen from 2021/22 through 2026/27.
-const BASIC_RATE = 0.20;
-const HIGHER_RATE = 0.40;
-const ADDITIONAL_RATE = 0.45;
-const BASIC_RATE_BAND = 37700; // taxable income taxed at 20%
-const ADDITIONAL_RATE_THRESHOLD = 125140; // taxable income above this taxed at 45%
-const ALLOWANCE_TAPER_THRESHOLD = 100000; // allowance reduced £1 for every £2 above this
+import type { Invoice, Expense, BusinessSettings } from './store';
+import { parseDate, toDateKey } from './dates';
+import { ukIncomeTaxOnProfit } from './ukIncomeTax';
 
 // Class 4 NI rates
 const CLASS4_LOWER_RATE = 0.06; // 6% on profits £12,570–£50,270
@@ -31,48 +25,9 @@ export function getTaxYearBounds(date: Date = new Date()): { start: Date; end: D
   };
 }
 
-/**
- * Filter invoices/expenses to the current tax year.
- */
-function filterToTaxYear<T extends { date?: string; paidAt?: string; createdAt: string }>(
-  items: T[],
-  dateField: keyof T,
-): T[] {
-  const { start, end } = getTaxYearBounds();
-  return items.filter((item) => {
-    const dateStr = item[dateField] as string | undefined;
-    if (!dateStr) return false;
-    const d = new Date(dateStr);
-    return d >= start && d <= end;
-  });
-}
-
-/**
- * Income tax on trading profit, with the personal allowance reduced by other
- * income and tapered away above £100k.
- */
-function calculateIncomeTax(
-  profit: number,
-  settings: BusinessSettings,
-): { personalAllowance: number; incomeAfterAllowance: number; incomeTax: number } {
-  const otherIncome = settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome;
-  const taper = Math.max(0, (profit + otherIncome - ALLOWANCE_TAPER_THRESHOLD) / 2);
-  const taperedAllowance = Math.max(0, settings.personalAllowance - taper);
-  const availableAllowance = Math.max(0, taperedAllowance - otherIncome);
-
-  const incomeAfterAllowance = Math.max(0, profit - availableAllowance);
-  const basicRateIncome = Math.min(incomeAfterAllowance, BASIC_RATE_BAND);
-  const higherRateIncome = Math.max(0, Math.min(incomeAfterAllowance, ADDITIONAL_RATE_THRESHOLD) - BASIC_RATE_BAND);
-  const additionalRateIncome = Math.max(0, incomeAfterAllowance - ADDITIONAL_RATE_THRESHOLD);
-
-  return {
-    personalAllowance: Math.min(availableAllowance, profit),
-    incomeAfterAllowance,
-    incomeTax:
-      basicRateIncome * BASIC_RATE +
-      higherRateIncome * HIGHER_RATE +
-      additionalRateIncome * ADDITIONAL_RATE,
-  };
+/** Income Tax the profit adds, given the tradie's other income and allowance. */
+function calculateIncomeTax(profit: number, settings: BusinessSettings) {
+  return ukIncomeTaxOnProfit(profit, settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome, settings.personalAllowance);
 }
 
 export interface TaxEstimate {
@@ -112,13 +67,16 @@ export function calculateTaxEstimate(
   settings: BusinessSettings,
 ): TaxEstimate {
   const { start, end } = getTaxYearBounds();
+  // Compare calendar days, so anything on 5 April (the last day) counts, whatever the time.
+  const firstDay = toDateKey(start);
+  const lastDay = toDateKey(end);
+  const inTaxYear = (date: string) => {
+    const day = toDateKey(parseDate(date));
+    return day >= firstDay && day <= lastDay;
+  };
 
   // Gross income = total of paid invoices in tax year (ex-VAT)
-  const taxYearInvoices = invoices.filter((inv) => {
-    if (inv.status !== 'paid' || !inv.paidAt) return false;
-    const d = new Date(inv.paidAt);
-    return d >= start && d <= end;
-  });
+  const taxYearInvoices = invoices.filter((inv) => inv.status === 'paid' && !!inv.paidAt && inTaxYear(inv.paidAt));
 
   // VAT tracking
   const vatCollected = taxYearInvoices.reduce((sum, inv) => sum + inv.quote.vat, 0);
@@ -144,10 +102,7 @@ export function calculateTaxEstimate(
   }, 0);
 
   // Total expenses in tax year
-  const taxYearExpenses = expenses.filter((exp) => {
-    const d = new Date(exp.date);
-    return d >= start && d <= end;
-  });
+  const taxYearExpenses = expenses.filter((exp) => inTaxYear(exp.date));
 
   // Input VAT from expenses (reclaimable under standard VAT scheme)
   const vatInputTax = taxYearExpenses

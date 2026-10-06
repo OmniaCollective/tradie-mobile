@@ -21,19 +21,6 @@ export function formatDate(dateStr?: string): string {
   });
 }
 
-/** Format an ISO date string to "Mon 1 Jan 2026" (includes year) */
-export function formatDateLong(dateStr?: string): string {
-  if (!dateStr) return '—';
-  const date = parseDate(dateStr);
-  if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(locale(), {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
 /** Format a Date object to "Mon 1 Jan" */
 export function formatDateObj(date: Date): string {
   return date.toLocaleDateString(locale(), {
@@ -47,18 +34,6 @@ export function formatDateObj(date: Date): string {
 export function formatDateObjLong(date: Date): string {
   return date.toLocaleDateString(locale(), {
     weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-/** Format an ISO date string to "1 Jan 2026" (day, short month, year — no weekday) */
-export function formatDateWithYear(dateStr?: string): string {
-  if (!dateStr) return '—';
-  const date = parseDate(dateStr);
-  if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(locale(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

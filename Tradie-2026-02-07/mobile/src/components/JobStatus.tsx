@@ -30,10 +30,6 @@ const STATUS: Record<Status, { label: string; icon: LucideIcon }> = {
   PAID: { label: 'Paid', icon: CircleCheck },
 };
 
-export function statusLabel(status: Status): string {
-  return STATUS[status].label;
-}
-
 /** Status line for a job. An open emergency shows "Emergency" instead, in red. */
 export function JobStatus({ job, size = 'sm' }: { job: Pick<Job, 'status' | 'urgency'>; size?: 'sm' | 'md' }) {
   const t = useTheme();
