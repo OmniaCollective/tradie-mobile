@@ -10,7 +10,11 @@ const daysFromNow = (days: number): string => {
 
 const daysAgo = (days: number): string => daysFromNow(-days);
 
-const dateOnly = (iso: string): string => iso.split('T')[0];
+/** Local calendar day (YYYY-MM-DD), not the UTC one. */
+const dateOnly = (iso: string): string => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export function generateSampleData() {
   // --- Customers ---
@@ -175,6 +179,7 @@ export function generateSampleData() {
     urgency: 'urgent',
     status: 'QUOTED',
     quote: makeQuote(jobIds[5], 180, 45, 15, 20, 7), // Created 20 days ago, valid 7 days = expired
+    quoteSentAt: daysAgo(20),
     createdAt: daysAgo(20),
     notes: 'Customer said they might get another quote.',
   };
@@ -188,6 +193,7 @@ export function generateSampleData() {
     urgency: 'standard',
     status: 'QUOTED',
     quote: makeQuote(jobIds[6], 200, 350, 10, 3, 30), // Valid for 30 days
+    quoteSentAt: daysAgo(3),
     createdAt: daysAgo(3),
     notes: 'Quoted for Megaflo unvented cylinder.',
   };
@@ -200,12 +206,7 @@ export function generateSampleData() {
     description: 'Emergency call-out — water pouring through ceiling',
     urgency: 'emergency',
     status: 'IN_PROGRESS',
-    quote: (() => {
-      const q = makeQuote(jobIds[7], 200, 30, 20, 0, 14);
-      q.emergencySurcharge = 100;
-      q.total = q.labour + q.materials + q.travel + q.emergencySurcharge;
-      return q;
-    })(),
+    quote: makeQuote(jobIds[7], 300, 30, 20, 0, 30), // emergency rate is in the labour
     scheduledDate: dateOnly(daysFromNow(0)),
     scheduledTime: '07:30',
     createdAt: daysAgo(0),
@@ -231,7 +232,7 @@ export function generateSampleData() {
   // Invoice for job1 (INVOICED — sent but not paid)
   const invoice1: Invoice = {
     id: generateId(),
-    number: 2,
+    number: 3,
     jobId: job1.id,
     customerId: customers[1].id,
     quote: job1.quote!,
@@ -243,7 +244,7 @@ export function generateSampleData() {
   // Invoice for job2 (PAID — boiler service)
   const invoice2: Invoice = {
     id: generateId(),
-    number: 3,
+    number: 2,
     jobId: job2.id,
     customerId: customers[2].id,
     quote: job2.quote!,
