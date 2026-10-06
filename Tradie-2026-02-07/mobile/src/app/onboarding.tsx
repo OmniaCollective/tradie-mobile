@@ -152,7 +152,7 @@ export default function OnboardingScreen() {
           </Pressable>
           <Text className="text-secondary text-xs text-center leading-5 mt-1">
             Signing in keeps Pro on a new phone and lets voice work. Your jobs stay on your phone.{' '}
-            <Text className="text-link" onPress={() => Linking.openURL('https://builtbyomnia.com/tradie/privacy-policy')}>
+            <Text className="text-link" onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}>
               Privacy
             </Text>
           </Text>

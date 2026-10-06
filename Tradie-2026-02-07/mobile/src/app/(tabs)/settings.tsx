@@ -518,13 +518,13 @@ export default function AccountScreen() {
           <LinkRow
             label="Privacy policy"
             external
-            onPress={() => Linking.openURL('https://builtbyomnia.com/tradie/privacy-policy')}
+            onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}
           />
           <RowDivider />
           <LinkRow
-            label="Terms of service"
+            label="Terms of use"
             external
-            onPress={() => Linking.openURL('https://builtbyomnia.com/tradie/terms-of-service')}
+            onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/terms.html')}
           />
           <RowDivider />
           <LinkRow

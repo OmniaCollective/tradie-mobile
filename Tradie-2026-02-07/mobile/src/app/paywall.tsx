@@ -24,8 +24,8 @@ const BENEFITS = [
   { title: 'Add jobs by voice', detail: 'Unlimited voice jobs' },
 ];
 
-const TERMS_URL = 'https://builtbyomnia.com/tradie/terms-of-service';
-const PRIVACY_URL = 'https://builtbyomnia.com/tradie/privacy-policy';
+const TERMS_URL = 'https://omniacollective.github.io/tradie-legal/terms.html';
+const PRIVACY_URL = 'https://omniacollective.github.io/tradie-legal/privacy.html';
 
 /** "1 week", "3 days", "1 month" for a free trial. */
 function trialLength(intro: PurchasesIntroPrice): string {
@@ -226,10 +226,10 @@ export default function PaywallScreen() {
             <Text className="text-fg text-sm font-semibold">{busy === 'restore' ? 'Restoring…' : 'Restore purchase'}</Text>
           </Pressable>
           <Pressable onPress={() => Linking.openURL(TERMS_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
-            <Text className="text-secondary text-sm">Terms</Text>
+            <Text className="text-secondary text-sm">Terms of use</Text>
           </Pressable>
           <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
-            <Text className="text-secondary text-sm">Privacy</Text>
+            <Text className="text-secondary text-sm">Privacy policy</Text>
           </Pressable>
         </View>
         <Text className="text-secondary text-xs text-center leading-4">
