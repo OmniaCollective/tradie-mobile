@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench, BellRing, Eye } from 'lucide-react-native';
+import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench, BellRing, Eye, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useTradeStore,
@@ -50,6 +50,7 @@ import {
   ProTeaser,
   Sheet,
   LinkRow,
+  SecondaryButton,
 } from '@/components/ui';
 import { toast } from '@/components/Toast';
 
@@ -92,6 +93,7 @@ export default function MoneyScreen() {
   const updateInvoice = useTradeStore((s) => s.updateInvoice);
   const deleteExpense = useTradeStore((s) => s.deleteExpense);
   const setTaxSetAside = useTradeStore((s) => s.setTaxSetAside);
+  const updateSettings = useTradeStore((s) => s.updateSettings);
   const taxSetAsideTotal = useTaxSetAside();
 
   const [viewMode, setViewMode] = useState<ViewMode>('income');
@@ -479,6 +481,17 @@ export default function MoneyScreen() {
         {/* Tax */}
         <View className="mb-8">
           <SectionHeader title="Tax" />
+          {isPro && !settings.taxTipSeen && (
+            <Group className="flex-row items-start p-4 mb-3">
+              <Info size={18} color={t.link} strokeWidth={2} />
+              <Text className="flex-1 text-fg text-[14px] leading-5 mx-3">
+                This works out the tax on your profit (money in minus expenses). It doesn’t change what customers pay you.
+              </Text>
+              <Pressable onPress={() => updateSettings({ taxTipSeen: true })} hitSlop={10} accessibilityRole="button">
+                <Text className="text-link text-[14px] font-semibold">Got it</Text>
+              </Pressable>
+            </Group>
+          )}
           {isPro ? (
             <Group>
               <View className="flex-row px-4 pt-4 pb-3">
@@ -639,6 +652,7 @@ export default function MoneyScreen() {
               <Text className="text-secondary text-[15px] leading-5">
                 Finish a job and tap Create invoice — it will show up here.
               </Text>
+              <SecondaryButton compact className="self-start mt-3" label="Go to jobs" onPress={() => router.push('/(tabs)/calendar')} />
             </Group>
           ) : (
             <>
@@ -670,6 +684,11 @@ export default function MoneyScreen() {
                 <Plus size={20} color={t.link} strokeWidth={2} />
                 <Text className="text-link text-base font-semibold ml-2">Add expense</Text>
               </Pressable>
+              {expenses.length === 0 && (
+                <Text className="text-secondary text-[15px] leading-5 px-4 pb-4">
+                  Fuel, materials, tools, insurance… every expense lowers the tax you pay. Snap the receipt as you go.
+                </Text>
+              )}
               {sortedExpenses.map((expense) => (
                 <View key={expense.id}>
                   <RowDivider />

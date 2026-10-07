@@ -9,7 +9,7 @@ import { formatTime, toDateKey, parseDate } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, PrimaryButton } from '@/components/ui';
-import { JobStatus } from '@/components/JobStatus';
+import { JobStatus, nextStep } from '@/components/JobStatus';
 import { toast } from '@/components/Toast';
 import { activeOffer, formatSlot, slotDate } from '@/lib/booking';
 
@@ -216,6 +216,13 @@ export default function JobsScreen() {
         {dayJobs.length === 0 && dayOffers.length === 0 ? (
           <Group className="p-4">
             <Text className="text-secondary text-[15px]">No jobs this day.</Text>
+            <Pressable
+              onPress={() => router.push(`/add-job?date=${selected}`)}
+              className="self-start min-h-[44px] justify-center"
+              accessibilityRole="button"
+            >
+              <Text className="text-link text-[15px] font-semibold">Add a job on this day</Text>
+            </Pressable>
           </Group>
         ) : (
           <Group>
@@ -316,8 +323,11 @@ export default function JobsScreen() {
                     <Text className="text-secondary text-sm" numberOfLines={1}>
                       {getCustomer(job.customerId)?.name ?? 'Unknown customer'}
                     </Text>
-                    <View className="mt-1">
+                    <View className="mt-1 flex-row items-center">
                       <JobStatus job={job} />
+                      <Text className="text-secondary text-[13px] ml-1.5 flex-1" numberOfLines={1}>
+                        · {nextStep(job, getCustomer(job.customerId)?.name ?? '')}
+                      </Text>
                     </View>
                   </View>
                   <ChevronRight size={16} color={t.secondary} strokeWidth={2} />

@@ -30,6 +30,36 @@ const STATUS: Record<Status, { label: string; icon: LucideIcon }> = {
   PAID: { label: 'Paid', icon: CircleCheck },
 };
 
+/**
+ * What happens next for this job, in plain words, so every status tells the
+ * tradie their next step ("waiting for Sarah to say yes", "pick a time to book it").
+ */
+export function nextStep(
+  job: Pick<Job, 'status' | 'quoteSentAt' | 'offeredSlots' | 'scheduledDate'>,
+  customerName: string,
+  opts: { overdueDays?: number } = {},
+): string {
+  const first = customerName.trim().split(/\s+/)[0] || 'the customer';
+  switch (job.status) {
+    case 'REQUESTED':
+      return 'Send the quote';
+    case 'QUOTED':
+      return `Waiting for ${first} to say yes`;
+    case 'APPROVED':
+      return job.offeredSlots?.length ? `Times offered · waiting for ${first} to pick one` : 'Pick a time to book it';
+    case 'SCHEDULED':
+      return 'Booked · start the job on the day';
+    case 'IN_PROGRESS':
+      return 'Mark it done when you finish';
+    case 'COMPLETED':
+      return 'Create the invoice';
+    case 'INVOICED':
+      return opts.overdueDays ? `Payment ${opts.overdueDays} ${opts.overdueDays === 1 ? 'day' : 'days'} late · chase it` : `Waiting for ${first} to pay`;
+    case 'PAID':
+      return 'All done';
+  }
+}
+
 /** Status line for a job. An open emergency shows "Emergency" instead, in red. */
 export function JobStatus({ job, size = 'sm' }: { job: Pick<Job, 'status' | 'urgency'>; size?: 'sm' | 'md' }) {
   const t = useTheme();

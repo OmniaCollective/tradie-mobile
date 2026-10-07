@@ -21,6 +21,7 @@ Collect everything first, fix in one pass, then one build. Nothing is built unti
 | 15 | Home | After Welcome, the Home landing needs to be better; move the cyan **New job** button below "Evening, John" | To do: greeting first, then a full-width New job button under it; first-run Home as in #2/#3 |
 | 16 | Add Job | Should open on the typing form, not the recorder. Voice is an option, not the lead: most people will type | To do: Add Job opens on the form with a "Say it instead 🎤" option at the top; first-run Home puts **Type it in** first and **Say it** second |
 | 17 | Voice | Voice could irritate people when it's wrong. Use it only for notes and reminders | Decided: Tradie's own voice is off for 1.6 and out of the Pro offer; the iPhone keyboard's dictation is used for notes and to-dos (with a hint). Voice button saved for later. See plan section 3a |
+| 18 | Add expense (US) | Found while fixing #10: US mileage used UK rates (45p/25p) | Fixed in code: IRS standard rate for the date driven, US wording |
 
 ## Still to test
 

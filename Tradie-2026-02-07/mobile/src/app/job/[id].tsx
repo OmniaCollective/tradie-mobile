@@ -35,6 +35,7 @@ import {
   businessDisplayName,
   priceQuote,
   usePricingPresets,
+  daysOverdue,
   type JobType,
   type Urgency,
   type OfferedSlot,
@@ -47,7 +48,7 @@ import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { sendCustomerReminder, sendQuoteFollowup, isQuoteExpiringSoon } from '@/lib/customerReminders';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
-import { JobStatus } from '@/components/JobStatus';
+import { JobStatus, nextStep as nextStepText } from '@/components/JobStatus';
 import { formatDateFull, formatTime, toDateKey } from '@/lib/dates';
 import { formatMoney, currencySymbol } from '@/lib/money';
 import { exportQuotePdf } from '@/lib/invoiceExport';
@@ -100,6 +101,10 @@ export default function JobDetailScreen() {
   const deleteJob = useTradeStore((s) => s.deleteJob);
   const invoiceId = useTradeStore((s) => s.invoices.find((inv) => inv.jobId === id)?.id);
   const hasInvoice = !!invoiceId;
+  const invoiceOverdueDays = useTradeStore((st) => {
+    const inv = st.invoices.find((i) => i.jobId === id);
+    return inv ? daysOverdue(inv, st.settings) : 0;
+  });
   const updateCustomer = useTradeStore((s) => s.updateCustomer);
   const removePart = useTradeStore((s) => s.removePart);
   const addPhoto = useTradeStore((s) => s.addPhoto);
@@ -404,6 +409,9 @@ export default function JobDetailScreen() {
           <View className="flex-row items-center mb-2">
             <JobStatus job={job} size="md" />
             {job.urgency === 'urgent' && !isDone && <Text className="text-secondary text-sm font-semibold ml-2">· Urgent</Text>}
+            <Text className="text-secondary text-sm ml-2" numberOfLines={1}>
+              · {nextStepText(job, customer.name, { overdueDays: invoiceOverdueDays })}
+            </Text>
           </View>
           <View className="flex-row items-start justify-between">
             <Text className="flex-1 text-fg text-[28px] font-bold tracking-tight mr-3">{label}</Text>

@@ -221,6 +221,8 @@ export interface BusinessSettings {
   paymentTermsDays: number;
   /** Light or dark: follow the iPhone (default), or always one. */
   appearance?: Appearance;
+  /** The one-off explainer on the Tax card has been dismissed. */
+  taxTipSeen?: boolean;
 }
 
 export type Appearance = 'automatic' | 'light' | 'dark';
