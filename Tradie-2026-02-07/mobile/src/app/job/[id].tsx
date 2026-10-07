@@ -450,7 +450,7 @@ export default function JobDetailScreen() {
                 <Text className="text-link text-[15px] font-semibold">Edit</Text>
               </Pressable>
             </View>
-            {(customer.address || customer.postcode) && (
+            {!!(customer.address || customer.postcode) && (
               <Text className="text-secondary text-[15px] mt-0.5">
                 {[customer.address, customer.postcode].filter(Boolean).join(', ')}
               </Text>
@@ -528,7 +528,7 @@ export default function JobDetailScreen() {
         )}
 
         {/* When */}
-        {job.scheduledDate && (
+        {!!job.scheduledDate && (
           <View className="mb-8">
             <SectionHeader title="When" />
             <Group>

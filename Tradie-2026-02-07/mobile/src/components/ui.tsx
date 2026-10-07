@@ -154,7 +154,7 @@ export function ChoiceRow({
     >
       <View className="flex-1">
         <Text className="text-fg text-base">{label}</Text>
-        {hint && <Text className="text-secondary text-sm mt-0.5">{hint}</Text>}
+        {!!hint && <Text className="text-secondary text-sm mt-0.5">{hint}</Text>}
       </View>
       {selected && <Check size={20} color={t.link} strokeWidth={2} />}
     </Pressable>
@@ -228,10 +228,10 @@ export function FieldRow({
     <View className="flex-row items-center px-4 min-h-[52px] py-2">
       <View className="flex-1 mr-3">
         <Text className="text-fg text-base">{label}</Text>
-        {hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
+        {!!hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
       </View>
       <View className="flex-row items-center">
-        {prefix && <Text className="text-secondary text-base mr-1">{prefix}</Text>}
+        {!!prefix && <Text className="text-secondary text-base mr-1">{prefix}</Text>}
         <TextInput
           // With a £ or unit beside it, the box hugs the number so the symbol sits right next to it.
           className={cn('text-fg text-base text-right py-2', !(prefix || suffix) && width)}
@@ -244,7 +244,7 @@ export function FieldRow({
           autoCapitalize={autoCapitalize}
           accessibilityLabel={label}
         />
-        {suffix && <Text className="text-secondary text-base ml-1">{suffix}</Text>}
+        {!!suffix && <Text className="text-secondary text-base ml-1">{suffix}</Text>}
       </View>
     </View>
   );
@@ -268,7 +268,7 @@ export function TextAreaRow({
   return (
     <View className="px-4 pt-3 pb-2">
       <Text className="text-fg text-base">{label}</Text>
-      {hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
+      {!!hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
       <TextInput
         className="text-fg text-base py-2 min-h-[64px]"
         style={{ textAlignVertical: 'top' }}
@@ -303,7 +303,7 @@ export function ToggleRow({
     <View className="flex-row items-center px-4 min-h-[52px] py-2">
       <View className="flex-1 mr-3">
         <Text className="text-fg text-base">{label}</Text>
-        {hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
+        {!!hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
       </View>
       <Switch
         value={value}
@@ -338,7 +338,7 @@ export function LinkRow({
     <Pressable onPress={onPress} className="flex-row items-center px-4 min-h-[52px] active:opacity-70" accessibilityRole="button">
       {Icon && <Icon size={20} color={destructive ? t.alert : t.secondary} strokeWidth={2} style={{ marginRight: 12 }} />}
       <Text className={cn('flex-1 text-base', destructive ? 'text-alert' : 'text-fg')}>{label}</Text>
-      {value && <Text className="text-secondary text-base mr-2">{value}</Text>}
+      {!!value && <Text className="text-secondary text-base mr-2">{value}</Text>}
       {!destructive && <Trailing size={16} color={t.secondary} strokeWidth={2} />}
     </Pressable>
   );

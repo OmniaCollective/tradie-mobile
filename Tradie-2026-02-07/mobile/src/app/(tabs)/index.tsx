@@ -439,7 +439,7 @@ function JobRow({
             {detail}
           </Text>
         </View>
-        {amount && <Text className="text-fg text-base font-semibold mr-2">{amount}</Text>}
+        {!!amount && <Text className="text-fg text-base font-semibold mr-2">{amount}</Text>}
         <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
       </Pressable>
     </View>

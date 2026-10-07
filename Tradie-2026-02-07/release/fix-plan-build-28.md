@@ -62,10 +62,10 @@ Voice could irritate people when it gets things wrong. Typing is the main way in
 
 ## Checks before building
 
-- [ ] Typecheck, lint, all tests (UK tax, US tax, scheduling), expo-doctor.
-- [ ] Web walkthrough script as a brand-new user: Welcome → Home → type a job → save → edit job → quote preview → send ("Not yet", then "Yes") → book → done → invoice preview → edit invoice → send → mark paid → expense with a large amount → appearance switch.
-- [ ] One native simulator check, light on the machine (2 cores), of Add Job open/close/save, the voice screen, and the Preview screen (the new native component).
-- [ ] Redeploy the server; check the health endpoint and one voice request.
+- [x] Typecheck, lint, all tests (UK tax, US tax, scheduling), expo-doctor.
+- [x] Web walkthrough script as a brand-new user: Welcome → Home → type a job → save → edit job → quote preview → send ("Not yet", then "Yes") → book → done → invoice preview → edit invoice → send → mark paid → expense with a large amount → appearance switch. **19/19 passed, no page errors** (it caught items 19 and 20).
+- [ ] One native simulator check, light on the machine (2 cores): Add Job open/close/save (the crash), the Preview screen (new native PDF viewer) and the Appearance switch.
+- [x] ~~Redeploy the server~~: not needed for 1.6 (voice is off).
 
 ## Build and retest
 

@@ -707,7 +707,7 @@ export default function MoneyScreen() {
                           {formatDate(expense.date)} · {EXPENSE_CATEGORY_LABELS[expense.category]}
                           {expense.miles ? ` · ${expense.miles} miles` : ''}
                         </Text>
-                        {expense.receiptUri && (
+                        {!!expense.receiptUri && (
                           <Paperclip size={14} color={t.secondary} strokeWidth={2} style={{ marginLeft: 6 }} />
                         )}
                       </View>

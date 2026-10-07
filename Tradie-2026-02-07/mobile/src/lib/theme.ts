@@ -10,6 +10,7 @@
  */
 import { useColorScheme, Appearance as RNAppearance } from 'react-native';
 import { vars } from 'nativewind';
+import { useTradeStore } from './store';
 
 export interface Palette {
   /** Screen behind everything */
@@ -71,8 +72,12 @@ export function applyAppearance(choice: 'automatic' | 'light' | 'dark' | undefin
   }
 }
 
+/** Light or dark: the tradie's Appearance choice, or the iPhone's setting when it's Automatic. */
 export function useColorMode(): ColorMode {
-  return useColorScheme() === 'light' ? 'light' : 'dark';
+  const system = useColorScheme();
+  const choice = useTradeStore((s) => s.settings.appearance);
+  if (choice === 'light' || choice === 'dark') return choice;
+  return system === 'light' ? 'light' : 'dark';
 }
 
 /** The current palette, for icon colours and other values outside className. */

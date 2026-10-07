@@ -73,7 +73,7 @@ export function AppleSignInButton({ onSignedIn, label = 'continue' }: { onSigned
           />
         )}
       </View>
-      {error && <Text className="text-alert text-sm text-center mt-2">{error}</Text>}
+      {!!error && <Text className="text-alert text-sm text-center mt-2">{error}</Text>}
     </View>
   );
 }
