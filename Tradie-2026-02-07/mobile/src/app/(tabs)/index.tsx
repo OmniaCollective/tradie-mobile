@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Phone, Navigation, ChevronRight, CircleAlert, Mic, Check } from 'lucide-react-native';
-import { useTradeStore, useJobs, useInvoices, useSettings, type Job, getRegion } from '@/lib/store';
+import { Plus, Phone, Navigation, ChevronRight, CircleAlert, Mic, Check, ShieldAlert } from 'lucide-react-native';
+import { useTradeStore, useJobs, useInvoices, useSettings, useRenewals, type Job, getRegion, daysOverdue, daysUntil } from '@/lib/store';
+import { renewalStatus } from '@/components/Renewals';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatTime, toDateKey } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
@@ -55,9 +56,7 @@ export default function HomeScreen() {
   const money_ = useMemo(() => {
     const now = new Date(nowMs);
     const unpaid = invoices.filter((i) => i.status !== 'paid');
-    const overdue = unpaid.filter(
-      (i) => i.sentAt && nowMs - new Date(i.sentAt).getTime() > (settings.paymentTermsDays ?? 14) * DAY_MS,
-    );
+    const overdue = unpaid.filter((i) => daysOverdue(i, settings, now) > 0);
     const paidThisMonth = invoices.filter((i) => {
       if (i.status !== 'paid' || !i.paidAt) return false;
       const d = new Date(i.paidAt);
@@ -69,7 +68,7 @@ export default function HomeScreen() {
       paidTotal: paidThisMonth.reduce((sum, i) => sum + i.quote.total, 0),
       paidCount: paidThisMonth.length,
     };
-  }, [invoices, nowMs, settings.paymentTermsDays]);
+  }, [invoices, nowMs, settings]);
 
   const inProgress = jobs.find((j) => j.status === 'IN_PROGRESS');
   const upcoming = useMemo(
@@ -86,6 +85,9 @@ export default function HomeScreen() {
   // Quotes not yet accepted (sent or still to send), and accepted jobs that still need a time.
   const quotes = jobs.filter((j) => j.status === 'REQUESTED' || j.status === 'QUOTED');
   const toBook = jobs.filter((j) => j.status === 'APPROVED' && !j.scheduledDate);
+  // Insurance and licences expiring within 30 days, or already expired.
+  const renewals = useRenewals();
+  const dueRenewals = renewals.filter((r) => daysUntil(r.expires) <= 30).sort((x, y) => x.expires.localeCompare(y.expires));
 
   const label = (job: Job) => getJobTypeLabel(settings.trade, job.type);
   const customerName = (job: Job) => getCustomer(job.customerId)?.name ?? 'Unknown customer';
@@ -155,6 +157,36 @@ export default function HomeScreen() {
               </View>
             </Group>
           </Pressable>
+
+          {/* Renewals due */}
+          {dueRenewals.length > 0 && (
+            <View>
+              <SectionHeader title="Renewals" />
+              <Group>
+                {dueRenewals.map((r, i) => (
+                  <View key={r.id}>
+                    {i > 0 && <RowDivider />}
+                    <Pressable
+                      onPress={() => router.push('/(tabs)/settings')}
+                      className="flex-row items-center px-4 py-3 active:opacity-70"
+                      accessibilityRole="button"
+                    >
+                      <ShieldAlert size={20} color={t.alert} strokeWidth={2} />
+                      <View className="flex-1 ml-3 mr-2">
+                        <Text className="text-fg text-base font-medium" numberOfLines={1}>
+                          {r.name}
+                        </Text>
+                        <Text className="text-alert text-sm" numberOfLines={1}>
+                          {renewalStatus(r).text}
+                        </Text>
+                      </View>
+                      <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+                    </Pressable>
+                  </View>
+                ))}
+              </Group>
+            </View>
+          )}
 
           {/* Next up */}
           <View className="mb-8">

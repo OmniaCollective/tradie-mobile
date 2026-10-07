@@ -18,7 +18,7 @@ Notifications.setNotificationHandler({
 });
 
 export interface NotificationData extends Record<string, unknown> {
-  type: 'job_reminder' | 'daily_reminder';
+  type: 'job_reminder' | 'daily_reminder' | 'renewal';
   jobId?: string;
 }
 
@@ -62,6 +62,43 @@ export async function scheduleJobReminder(jobId: string, customerName: string, j
 /** Removes a job's reminder, e.g. when the job is deleted. */
 export async function cancelJobReminder(jobId: string): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(jobReminderId(jobId)).catch(() => {});
+}
+
+const RENEWAL_DAYS_BEFORE = [30, 7, 0];
+const renewalReminderId = (id: string, daysBefore: number) => `renewal-${id}-${daysBefore}`;
+
+/** Removes a renewal's reminders (on delete, or before rescheduling after an edit). */
+export async function cancelRenewalReminders(renewalId: string): Promise<void> {
+  await Promise.all(
+    RENEWAL_DAYS_BEFORE.map((d) => Notifications.cancelScheduledNotificationAsync(renewalReminderId(renewalId, d)).catch(() => {})),
+  );
+}
+
+/** Reminders at 9am, 30 and 7 days before a renewal's expiry and on the day itself. */
+export async function scheduleRenewalReminders(renewal: { id: string; name: string; expires: string }): Promise<void> {
+  await cancelRenewalReminders(renewal.id);
+  const [y, m, d] = renewal.expires.split('-').map(Number);
+  const now = new Date();
+  const upcoming = RENEWAL_DAYS_BEFORE.map((before) => ({ before, at: new Date(y, m - 1, d - before, 9, 0, 0) })).filter(
+    ({ at }) => at > now,
+  );
+  if (upcoming.length === 0 || !(await ensureNotificationPermission())) return;
+  for (const { before, at } of upcoming) {
+    await Notifications.scheduleNotificationAsync({
+      identifier: renewalReminderId(renewal.id, before),
+      content: {
+        title: before === 0 ? `${renewal.name} expires today` : `${renewal.name} expires in ${before} days`,
+        body: 'Renew it so you stay covered. Update the new date in Account.',
+        data: { type: 'renewal' } satisfies NotificationData,
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+    });
+  }
+}
+
+/** Removes every scheduled reminder (used when all data is deleted). */
+export async function cancelAllReminders(): Promise<void> {
+  await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
 }
 
 /** Whether the 6pm "message tomorrow's customers" nudge is on. */

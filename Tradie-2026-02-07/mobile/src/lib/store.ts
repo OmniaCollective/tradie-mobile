@@ -116,6 +116,8 @@ export interface Invoice {
   paidAt?: string;
   cisDeducted?: boolean;
   cisDeductionAmount?: number;
+  /** Each time the customer was chased for payment. */
+  chasedAt?: string[];
   createdAt: string;
 }
 
@@ -155,6 +157,17 @@ export interface Expense {
   businessUsePercent?: number; // for phone_internet
   vatAmount?: number; // VAT included in this expense (for input VAT tracking)
   jobId?: string; // link to a specific job
+  createdAt: string;
+}
+
+/** Insurance, licence or registration the tradie must keep current. */
+export interface Renewal {
+  id: string;
+  name: string;
+  /** Policy, licence or registration number (optional). */
+  reference?: string;
+  /** Expiry day, YYYY-MM-DD. */
+  expires: string;
   createdAt: string;
 }
 
@@ -271,6 +284,7 @@ interface TradeStore {
   invoices: Invoice[];
   expenses: Expense[];
   todos: TodoItem[];
+  renewals: Renewal[];
   settings: BusinessSettings;
   pricingPresets: PricingPreset[];
 
@@ -316,6 +330,11 @@ interface TradeStore {
   toggleTodo: (id: string) => void;
   deleteTodo: (id: string) => void;
 
+  // Insurance and licence renewals
+  addRenewal: (renewal: Omit<Renewal, 'id' | 'createdAt'>) => string;
+  updateRenewal: (id: string, updates: Partial<Omit<Renewal, 'id' | 'createdAt'>>) => void;
+  deleteRenewal: (id: string) => void;
+
   // Settings actions
   updateSettings: (updates: Partial<BusinessSettings>) => void;
   updatePricingPreset: (type: JobType, updates: Partial<PricingPreset>) => void;
@@ -350,6 +369,7 @@ export const useTradeStore = create<TradeStore>()(
       invoices: [],
       expenses: [],
       todos: [],
+      renewals: [],
       settings: defaultSettings,
       pricingPresets: defaultPricingPresets,
       hasCompletedOnboarding: false,
@@ -571,6 +591,20 @@ export const useTradeStore = create<TradeStore>()(
         }));
       },
 
+      addRenewal: (renewal) => {
+        const id = generateId();
+        set((state) => ({ renewals: [...state.renewals, { ...renewal, id, createdAt: new Date().toISOString() }] }));
+        return id;
+      },
+
+      updateRenewal: (id, updates) => {
+        set((state) => ({ renewals: state.renewals.map((r) => (r.id === id ? { ...r, ...updates } : r)) }));
+      },
+
+      deleteRenewal: (id) => {
+        set((state) => ({ renewals: state.renewals.filter((r) => r.id !== id) }));
+      },
+
       deleteTodo: (id) => {
         set((state) => ({
           todos: state.todos.filter((todo) => todo.id !== id),
@@ -669,6 +703,7 @@ export const useTradeStore = create<TradeStore>()(
           invoices: [],
           expenses: [],
           todos: [],
+          renewals: [],
           taxSetAsideTotal: 0,
         });
       },
@@ -706,7 +741,7 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 7,
+      version: 8,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persisted: any, version: number) => {
         if (version === 0) {
@@ -763,6 +798,9 @@ export const useTradeStore = create<TradeStore>()(
           // Anyone with saved data from an earlier version has already set up the app
           persisted.hasCompletedOnboarding = true;
         }
+        if (version < 8) {
+          if (!Array.isArray(persisted.renewals)) persisted.renewals = [];
+        }
         if (version < 7) {
           // 'TRADIE' was a placeholder business name, never the tradie's own
           if (persisted.settings) {
@@ -804,6 +842,15 @@ export const useCustomers = () => useTradeStore(useShallow((s) => s.customers));
 export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
 export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
+export const useRenewals = () => useTradeStore(useShallow((s) => s.renewals));
+
+/** Days until a renewal expires (negative once it has). */
+export function daysUntil(day: string, now: Date = new Date()): number {
+  const [y, m, d] = day.split('-').map(Number);
+  const end = new Date(y, m - 1, d).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((end - today) / (24 * 60 * 60 * 1000));
+}
 export const useSettings = () => useTradeStore(useShallow((s) => s.settings));
 
 /**
@@ -821,6 +868,23 @@ export const useTaxSetAside = (): number =>
   useTradeStore((s) =>
     s.taxSetAsideTaxYear === taxYearKey(regionFor(s.settings.country).country) ? s.taxSetAsideTotal : 0,
   );
+
+/** When a sent invoice is due: the send date plus the tradie's payment terms. Unsent invoices have no due date. */
+export function invoiceDueDate(invoice: Pick<Invoice, 'sentAt'>, settings: Pick<BusinessSettings, 'paymentTermsDays'>): Date | null {
+  if (!invoice.sentAt) return null;
+  return new Date(new Date(invoice.sentAt).getTime() + (settings.paymentTermsDays ?? 14) * 24 * 60 * 60 * 1000);
+}
+
+/** Whole days past the due date (0 if not overdue, or paid). */
+export function daysOverdue(
+  invoice: Pick<Invoice, 'sentAt' | 'status'>,
+  settings: Pick<BusinessSettings, 'paymentTermsDays'>,
+  now: Date = new Date(),
+): number {
+  const due = invoiceDueDate(invoice, settings);
+  if (!due || invoice.status === 'paid') return 0;
+  return Math.max(0, Math.floor((now.getTime() - due.getTime()) / (24 * 60 * 60 * 1000)));
+}
 
 /** How long a new quote stays valid. */
 export const QUOTE_VALID_DAYS = 30;

@@ -35,6 +35,7 @@ function RootLayoutNav() {
       const data = response.notification.request.content.data;
       if (typeof data?.jobId === 'string') router.push(`/job/${data.jobId}`);
       else if (data?.type === 'daily_reminder') router.push('/(tabs)/calendar');
+      else if (data?.type === 'renewal') router.push('/(tabs)/settings');
     });
     return () => subscription.remove();
   }, [router]);

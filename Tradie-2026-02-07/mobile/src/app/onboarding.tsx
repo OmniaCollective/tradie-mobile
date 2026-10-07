@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Mic,
   CalendarCheck,
+  Banknote,
   FileText,
   PoundSterling,
   DollarSign,
@@ -47,17 +48,21 @@ const MORE_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'dog_walker', icon: Dog },
 ];
 
+// Led by the biggest worries for solo traders: getting paid, then time, then admin and tax.
 const benefits = (country: Country): { icon: LucideIcon; title: string; body: string }[] => [
-  { icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' },
+  { icon: Banknote, title: 'Get paid on time', body: 'Invoices with due dates, and one tap to chase late payers' },
   {
     icon: CalendarCheck,
     title: 'Book jobs that fit your day',
-    body: country === 'US' ? 'Suggests times around your schedule and drive' : 'Suggests times around your diary and drive',
+    body: country === 'US' ? 'Around your schedule and drive' : 'Around your diary and drive',
   },
+  { icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' },
   { icon: FileText, title: 'Quote and invoice in a tap', body: 'Professional PDFs from your own prices' },
-  country === 'US'
-    ? { icon: DollarSign, title: 'Your tax, worked out', body: 'Federal and self-employment tax to set aside' }
-    : { icon: PoundSterling, title: 'Your tax, worked out', body: 'Income Tax and NI to set aside, live' },
+  {
+    icon: country === 'US' ? DollarSign : PoundSterling,
+    title: 'Your tax, worked out',
+    body: 'What to set aside, live',
+  },
 ];
 
 export default function OnboardingScreen() {
@@ -120,25 +125,23 @@ export default function OnboardingScreen() {
   // ── 1. Welcome ────────────────────────────────────────────────────────────
   if (step === 0) {
     return (
-      <View
-        className="flex-1 bg-bg px-6 justify-between"
-        style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }}
-      >
-        <View>
-          {/* Brand mascot above the wordmark; the wordmark stays as text so it reads in both modes */}
+      <View className="flex-1 bg-bg px-6" style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }}>
+        {/* Scrolls on small iPhones; the sign-in buttons stay put */}
+        <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+          {/* App icon as the logo, with the wordmark in the text colour (black on light, white on dark) */}
           <Image
-            source={require('@/assets/mascot.png')}
-            style={{ width: 93, height: 96, marginBottom: 16, marginLeft: -4 }}
+            source={require('@/assets/app-icon-tile.png')}
+            style={{ width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
             accessibilityIgnoresInvertColors
             accessible={false}
           />
-          <Text className="text-link text-[17px] font-extrabold tracking-[2.4px] mb-4">TRADIE</Text>
+          <Text className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4">TRADIE</Text>
           <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight">Quotes, jobs and invoices. Sorted.</Text>
           <Text className="text-secondary text-[17px] leading-6 mt-4">
             Built for solo traders.{'\n'}Know what to set aside for tax as you go.
           </Text>
 
-          <View className="mt-10 gap-5">
+          <View className="mt-8 gap-4">
             {benefits(country).map(({ icon: Icon, title, body }) => (
               <View key={title} className="flex-row">
                 <Icon size={24} color={t.link} strokeWidth={2} />
@@ -149,7 +152,7 @@ export default function OnboardingScreen() {
               </View>
             ))}
           </View>
-        </View>
+        </ScrollView>
 
         <View>
           <AppleSignInButton onSignedIn={goToTrade} />
@@ -165,7 +168,10 @@ export default function OnboardingScreen() {
           </Pressable>
           <Text className="text-secondary text-xs text-center leading-5 mt-1">
             Signing in keeps Pro on a new phone and lets voice work. Your jobs stay on your phone.{' '}
-            <Text className="text-link" onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}>
+            <Text
+              className="text-link"
+              onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}
+            >
               Privacy
             </Text>
           </Text>

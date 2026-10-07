@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench } from 'lucide-react-native';
+import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench, BellRing } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useTradeStore,
@@ -12,6 +12,7 @@ import {
   useRegion,
   getJobTypeLabel,
   invoiceNumberLabel,
+  daysOverdue,
   useTaxSetAside,
   type Invoice,
   type Job,
@@ -35,6 +36,7 @@ import { calculateUSTax } from '@/lib/usTaxEstimator';
 import { formatDate, parseDate } from '@/lib/dates';
 import { formatMoney, formatPounds, currencySymbol } from '@/lib/money';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
+import { chaseInvoice } from '@/lib/chase';
 import { useProAccess, FREE_LIMITS } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -212,6 +214,23 @@ export default function MoneyScreen() {
     }
   };
 
+  // A pre-written reminder from the tradie's phone; payment details must be set so the text says how to pay.
+  const handleChase = (invoice: Invoice) => {
+    const customer = getCustomer(invoice.customerId);
+    const job = getJob(invoice.jobId);
+    if (!customer || !job) return;
+    requireDetails('invoice', async (current) => {
+      try {
+        if (await chaseInvoice(invoice, job, customer, current)) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } catch (error) {
+        if (__DEV__) console.error('Chase failed:', error);
+        setModal({ title: 'Couldn’t open the message', message: 'Please try again.', variant: 'error' });
+      }
+    });
+  };
+
   const confirmMarkPaid = async (invoiceId: string, cisDeducted: boolean, cisDeductionAmount: number) => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateInvoice(invoiceId, {
@@ -310,7 +329,9 @@ export default function MoneyScreen() {
       invoice.status === 'paid'
         ? `Paid ${formatDate(invoice.paidAt)}`
         : invoice.status === 'sent'
-          ? `Sent ${formatDate(invoice.sentAt)}`
+          ? daysOverdue(invoice, settings) > 0
+            ? `${daysOverdue(invoice, settings)} ${daysOverdue(invoice, settings) === 1 ? 'day' : 'days'} overdue`
+            : `Sent ${formatDate(invoice.sentAt)}`
           : job
             ? getJobTypeLabel(settings.trade, job.type)
             : formatDate(invoice.createdAt);
@@ -325,7 +346,9 @@ export default function MoneyScreen() {
           ]
         : invoice.status === 'sent'
           ? [
-              { label: 'Resend', run: () => handleSharePdf(invoice) },
+              daysOverdue(invoice, settings) > 0
+                ? { label: 'Chase', run: () => handleChase(invoice) }
+                : { label: 'Resend', run: () => handleSharePdf(invoice) },
               { label: 'Mark paid', run: () => handleMarkPaid(invoice) },
             ]
           : [{ label: 'PDF', run: () => handleSharePdf(invoice) }];
@@ -345,7 +368,13 @@ export default function MoneyScreen() {
             </Text>
             <View className="flex-row items-center mt-0.5">
               {invoice.status === 'paid' && <CircleCheck size={14} color={t.link} strokeWidth={2} />}
-              <Text className={cn('text-sm', invoice.status === 'paid' ? 'text-link ml-1' : 'text-secondary')} numberOfLines={1}>
+              <Text
+                className={cn(
+                  'text-sm',
+                  invoice.status === 'paid' ? 'text-link ml-1' : daysOverdue(invoice, settings) > 0 ? 'text-alert' : 'text-secondary',
+                )}
+                numberOfLines={1}
+              >
                 {detail}
               </Text>
             </View>
@@ -690,6 +719,17 @@ export default function MoneyScreen() {
             </Text>
             <Group className="bg-bg mb-4">
               {invoice.status === 'pending' && <LinkRow icon={Send} label="Send invoice" onPress={then(() => handleSendInvoice(invoice))} />}
+              {invoice.status === 'sent' && (
+                <>
+                  <LinkRow
+                    icon={BellRing}
+                    label={daysOverdue(invoice, settings) > 0 ? 'Chase payment' : 'Send payment reminder'}
+                    value={invoice.chasedAt?.length ? `Chased ${formatDate(invoice.chasedAt[invoice.chasedAt.length - 1])}` : undefined}
+                    onPress={then(() => handleChase(invoice))}
+                  />
+                  <RowDivider />
+                </>
+              )}
               {invoice.status !== 'pending' && (
                 <LinkRow
                   icon={Share2}

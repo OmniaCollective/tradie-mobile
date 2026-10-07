@@ -18,11 +18,12 @@ import { COUNTRY_OPTIONS } from '@/lib/region';
 import { mileageRate } from '@/lib/data/usTax2026';
 import { requestCalendarPermissions, hasCalendarPermissions, syncAllJobsToCalendar } from '@/lib/calendarSync';
 import { getJobTypeLabel } from '@/lib/store';
-import { isDailyReminderOn, setDailyReminder } from '@/lib/notifications';
+import { isDailyReminderOn, setDailyReminder, cancelAllReminders } from '@/lib/notifications';
 import { useProAccess } from '@/lib/useProAccess';
 import { useAccount, signOut, deleteAccount } from '@/lib/auth';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { RenewalsSection } from '@/components/Renewals';
 import { cn } from '@/lib/cn';
 import {
   Group,
@@ -298,6 +299,9 @@ export default function AccountScreen() {
         <Text className="text-secondary text-[13px] mx-1 mb-8">
           Invoices show the due date, and unpaid ones count as overdue after it.
         </Text>
+
+        {/* Insurance and licences */}
+        <RenewalsSection />
 
         {/* Pricing and tax */}
         <SectionHeader title="Pricing and tax" />
@@ -633,7 +637,10 @@ export default function AccountScreen() {
         onConfirm={async () => {
           setDeleting(true);
           try {
-            if (await deleteAccount()) clearAllData();
+            if (await deleteAccount()) {
+              await cancelAllReminders();
+              clearAllData();
+            }
           } catch (e) {
             if (__DEV__) console.error('Delete account failed:', e);
             setModal({
@@ -658,6 +665,7 @@ export default function AccountScreen() {
         variant="error"
         onConfirm={async () => {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          await cancelAllReminders();
           clearAllData();
         }}
         onCancel={() => {}}

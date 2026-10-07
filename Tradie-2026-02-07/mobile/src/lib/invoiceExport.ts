@@ -12,6 +12,7 @@ import {
   getJobTypeLabel,
   businessDisplayName,
   invoiceNumberLabel,
+  invoiceDueDate,
 } from './store';
 import { getTaxYearBounds } from './taxEstimator';
 import { parseDate, toDateKey } from './dates';
@@ -433,8 +434,18 @@ ${body}
 </body>
 </html>`;
 
-const sharePdf = async (html: string) => {
+/** Renders the page to a PDF file, named e.g. "INV-0012.pdf" so it reads well as an attachment. */
+const makePdf = async (html: string, fileName?: string): Promise<string> => {
   const { uri } = await Print.printToFileAsync({ html });
+  if (!fileName || !FileSystem.cacheDirectory) return uri;
+  const named = `${FileSystem.cacheDirectory}${fileName.replace(/[^\w-]+/g, '-')}.pdf`;
+  await FileSystem.deleteAsync(named, { idempotent: true });
+  await FileSystem.moveAsync({ from: uri, to: named });
+  return named;
+};
+
+const sharePdf = async (html: string, fileName?: string) => {
+  const uri = await makePdf(html, fileName);
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
 };
 
@@ -475,13 +486,19 @@ interface PdfContext {
   settings: BusinessSettings;
 }
 
-export const exportInvoicePdf = async ({ invoice, job, customer, settings }: PdfContext): Promise<void> => {
+/** Shares the invoice PDF through the share sheet. */
+export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
+  await Sharing.shareAsync(await createInvoicePdf(ctx), { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+};
+
+/** Builds the invoice PDF and returns its file, e.g. to attach to a payment reminder. */
+export const createInvoicePdf = async ({ invoice, job, customer, settings }: PdfContext): Promise<string> => {
   const q = invoice.quote;
   const name = businessDisplayName(settings);
   const issued = invoice.sentAt ?? invoice.createdAt;
-  const due = new Date(new Date(issued).getTime() + (settings.paymentTermsDays ?? 14) * 24 * 60 * 60 * 1000).toISOString();
+  const due = (invoiceDueDate({ sentAt: issued }, settings) ?? new Date(issued)).toISOString();
   const cis = invoice.cisDeducted && invoice.cisDeductionAmount ? invoice.cisDeductionAmount : 0;
-  await sharePdf(
+  return makePdf(
     pdfPage(`
   <div class="header">
     <div>
@@ -508,5 +525,6 @@ export const exportInvoicePdf = async ({ invoice, job, customer, settings }: Pdf
         : ''
   }
   <div class="value muted" style="text-align:center;margin-top:16px">Thank you for your business.</div>`),
+    invoiceNumberLabel(invoice),
   );
 };
