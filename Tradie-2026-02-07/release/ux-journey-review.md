@@ -51,3 +51,13 @@ Prototype: https://claude.ai/artifact/QXvzAs14oYerYAaEWkbxcz
   - Your tax, worked out · What to set aside, as you go (Pro)
   - Never miss a renewal · Insurance and licences with reminders (US: licenses)
   One "Get started" button; sign-in as a small link.
+- **Tabs:** Home (what needs me) · Diary/Schedule (when) · Money (how's the money) · Account.
+- **Diary (UK) / Schedule (US):** week strip (dots = booked, hollow = times offered), tap the month to open the full month; the day's jobs in time order with offered times pencilled in; to-do list underneath (keyboard-mic tip). No statuses or money here.
+- **Money:** two numbers (Owed to you with overdue count · Paid this month); Owed to you list, overdue first with Chase; one line "N finished jobs not invoiced · £X" (expands); Paid grouped by month with totals; Tax below the money (Pro card with set-aside, tax year, profit, UK VAT bar, export; Free = one row with a Pro lock); Expenses (Pro list + "lowers your tax"; Free = one locked row); export moves from the header into Tax; no "3 of 3" banner, only "1 free invoice left" or "used all 3"; friendly empty state. "Not invoiced yet" appears on both Home (as jobs to act on) and Money (as money not asked for).
+
+## Account and paywall findings (to decide)
+
+- Account leads with Sign in + Free plan upsell before the business details.
+- Grey example text looks like real data: "Bank: Your Bank, Sort code 00-00-00, Account 12345678", "you@example.com", "12 High Street, London" (placeholders only, never saved or printed).
+- Scrolled content slides under the status bar (clock overlaps text).
+- Paywall mixes currencies when the App Store country differs: "$99.00" with "£8.25 a month" (per-month uses the app's currency, not the store price's). Big empty gap above the button; "Start Pro — …" uses a long dash.
