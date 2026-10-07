@@ -7,7 +7,8 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTradeStore, useJobs, type ExpenseCategory, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
+import { useTradeStore, useJobs, useRegion, type ExpenseCategory, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
+import { mileageRate } from '@/lib/data/usTax2026';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatDateObjLong, toDateKey, parseDate } from '@/lib/dates';
 import { formatMoney, currencySymbol } from '@/lib/money';
@@ -38,8 +39,32 @@ function taxYearStart(now = new Date()): Date {
   return new Date(afterApril6 ? now.getFullYear() : now.getFullYear() - 1, 3, 6);
 }
 
-/** The big amount box hugs its digits so it stays centred and never clips. */
-const bigInputWidth = (text: string) => Math.max(48, text.length * 24 + 12);
+/**
+ * The big number box sized to the real width of what's typed (measured by an
+ * invisible copy in the same font), so it stays centred and never clips.
+ */
+function BigNumberInput({ value, placeholder, className, ...props }: React.ComponentProps<typeof TextInput>) {
+  const [width, setWidth] = useState(0);
+  return (
+    <View>
+      <Text
+        className={cn('text-[40px] font-bold absolute opacity-0', className)}
+        onLayout={(e) => setWidth(Math.ceil(e.nativeEvent.layout.width))}
+        accessible={false}
+        importantForAccessibility="no"
+      >
+        {value || placeholder}
+      </Text>
+      <TextInput
+        className={cn('text-fg text-[40px] font-bold', className)}
+        style={{ width: Math.max(32, width + 6) }}
+        value={value}
+        placeholder={placeholder}
+        {...props}
+      />
+    </View>
+  );
+}
 
 async function saveReceipt(uri: string): Promise<string> {
   const destDir = `${FileSystem.documentDirectory}receipts/`;
@@ -92,9 +117,12 @@ export default function AddExpenseScreen() {
   const isMileage = category === 'vehicle_mileage';
   const num = (s: string) => parseFloat(s.replace(',', '.')) || 0;
 
+  const isUS = useRegion().country === 'US';
   const mileageAmount = (() => {
     const total = num(miles);
     if (!isMileage || total <= 0) return 0;
+    // US: the IRS standard rate for the date driven. UK: HMRC's 45p, then 25p after 10,000 miles a tax year.
+    if (isUS) return total * mileageRate(date);
     const start = taxYearStart();
     const usedThisYear = expenses
       .filter((e) => e.category === 'vehicle_mileage' && e.miles && parseDate(e.date) >= start)
@@ -178,9 +206,8 @@ export default function AddExpenseScreen() {
           {isMileage ? (
             <>
               <View className="flex-row items-baseline">
-                <TextInput
-                  className="text-fg text-[40px] font-bold text-center"
-                  style={{ width: bigInputWidth(miles || '0') }}
+                <BigNumberInput
+                  className="text-center"
                   placeholder="0"
                   placeholderTextColor={t.secondary}
                   value={miles}
@@ -192,16 +219,20 @@ export default function AddExpenseScreen() {
                 <Text className="text-secondary text-xl ml-2">miles</Text>
               </View>
               <Text className="text-secondary text-sm mt-1">
-                {mileageAmount > 0 ? `You can claim ${formatMoney(mileageAmount)} at HMRC rates` : '45p a mile, 25p after 10,000 this tax year'}
+                {isUS
+                  ? mileageAmount > 0
+                    ? `You can claim ${formatMoney(mileageAmount)} at the IRS rate`
+                    : `IRS rate: ${Math.round(mileageRate(date) * 1000) / 10}¢ a mile`
+                  : mileageAmount > 0
+                    ? `You can claim ${formatMoney(mileageAmount)} at HMRC rates`
+                    : '45p a mile, 25p after 10,000 this tax year'}
               </Text>
             </>
           ) : (
             <>
               <View className="flex-row items-baseline">
                 <Text className="text-secondary text-[32px] font-bold mr-1">{currencySymbol()}</Text>
-                <TextInput
-                  className="text-fg text-[40px] font-bold"
-                  style={{ width: bigInputWidth(amount || '0.00') }}
+                <BigNumberInput
                   placeholder="0.00"
                   placeholderTextColor={t.secondary}
                   value={amount}
