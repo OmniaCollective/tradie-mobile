@@ -143,15 +143,15 @@ export default function HomeScreen() {
       className="flex-1 bg-bg"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, paddingHorizontal: 16 }}
     >
-      {/* Header */}
-      <View className="flex-row items-end justify-between mb-7">
-        <View className="flex-1 mr-3">
-          <Text className="text-secondary text-sm">{today}</Text>
-          <Text className="text-fg text-[28px] font-bold tracking-tight" numberOfLines={1}>
-            {greeting(settings.ownerName ?? '')}
-          </Text>
-        </View>
-        <PrimaryButton compact icon={Plus} label="New job" onPress={() => router.push('/add-job')} />
+      {/* Header: greeting first, then the main action full width */}
+      <View className="mb-7">
+        <Text className="text-secondary text-sm">{today}</Text>
+        <Text className="text-fg text-[28px] font-bold tracking-tight" numberOfLines={1}>
+          {greeting(settings.ownerName ?? '')}
+        </Text>
+        {jobs.length > 0 && (
+          <PrimaryButton icon={Plus} label="New job" onPress={() => router.push('/add-job')} className="mt-4" />
+        )}
       </View>
 
       {jobs.length === 0 ? (
@@ -160,16 +160,16 @@ export default function HomeScreen() {
           <Group className="p-5 mb-8">
             <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
             <Text className="text-secondary text-[15px] leading-5 mb-4">
-              Say it in one go, like “Leaking tap for Sarah Jones, Friday at 9”, or type it in.
+              Type in the customer and the job, or say it in one go, like “Leaking tap for Sarah Jones, Friday at 9”.
             </Text>
             <View className="flex-row gap-3">
-              <PrimaryButton icon={Mic} label="Say it" onPress={() => router.push('/add-job?mode=voice')} className="flex-1" />
-              <SecondaryButton
+              <PrimaryButton
                 icon={Keyboard}
                 label="Type it in"
                 onPress={() => router.push('/add-job?mode=type')}
                 className="flex-1"
               />
+              <SecondaryButton icon={Mic} label="Say it" onPress={() => router.push('/add-job?mode=voice')} className="flex-1" />
             </View>
           </Group>
 

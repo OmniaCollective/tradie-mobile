@@ -61,6 +61,7 @@ export default function MoneyScreen() {
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(params.invoice ?? null);
   const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<string | null>(null);
   const [confirmDeleteExpense, setConfirmDeleteExpense] = useState<string | null>(null);
+  const [confirmSent, setConfirmSent] = useState<{ invoiceId: string; customerName: string } | null>(null);
   const deleteInvoice = useTradeStore((s) => s.deleteInvoice);
   // A new link opens that invoice (adjusting state during render, as React recommends over an effect).
   const [linkedInvoice, setLinkedInvoice] = useState(params.invoice);
@@ -197,11 +198,8 @@ export default function MoneyScreen() {
       const job = getJob(invoice.jobId);
       if (!job) throw new Error('Job not found');
       await exportInvoicePdf({ invoice, job, customer, settings: current });
-      updateInvoice(invoice.id, {
-        status: 'sent',
-        sentAt: invoice.sentAt ?? new Date().toISOString(),
-      });
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // iOS doesn't say whether it was actually sent, so ask before starting the due date.
+      setConfirmSent({ invoiceId: invoice.id, customerName: customer.name });
     } catch (error) {
       if (__DEV__) console.error('Error sending invoice PDF:', error);
       setModal({
@@ -760,6 +758,21 @@ export default function MoneyScreen() {
           </Sheet>
         );
       })()}
+
+      <ConfirmModal
+        visible={!!confirmSent}
+        title="Did you send it?"
+        message={`Mark the invoice to ${confirmSent?.customerName ?? 'the customer'} as sent? Its due date starts today.`}
+        confirmText="Yes, mark as sent"
+        cancelText="Not yet"
+        onConfirm={async () => {
+          if (!confirmSent) return;
+          updateInvoice(confirmSent.invoiceId, { status: 'sent', sentAt: new Date().toISOString() });
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
+        onCancel={() => {}}
+        onDismiss={() => setConfirmSent(null)}
+      />
 
       <ConfirmModal
         visible={!!confirmDeleteExpense}

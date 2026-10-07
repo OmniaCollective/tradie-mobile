@@ -25,15 +25,21 @@ import { UpgradePrompt } from '@/components/UpgradePrompt';
 type Mode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
 
+/** A form field. `boxed` draws an input box, used after voice so it's obvious each detail can be changed. */
 function InputRow({
   icon: Icon,
+  boxed,
   ...props
-}: { icon: LucideIcon } & React.ComponentProps<typeof TextInput>) {
+}: { icon: LucideIcon; boxed?: boolean } & React.ComponentProps<typeof TextInput>) {
   const t = useTheme();
   return (
-    <View className="flex-row items-center px-4 min-h-[52px]">
+    <View className={cn('flex-row items-center px-4 min-h-[52px]', boxed && 'py-1.5')}>
       <Icon size={20} color={t.secondary} strokeWidth={2} />
-      <TextInput className="flex-1 text-fg text-base ml-3 py-3" placeholderTextColor={t.secondary} {...props} />
+      <TextInput
+        className={cn('flex-1 text-fg text-base ml-3 py-3', boxed && 'bg-bg rounded-lg px-3 border border-divider')}
+        placeholderTextColor={t.secondary}
+        {...props}
+      />
     </View>
   );
 }
@@ -56,8 +62,8 @@ export default function AddJobScreen() {
   const freeVoiceLeft = useVoiceAllowance((s) => s.freeLeft);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
-  // Opens on the recorder unless the tradie chose to type, or came from a calendar day.
-  const [mode, setMode] = useState<Mode>(params.date || params.mode === 'type' ? 'form' : 'voice');
+  // Most people type, so Add Job opens on the form; voice is an option (or chosen from Home).
+  const [mode, setMode] = useState<Mode>(params.mode === 'voice' && !params.date ? 'voice' : 'form');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [transcription, setTranscription] = useState('');
@@ -344,6 +350,8 @@ export default function AddJobScreen() {
   }
 
   // ── Form ──────────────────────────────────────────────────────────────────
+  // After voice the fields are boxed, so it's clear each one can be corrected.
+  const checking = !!transcription;
 
   return (
     <View className="flex-1 bg-bg">
@@ -364,6 +372,16 @@ export default function AddJobScreen() {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
       >
+        {!transcription && (
+          <Pressable
+            onPress={() => setMode('voice')}
+            className="flex-row items-center justify-center min-h-[48px] rounded-xl bg-surface mb-6 active:opacity-70"
+            accessibilityRole="button"
+          >
+            <Mic size={18} color={t.link} strokeWidth={2} />
+            <Text className="text-link text-base font-semibold ml-2">Say it instead</Text>
+          </Pressable>
+        )}
         {transcription ? (
           <View className="mb-6">
             <Group className="p-4">
@@ -390,6 +408,7 @@ export default function AddJobScreen() {
         <SectionHeader title="Customer" />
         <Group className="mb-2">
           <InputRow
+            boxed={checking}
             icon={User}
             placeholder="Name"
             value={customerName}
@@ -403,9 +422,10 @@ export default function AddJobScreen() {
             accessibilityLabel="Customer name"
           />
           <RowDivider />
-          <InputRow icon={Phone} placeholder="Phone" value={customerPhone} onChangeText={setCustomerPhone} keyboardType="phone-pad" accessibilityLabel="Phone" />
+          <InputRow boxed={checking} icon={Phone} placeholder="Phone" value={customerPhone} onChangeText={setCustomerPhone} keyboardType="phone-pad" accessibilityLabel="Phone" />
           <RowDivider />
           <InputRow
+            boxed={checking}
             icon={Mail}
             placeholder="Email (optional)"
             value={customerEmail}
@@ -415,9 +435,10 @@ export default function AddJobScreen() {
             accessibilityLabel="Email"
           />
           <RowDivider />
-          <InputRow icon={MapPin} placeholder="Address" value={customerAddress} onChangeText={setCustomerAddress} accessibilityLabel="Address" />
+          <InputRow boxed={checking} icon={MapPin} placeholder="Address" value={customerAddress} onChangeText={setCustomerAddress} accessibilityLabel="Address" />
           <RowDivider />
           <InputRow
+            boxed={checking}
             icon={MapPin}
             placeholder="Postcode"
             value={customerPostcode}

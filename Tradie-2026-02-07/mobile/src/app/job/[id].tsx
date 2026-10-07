@@ -115,6 +115,7 @@ export default function JobDetailScreen() {
   const [editQuote, setEditQuote] = useState<{ labour: number; materials: number; travel: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancelBooking, setConfirmCancelBooking] = useState(false);
+  const [confirmQuoteSent, setConfirmQuoteSent] = useState(false);
   const [editCustomer, setEditCustomer] = useState<{ name: string; phone: string; email: string; address: string; postcode: string } | null>(null);
   const [limitPrompt, setLimitPrompt] = useState(false);
 
@@ -256,11 +257,8 @@ export default function JobDetailScreen() {
   const shareQuote = async (current: BusinessSettings) => {
     try {
       await exportQuotePdf({ job, customer, settings: current });
-      // Shared with the customer: the quote now counts as sent.
-      updateJob(job.id, {
-        quoteSentAt: new Date().toISOString(),
-        ...(job.status === 'REQUESTED' && { status: 'QUOTED' as const }),
-      });
+      // iOS doesn't say whether it was actually sent, so ask before marking it Quoted.
+      setConfirmQuoteSent(true);
     } catch (error) {
       if (__DEV__) console.error('Quote PDF error:', error);
       setModal({
@@ -1007,6 +1005,22 @@ export default function JobDetailScreen() {
           </Pressable>
         </Sheet>
       )}
+
+      <ConfirmModal
+        visible={confirmQuoteSent}
+        title="Did you send it?"
+        message={`Mark the quote to ${customer.name} as sent?`}
+        confirmText="Yes, mark as sent"
+        cancelText="Not yet"
+        onConfirm={() =>
+          updateJob(job.id, {
+            quoteSentAt: new Date().toISOString(),
+            ...(job.status === 'REQUESTED' && { status: 'QUOTED' as const }),
+          })
+        }
+        onCancel={() => {}}
+        onDismiss={() => setConfirmQuoteSent(false)}
+      />
 
       <ConfirmModal
         visible={confirmCancelBooking}
