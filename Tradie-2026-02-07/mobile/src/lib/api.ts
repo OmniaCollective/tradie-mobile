@@ -23,9 +23,20 @@ export class ApiError extends Error {
 // SecureStore has no web implementation; the web preview keeps the token in memory.
 let webToken: string | null = null;
 
-export async function getSessionToken(): Promise<string | null> {
+/** The saved sign-in token; throws if the keychain can't be read. */
+export async function readSessionToken(): Promise<string | null> {
   if (Platform.OS === 'web') return webToken;
   return SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+/** The saved sign-in token. If the keychain can't be read (e.g. phone locked), this counts as signed out. */
+export async function getSessionToken(): Promise<string | null> {
+  try {
+    return await readSessionToken();
+  } catch (error) {
+    if (__DEV__) console.warn('[API] Keychain read failed:', error);
+    return null;
+  }
 }
 
 export async function setSessionToken(token: string | null): Promise<void> {

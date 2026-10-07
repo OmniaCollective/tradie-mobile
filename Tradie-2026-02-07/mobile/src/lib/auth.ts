@@ -11,7 +11,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { apiPost, setSessionToken, getSessionToken, setUnauthorizedHandler } from './api';
+import { apiPost, setSessionToken, readSessionToken, setUnauthorizedHandler } from './api';
 import { setUserId, setUserDetails, logoutUser } from './revenuecatClient';
 
 interface Account {
@@ -132,7 +132,13 @@ export function useAuthSync() {
   useEffect(() => {
     if (!account) return;
     (async () => {
-      if (!(await getSessionToken())) {
+      let token: string | null;
+      try {
+        token = await readSessionToken();
+      } catch {
+        return; // Keychain unreadable for now (e.g. phone locked): stay signed in and check next time.
+      }
+      if (!token) {
         // Account record survived but the Keychain token didn't (e.g. restored backup).
         useAuthStore.getState().setAccount(null);
         return;
