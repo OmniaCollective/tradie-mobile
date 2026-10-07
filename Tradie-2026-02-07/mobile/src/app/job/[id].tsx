@@ -21,6 +21,7 @@ import {
   Pencil,
   CalendarX,
   FileText,
+  Eye,
   type LucideIcon,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -573,6 +574,8 @@ export default function JobDetailScreen() {
                   />
                 </>
               )}
+              <RowDivider />
+              <LinkRow icon={Eye} label="Preview quote" onPress={() => router.push(`/preview?kind=quote&id=${job.id}`)} />
               <RowDivider />
               <LinkRow
                 icon={Share2}

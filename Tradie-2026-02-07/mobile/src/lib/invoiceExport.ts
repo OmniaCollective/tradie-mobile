@@ -444,8 +444,8 @@ const makePdf = async (html: string, fileName?: string): Promise<string> => {
   return named;
 };
 
-const sharePdf = async (html: string, fileName?: string) => {
-  const uri = await makePdf(html, fileName);
+/** Opens the share sheet for a PDF that's already been made. */
+export const sharePdfFile = async (uri: string) => {
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
 };
 
@@ -455,10 +455,16 @@ interface QuotePdfContext {
   settings: BusinessSettings;
 }
 
-export const exportQuotePdf = async ({ job, customer, settings }: QuotePdfContext): Promise<void> => {
+/** Shares the quote PDF through the share sheet. */
+export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
+  await sharePdfFile(await createQuotePdf(ctx));
+};
+
+/** Builds the quote PDF and returns its file (for the preview screen or sharing). */
+export const createQuotePdf = async ({ job, customer, settings }: QuotePdfContext): Promise<string> => {
   const q = job.quote!;
   const name = businessDisplayName(settings);
-  await sharePdf(
+  return makePdf(
     pdfPage(`
   <div class="header">
     <div>
@@ -476,6 +482,7 @@ export const exportQuotePdf = async ({ job, customer, settings }: QuotePdfContex
   </div>
   ${pricesBlock(q, settings, getJobTypeLabel(settings.trade, job.type), job.description)}
   <div style="text-align:center;margin-top:8px"><span class="badge">Quote · reply to accept</span></div>`),
+    `Quote-${customer.name}`,
   );
 };
 
@@ -488,7 +495,7 @@ interface PdfContext {
 
 /** Shares the invoice PDF through the share sheet. */
 export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
-  await Sharing.shareAsync(await createInvoicePdf(ctx), { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+  await sharePdfFile(await createInvoicePdf(ctx));
 };
 
 /** Builds the invoice PDF and returns its file, e.g. to attach to a payment reminder. */

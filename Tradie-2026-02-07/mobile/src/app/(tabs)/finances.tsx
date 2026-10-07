@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench, BellRing } from 'lucide-react-native';
+import { Plus, Trash2, Paperclip, CircleCheck, Lock, Send, Share2, Undo2, Wrench, BellRing, Eye } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useTradeStore,
@@ -716,6 +716,12 @@ export default function MoneyScreen() {
               {invoice.cisDeducted && invoice.cisDeductionAmount ? ` · CIS −${money(invoice.cisDeductionAmount)}` : ''}
             </Text>
             <Group className="bg-bg mb-4">
+              <LinkRow
+                icon={Eye}
+                label={invoice.status === 'paid' ? 'View invoice' : 'Preview and edit'}
+                onPress={then(() => router.push(`/preview?kind=invoice&id=${invoice.id}`))}
+              />
+              <RowDivider />
               {invoice.status === 'pending' && <LinkRow icon={Send} label="Send invoice" onPress={then(() => handleSendInvoice(invoice))} />}
               {invoice.status === 'sent' && (
                 <>

@@ -315,6 +315,8 @@ interface TradeStore {
   // Invoice actions
   createInvoice: (jobId: string) => string | null;
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
+  /** Corrects an unpaid invoice's amounts; VAT, total and any CIS deduction are worked out again. */
+  updateInvoicePrices: (id: string, prices: QuotePrices) => void;
   /** Removes an invoice made by mistake; its job goes back to Done so it can be invoiced again. */
   deleteInvoice: (id: string) => void;
   getInvoice: (id: string) => Invoice | undefined;
@@ -515,6 +517,21 @@ export const useTradeStore = create<TradeStore>()(
         }));
 
         return id;
+      },
+
+      updateInvoicePrices: (id, prices) => {
+        const { settings } = get();
+        set((state) => ({
+          invoices: state.invoices.map((inv) => {
+            if (inv.id !== id) return inv;
+            const quote = { ...inv.quote, ...priceQuote(settings, prices, inv.quote.emergencySurcharge) };
+            return {
+              ...inv,
+              quote,
+              cisDeductionAmount: inv.cisDeducted ? Math.round(quote.total * (settings.cisRate / 100) * 100) / 100 : inv.cisDeductionAmount,
+            };
+          }),
+        }));
       },
 
       deleteInvoice: (id) => {

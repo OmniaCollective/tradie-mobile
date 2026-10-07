@@ -86,6 +86,13 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="preview"
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="paywall"
           options={{
             presentation: 'modal',
