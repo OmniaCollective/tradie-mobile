@@ -54,6 +54,8 @@ Extract any mentioned details and return ONLY valid JSON (no markdown, no explan
 
 Rules:
 - Only include fields that were clearly mentioned or can be reasonably inferred.
+- customerName is only a person's or business's name that the speaker gives for the customer (e.g. "for Sarah Jones", "Mike at number 4"). Never use words that describe the work, the problem or the room. Speech-to-text often mishears trade words as names (e.g. "Li King" for "leaking", "Bo Ler" for "boiler"); treat those as the job, not a name. If no customer is clearly named, use null.
+- In description, correct obvious mishearings of trade words (e.g. "Li King bathroom tap" means "leaking bathroom tap").
 - For relative dates like "tomorrow", "next Tuesday", "Friday", convert to actual dates based on today (${today}).
 - For jobType, match to the closest available job type label. Use exact label text.
 - Use null for any field not mentioned.`;

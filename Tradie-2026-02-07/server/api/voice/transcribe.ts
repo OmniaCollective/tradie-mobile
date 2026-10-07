@@ -16,6 +16,18 @@ function readBody(req: VercelRequest): Promise<Buffer> {
   });
 }
 
+/** Value of a plain text field in a multipart/form-data body, e.g. the vocabulary hint. */
+function extractField(body: Buffer, boundary: string, name: string): string | undefined {
+  const text = body.toString('latin1');
+  const marker = `name="${name}"`;
+  const at = text.indexOf(marker);
+  if (at === -1) return undefined;
+  const start = text.indexOf('\r\n\r\n', at);
+  const end = text.indexOf(`\r\n--${boundary}`, start);
+  if (start === -1 || end === -1) return undefined;
+  return Buffer.from(text.slice(start + 4, end), 'latin1').toString('utf8').trim();
+}
+
 /** First file part of a multipart/form-data body (same parser as Arken's transcribe). */
 function extractFile(body: Buffer, boundary: string): { data: Buffer; filename: string; contentType: string } | null {
   const marker = Buffer.from(`--${boundary}`);
@@ -68,13 +80,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const boundary = (req.headers['content-type'] ?? '').match(/boundary=(.+)/)?.[1];
   if (!boundary) return sendError(res, 400, 'VALIDATION_ERROR', 'Expected multipart/form-data');
 
-  const file = extractFile(await readBody(req), boundary);
+  const raw = await readBody(req);
+  const file = extractFile(raw, boundary);
+  // Trade words and job types steer the recogniser away from mishearings ("leaking" → "Li King").
+  const hint = extractField(raw, boundary, 'hint')?.slice(0, 800);
   if (!file) return sendError(res, 400, 'VALIDATION_ERROR', 'No audio file in request');
 
   const form = new FormData();
   form.append('file', new Blob([Uint8Array.from(file.data)], { type: file.contentType }), file.filename);
   form.append('model', TRANSCRIBE_MODEL);
   form.append('language', 'en');
+  if (hint) form.append('prompt', hint);
 
   const groq = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',

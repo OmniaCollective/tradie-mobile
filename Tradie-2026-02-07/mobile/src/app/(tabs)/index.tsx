@@ -2,8 +2,30 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Phone, Navigation, ChevronRight, CircleAlert, Mic, Check, ShieldAlert } from 'lucide-react-native';
-import { useTradeStore, useJobs, useInvoices, useSettings, useRenewals, type Job, getRegion, daysOverdue, daysUntil } from '@/lib/store';
+import {
+  Plus,
+  Phone,
+  Navigation,
+  ChevronRight,
+  CircleAlert,
+  Mic,
+  Check,
+  ShieldAlert,
+  Keyboard,
+  Circle,
+  CircleCheck,
+} from 'lucide-react-native';
+import {
+  useTradeStore,
+  useJobs,
+  useInvoices,
+  useSettings,
+  useRenewals,
+  type Job,
+  getRegion,
+  daysOverdue,
+  daysUntil,
+} from '@/lib/store';
 import { renewalStatus } from '@/components/Renewals';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatTime, toDateKey } from '@/lib/dates';
@@ -29,7 +51,11 @@ function dayLabel(dateStr: string | undefined, todayStr: string): string {
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (dateStr === toDateKey(tomorrow)) return 'Tomorrow';
   // Parse the stored local date as local noon so it can't slip a day in any timezone.
-  return new Date(`${dateStr}T12:00:00`).toLocaleDateString(getRegion().locale, { weekday: 'short', day: 'numeric', month: 'short' });
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString(getRegion().locale, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 }
 
 function daysAgo(iso: string): string {
@@ -88,6 +114,16 @@ export default function HomeScreen() {
   // Insurance and licences expiring within 30 days, or already expired.
   const renewals = useRenewals();
   const dueRenewals = renewals.filter((r) => daysUntil(r.expires) <= 30).sort((x, y) => x.expires.localeCompare(y.expires));
+  // First-run checklist: what quotes and invoices need from the profile.
+  const setupSteps = [
+    {
+      label: 'Business details',
+      hint: 'Name, phone and address',
+      done: !!(settings.businessName.trim() || settings.ownerName.trim()) && !!(settings.phone.trim() || settings.email.trim()),
+    },
+    { label: 'How customers pay you', hint: 'Bank or payment details for invoices', done: !!settings.paymentDetails.trim() },
+    { label: 'Insurance and licences', hint: 'Optional · reminders before they expire', done: renewals.length > 0 },
+  ];
 
   const label = (job: Job) => getJobTypeLabel(settings.trade, job.type);
   const customerName = (job: Job) => getCustomer(job.customerId)?.name ?? 'Unknown customer';
@@ -119,17 +155,51 @@ export default function HomeScreen() {
       </View>
 
       {jobs.length === 0 ? (
-        /* First run: one clear next step */
-        <Group className="p-5">
-          <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
-          <Text className="text-secondary text-[15px] leading-5 mb-4">
-            Type it in or just say it — “Leaking tap for Sarah Jones, Friday at 9”.
-          </Text>
-          <View className="flex-row items-center">
-            <Mic size={16} color={t.link} strokeWidth={2} />
-            <Text className="text-link text-sm font-semibold ml-1.5">Tap New job, then the microphone</Text>
-          </View>
-        </Group>
+        /* First run: a choice of what to do first, each one tappable */
+        <View>
+          <Group className="p-5 mb-8">
+            <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
+            <Text className="text-secondary text-[15px] leading-5 mb-4">
+              Say it in one go, like “Leaking tap for Sarah Jones, Friday at 9”, or type it in.
+            </Text>
+            <View className="flex-row gap-3">
+              <PrimaryButton icon={Mic} label="Say it" onPress={() => router.push('/add-job?mode=voice')} className="flex-1" />
+              <SecondaryButton
+                icon={Keyboard}
+                label="Type it in"
+                onPress={() => router.push('/add-job?mode=type')}
+                className="flex-1"
+              />
+            </View>
+          </Group>
+
+          <SectionHeader title="Set up your business" />
+          <Group className="mb-2">
+            {setupSteps.map((step, i) => (
+              <View key={step.label}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => router.push('/(tabs)/settings')}
+                  className="flex-row items-center px-4 min-h-[56px] py-2 active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityState={{ checked: step.done }}
+                >
+                  {step.done ? (
+                    <CircleCheck size={22} color={t.link} strokeWidth={2} />
+                  ) : (
+                    <Circle size={22} color={t.secondary} strokeWidth={2} />
+                  )}
+                  <View className="flex-1 ml-3">
+                    <Text className={step.done ? 'text-secondary text-base' : 'text-fg text-base'}>{step.label}</Text>
+                    <Text className="text-secondary text-[13px]">{step.hint}</Text>
+                  </View>
+                  <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+                </Pressable>
+              </View>
+            ))}
+          </Group>
+          <Text className="text-secondary text-[13px] mx-1">These go on your quotes and invoices. You can do them any time.</Text>
+        </View>
       ) : (
         <>
           {/* Money */}
@@ -216,7 +286,11 @@ export default function HomeScreen() {
                     </Pressable>
                   ) : null}
                   {nextCustomer?.address ? (
-                    <Pressable onPress={directionsNext} className="flex-row items-center min-h-[48px] mr-6" accessibilityRole="button">
+                    <Pressable
+                      onPress={directionsNext}
+                      className="flex-row items-center min-h-[48px] mr-6"
+                      accessibilityRole="button"
+                    >
                       <Navigation size={20} color={t.link} strokeWidth={2} />
                       <Text className="text-link text-[15px] font-semibold ml-1.5">Directions</Text>
                     </Pressable>
@@ -236,7 +310,12 @@ export default function HomeScreen() {
             ) : (
               <Group className="p-4">
                 <Text className="text-secondary text-[15px]">Nothing booked yet.</Text>
-                <SecondaryButton compact className="self-start mt-3" label="Open calendar" onPress={() => router.push('/(tabs)/calendar')} />
+                <SecondaryButton
+                  compact
+                  className="self-start mt-3"
+                  label="Open calendar"
+                  onPress={() => router.push('/(tabs)/calendar')}
+                />
               </Group>
             )}
           </View>
@@ -259,8 +338,12 @@ export default function HomeScreen() {
                         <Text className="text-secondary text-[13px]">{formatTime(job.scheduledTime)}</Text>
                       </View>
                       <View className="flex-1">
-                        <Text className="text-fg text-base" numberOfLines={1}>{label(job)}</Text>
-                        <Text className="text-secondary text-sm" numberOfLines={1}>{customerName(job)}</Text>
+                        <Text className="text-fg text-base" numberOfLines={1}>
+                          {label(job)}
+                        </Text>
+                        <Text className="text-secondary text-sm" numberOfLines={1}>
+                          {customerName(job)}
+                        </Text>
                       </View>
                       <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
                     </Pressable>

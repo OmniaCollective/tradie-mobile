@@ -44,7 +44,7 @@ export default function AddJobScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{ date?: string; mode?: 'voice' | 'type' }>();
   const customers = useCustomers();
   const pricingPresets = usePricingPresets();
   const settings = useTradeStore((s) => s.settings);
@@ -56,7 +56,8 @@ export default function AddJobScreen() {
   const freeVoiceLeft = useVoiceAllowance((s) => s.freeLeft);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
-  const [mode, setMode] = useState<Mode>(params.date ? 'form' : 'voice');
+  // Opens on the recorder unless the tradie chose to type, or came from a calendar day.
+  const [mode, setMode] = useState<Mode>(params.date || params.mode === 'type' ? 'form' : 'voice');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [transcription, setTranscription] = useState('');
@@ -364,10 +365,26 @@ export default function AddJobScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
       >
         {transcription ? (
-          <Group className="p-4 mb-6">
-            <Text className="text-secondary text-[13px] mb-1">You said</Text>
-            <Text className="text-fg text-[15px] leading-6">{transcription}</Text>
-          </Group>
+          <View className="mb-6">
+            <Group className="p-4">
+              <Text className="text-secondary text-[13px] mb-1">You said</Text>
+              <Text className="text-fg text-[15px] leading-6">{transcription}</Text>
+              <Pressable
+                onPress={() => {
+                  setTranscription('');
+                  setMode('voice');
+                }}
+                className="flex-row items-center self-start min-h-[44px] mt-1"
+                accessibilityRole="button"
+              >
+                <Mic size={16} color={t.link} strokeWidth={2} />
+                <Text className="text-link text-[15px] font-semibold ml-1.5">Record again</Text>
+              </Pressable>
+            </Group>
+            <Text className="text-secondary text-[13px] mx-1 mt-2">
+              Check the details below. Tap any of them to change it before saving.
+            </Text>
+          </View>
         ) : null}
 
         <SectionHeader title="Customer" />

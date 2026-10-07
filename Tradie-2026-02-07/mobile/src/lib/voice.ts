@@ -30,7 +30,19 @@ export const useVoiceAllowance = create<{ freeLeft: number | null; set: (n: numb
   ),
 );
 
-async function transcribe(audioUri: string): Promise<string> {
+/**
+ * Words the speech recogniser should expect, so trade talk isn't misheard
+ * (e.g. "leaking" heard as the name "Li King").
+ */
+function vocabularyHint(trade: string, jobTypes: string[]): string {
+  return [
+    `A ${trade.replace(/_/g, ' ')} describing a new job: customer name, address, the work and when.`,
+    `Job types: ${jobTypes.join(', ')}.`,
+    'Words: leaking, leak, dripping, blocked, burst, tap, toilet, boiler, radiator, socket, fuse box, quote, call-out, tomorrow, morning, afternoon.',
+  ].join(' ');
+}
+
+async function transcribe(audioUri: string, hint: string): Promise<string> {
   const token = await getSessionToken();
   if (!token) throw new ApiError('UNAUTHORIZED', 'Please sign in', 401);
 
@@ -41,6 +53,7 @@ async function transcribe(audioUri: string): Promise<string> {
       uploadType: FileSystem.FileSystemUploadType.MULTIPART,
       fieldName: 'file',
       mimeType: 'audio/mp4',
+      parameters: { hint },
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch {
@@ -60,7 +73,7 @@ export async function processVoiceNote(
   trade: string,
   jobTypes: string[],
 ): Promise<{ transcription: string; extracted: ExtractedJobData }> {
-  const transcription = await transcribe(audioUri);
+  const transcription = await transcribe(audioUri, vocabularyHint(trade, jobTypes));
   if (!transcription) throw new ApiError('EMPTY', 'Nothing was heard', 200);
 
   const { extracted, freeVoiceJobsLeft } = await apiPost<{ extracted: ExtractedJobData; freeVoiceJobsLeft: number | null }>(
