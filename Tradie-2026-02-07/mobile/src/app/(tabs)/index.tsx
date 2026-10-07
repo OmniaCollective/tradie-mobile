@@ -160,7 +160,7 @@ export default function HomeScreen() {
 
           {/* Renewals due */}
           {dueRenewals.length > 0 && (
-            <View>
+            <View className="mb-8">
               <SectionHeader title="Renewals" />
               <Group>
                 {dueRenewals.map((r, i) => (
@@ -272,7 +272,7 @@ export default function HomeScreen() {
 
           {/* Quotes waiting */}
           {quotes.length > 0 && (
-            <View>
+            <View className="mb-8">
               <SectionHeader title="Quotes waiting" />
               <Group>
                 {quotes.map((job, i) => {
@@ -296,7 +296,7 @@ export default function HomeScreen() {
 
           {/* Accepted, not booked yet */}
           {toBook.length > 0 && (
-            <View>
+            <View className="mb-8">
               <SectionHeader title="To book" />
               <Group>
                 {toBook.map((job, i) => (
