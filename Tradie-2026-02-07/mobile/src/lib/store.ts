@@ -219,7 +219,11 @@ export interface BusinessSettings {
   paymentDetails: string;
   /** Days a customer has to pay. Sets the due date on invoices and when one counts as overdue. */
   paymentTermsDays: number;
+  /** Light or dark: follow the iPhone (default), or always one. */
+  appearance?: Appearance;
 }
+
+export type Appearance = 'automatic' | 'light' | 'dark';
 
 export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
 

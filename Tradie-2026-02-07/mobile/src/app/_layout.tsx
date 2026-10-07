@@ -7,8 +7,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
-import { palettes, themeVars, useColorMode } from '@/lib/theme';
+import { palettes, themeVars, useColorMode, applyAppearance } from '@/lib/theme';
 import { useAuthSync } from '@/lib/auth';
+import { useTradeStore } from '@/lib/store';
 import { addNotificationResponseListener } from '@/lib/notifications';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -29,6 +30,12 @@ function RootLayoutNav() {
       colors: { ...base.colors, background: p.bg, card: p.bg, text: p.fg, border: p.divider, primary: p.link },
     };
   }, [mode, p]);
+  // The tradie's Appearance choice (Account) overrides the iPhone's light/dark setting.
+  const appearance = useTradeStore((s) => s.settings.appearance);
+  useEffect(() => {
+    applyAppearance(appearance);
+  }, [appearance]);
+
   // Tapping a reminder opens the job, or the Jobs tab for the daily nudge.
   useEffect(() => {
     const subscription = addNotificationResponseListener((response) => {

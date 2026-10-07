@@ -566,6 +566,20 @@ export default function AccountScreen() {
           </Disclosure>
         </View>
 
+        {/* Appearance */}
+        <SectionHeader title="Appearance" />
+        <Segmented
+          className="mb-2"
+          options={[
+            { key: 'automatic', label: 'Automatic' },
+            { key: 'light', label: 'Light' },
+            { key: 'dark', label: 'Dark' },
+          ]}
+          value={settings.appearance ?? 'automatic'}
+          onChange={(v) => set({ appearance: v })}
+        />
+        <Text className="text-secondary text-[13px] mx-1 mb-8">Automatic matches your iPhone’s light or dark setting.</Text>
+
         {/* About */}
         <SectionHeader title="About" />
         <Group className="mb-8">

@@ -8,7 +8,7 @@
  *   variables that ThemeRoot sets from the phone's light/dark setting.
  * - For icon `color` props and other JS values, use `useTheme()`.
  */
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Appearance as RNAppearance } from 'react-native';
 import { vars } from 'nativewind';
 
 export interface Palette {
@@ -58,6 +58,18 @@ export const palettes: Record<'light' | 'dark', Palette> = {
 };
 
 export type ColorMode = 'light' | 'dark';
+
+/**
+ * Applies the tradie's Appearance choice to the whole app, including native parts
+ * (switches, date pickers, keyboard). "automatic" hands control back to the iPhone.
+ */
+export function applyAppearance(choice: 'automatic' | 'light' | 'dark' | undefined) {
+  try {
+    RNAppearance.setColorScheme(choice === 'light' || choice === 'dark' ? choice : 'unspecified');
+  } catch {
+    // not supported here (web preview): the system setting applies
+  }
+}
 
 export function useColorMode(): ColorMode {
   return useColorScheme() === 'light' ? 'light' : 'dark';
