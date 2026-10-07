@@ -31,7 +31,7 @@ Voice could irritate people when it gets things wrong. Typing is the main way in
 - [x] Keyboard-dictation hint under job **Notes** and the **To-do** box: "Tip: tap 🎤 on the keyboard to speak it."
 - [x] App Store listing (UK and US): remove voice from the description, promo text and What's New.
 - [x] App Review notes: remove the voice mentions.
-- [ ] Screenshot 1 (Welcome), UK and US: re-shoot with four benefits and swap into Paul's design.
+- [x] Screenshot 1 (Welcome), UK and US: re-shot with four benefits and swapped into Paul's design (all upload sizes). All 9 US designed screenshots rebuilt on the UK frames (the earlier US set had lost the Dynamic Island and bezel).
 - [ ] Privacy policy: tidy the voice section (optional).
 
 ## 4. Edit what you've already saved (item 6)
@@ -64,7 +64,7 @@ Voice could irritate people when it gets things wrong. Typing is the main way in
 
 - [x] Typecheck, lint, all tests (UK tax, US tax, scheduling), expo-doctor.
 - [x] Web walkthrough script as a brand-new user: Welcome → Home → type a job → save → edit job → quote preview → send ("Not yet", then "Yes") → book → done → invoice preview → edit invoice → send → mark paid → expense with a large amount → appearance switch. **19/19 passed, no page errors** (it caught items 19 and 20).
-- [ ] One native simulator check, light on the machine (2 cores): Add Job open/close/save (the crash), the Preview screen (new native PDF viewer) and the Appearance switch.
+- [x] One native simulator check (Release build): Add Job opened and closed twice with no crash, Quote Preview (native PDF viewer) opens and closes, dark Appearance applied.
 - [x] ~~Redeploy the server~~: not needed for 1.6 (voice is off).
 
 ## Build and retest
