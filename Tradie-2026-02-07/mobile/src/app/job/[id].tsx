@@ -33,11 +33,15 @@ import {
   getJobTypeLabel,
   businessDisplayName,
   priceQuote,
+  usePricingPresets,
+  type JobType,
+  type Urgency,
+  type OfferedSlot,
+  type BusinessSettings,
 } from '@/lib/store';
 import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions, removeJobFromCalendar } from '@/lib/calendarSync';
 import { cancelJobReminder } from '@/lib/notifications';
 import { activeOffer, offerExpired, formatSlot, slotDate, scheduleJob, confirmationMessage } from '@/lib/booking';
-import type { OfferedSlot, BusinessSettings } from '@/lib/store';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { sendCustomerReminder, sendQuoteFollowup, isQuoteExpiringSoon } from '@/lib/customerReminders';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -49,7 +53,7 @@ import { exportQuotePdf } from '@/lib/invoiceExport';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet, NumberFieldRow, FieldRow } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet, NumberFieldRow, FieldRow, ChoiceRow } from '@/components/ui';
 
 type PhotoTab = 'before' | 'during' | 'after';
 
@@ -116,6 +120,9 @@ export default function JobDetailScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancelBooking, setConfirmCancelBooking] = useState(false);
   const [confirmQuoteSent, setConfirmQuoteSent] = useState(false);
+  const [editJob, setEditJob] = useState<{ type: JobType; description: string; urgency: Urgency } | null>(null);
+  const pricingPresets = usePricingPresets();
+  const calculateQuote = useTradeStore((s) => s.calculateQuote);
   const [editCustomer, setEditCustomer] = useState<{ name: string; phone: string; email: string; address: string; postcode: string } | null>(null);
   const [limitPrompt, setLimitPrompt] = useState(false);
 
@@ -372,7 +379,18 @@ export default function JobDetailScreen() {
             <JobStatus job={job} size="md" />
             {job.urgency === 'urgent' && !isDone && <Text className="text-secondary text-sm font-semibold ml-2">· Urgent</Text>}
           </View>
-          <Text className="text-fg text-[28px] font-bold tracking-tight">{label}</Text>
+          <View className="flex-row items-start justify-between">
+            <Text className="flex-1 text-fg text-[28px] font-bold tracking-tight mr-3">{label}</Text>
+            <Pressable
+              onPress={() => setEditJob({ type: job.type, description: job.description ?? '', urgency: job.urgency })}
+              hitSlop={10}
+              className="min-h-[44px] justify-center"
+              accessibilityRole="button"
+              accessibilityLabel="Edit job"
+            >
+              <Text className="text-link text-[15px] font-semibold">Edit</Text>
+            </Pressable>
+          </View>
           {job.description ? <Text className="text-secondary text-base leading-6 mt-1">{job.description}</Text> : null}
         </View>
 
@@ -964,6 +982,73 @@ export default function JobDetailScreen() {
           <Pressable onPress={() => setEditQuote(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
             <Text className="text-secondary text-base font-semibold">Cancel</Text>
           </Pressable>
+        </Sheet>
+      )}
+
+      {/* Edit job: type, description, urgency */}
+      {editJob && (
+        <Sheet visible onClose={() => setEditJob(null)}>
+          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 640 }}>
+            <Text className="text-fg text-[20px] font-semibold mb-4">Edit job</Text>
+            <Text className="text-secondary text-[13px] mx-1 mb-1.5">Job type</Text>
+            <Group className="bg-bg mb-4">
+              {pricingPresets.map((p, i) => (
+                <View key={p.type}>
+                  {i > 0 && <RowDivider />}
+                  <ChoiceRow label={p.label} selected={editJob.type === p.type} onPress={() => setEditJob({ ...editJob, type: p.type })} />
+                </View>
+              ))}
+            </Group>
+            <Text className="text-secondary text-[13px] mx-1 mb-1.5">What needs doing</Text>
+            <Group className="bg-bg mb-4">
+              <TextInput
+                className="text-fg text-base px-4 py-3 min-h-[72px]"
+                style={{ textAlignVertical: 'top' }}
+                value={editJob.description}
+                onChangeText={(v) => setEditJob({ ...editJob, description: v })}
+                placeholder="Optional"
+                placeholderTextColor={t.secondary}
+                multiline
+                accessibilityLabel="What needs doing"
+              />
+            </Group>
+            <Segmented
+              className="mb-2"
+              options={[
+                { key: 'standard', label: 'Standard' },
+                { key: 'urgent', label: 'Urgent' },
+                { key: 'emergency', label: 'Emergency' },
+              ]}
+              value={editJob.urgency}
+              onChange={(u) => setEditJob({ ...editJob, urgency: u })}
+            />
+            {job.quote && !hasInvoice && (editJob.type !== job.type || editJob.urgency !== job.urgency) && (
+              <Text className="text-secondary text-[13px] mx-1 mb-2">
+                Labour changes to {formatMoney(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel stay as they are.
+              </Text>
+            )}
+            <PrimaryButton
+              label="Save"
+              className="mt-3"
+              onPress={async () => {
+                const priceChanged = editJob.type !== job.type || editJob.urgency !== job.urgency;
+                updateJob(job.id, { type: editJob.type, description: editJob.description.trim(), urgency: editJob.urgency });
+                // A different job type or urgency means a different price, until it's on an invoice.
+                if (priceChanged && job.quote && !hasInvoice) {
+                  updateQuote(job.id, {
+                    labour: calculateQuote(editJob.type, editJob.urgency).labour,
+                    materials: job.quote.materials,
+                    travel: job.quote.travel,
+                  });
+                }
+                setEditJob(null);
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }}
+            />
+            <Pressable onPress={() => setEditJob(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+              <Text className="text-secondary text-base font-semibold">Cancel</Text>
+            </Pressable>
+          </ScrollView>
         </Sheet>
       )}
 
