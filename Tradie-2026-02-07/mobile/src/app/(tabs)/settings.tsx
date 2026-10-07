@@ -174,7 +174,7 @@ export default function AccountScreen() {
           <Group className="mb-4 p-4">
             <Text className="text-fg text-[17px] font-semibold mb-1">Sign in</Text>
             <Text className="text-secondary text-[15px] leading-5 mb-4">
-              Keeps Pro on a new phone and turns on voice jobs and drive times. Your jobs stay on this phone.
+              Keeps Pro on a new phone and turns on drive times. Your jobs stay on this phone.
             </Text>
             <AppleSignInButton label="signIn" />
           </Group>
@@ -206,7 +206,7 @@ export default function AccountScreen() {
                 <Text className="text-link text-[15px] font-semibold">Upgrade</Text>
               </View>
               <Text className="text-secondary text-sm mt-0.5">
-                Pro adds unlimited invoices, the tax tracker, expenses and voice jobs.
+                Pro adds unlimited invoices, the tax tracker, and expenses with exports.
               </Text>
             </Pressable>
           )}

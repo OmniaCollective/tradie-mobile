@@ -30,6 +30,7 @@ import { renewalStatus } from '@/components/Renewals';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatTime, toDateKey } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
+import { VOICE_ENABLED } from '@/lib/features';
 import { formatMoney } from '@/lib/money';
 import { Group, RowDivider, SectionHeader, PrimaryButton, SecondaryButton } from '@/components/ui';
 
@@ -160,17 +161,26 @@ export default function HomeScreen() {
           <Group className="p-5 mb-8">
             <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
             <Text className="text-secondary text-[15px] leading-5 mb-4">
-              Type in the customer and the job, or say it in one go, like “Leaking tap for Sarah Jones, Friday at 9”.
+              Add the customer and the job, and Tradie works out the quote from your prices.
             </Text>
-            <View className="flex-row gap-3">
-              <PrimaryButton
-                icon={Keyboard}
-                label="Type it in"
-                onPress={() => router.push('/add-job?mode=type')}
-                className="flex-1"
-              />
-              <SecondaryButton icon={Mic} label="Say it" onPress={() => router.push('/add-job?mode=voice')} className="flex-1" />
-            </View>
+            {VOICE_ENABLED ? (
+              <View className="flex-row gap-3">
+                <PrimaryButton
+                  icon={Keyboard}
+                  label="Type it in"
+                  onPress={() => router.push('/add-job?mode=type')}
+                  className="flex-1"
+                />
+                <SecondaryButton
+                  icon={Mic}
+                  label="Say it"
+                  onPress={() => router.push('/add-job?mode=voice')}
+                  className="flex-1"
+                />
+              </View>
+            ) : (
+              <PrimaryButton icon={Plus} label="Add a job" onPress={() => router.push('/add-job')} />
+            )}
           </Group>
 
           <SectionHeader title="Set up your business" />

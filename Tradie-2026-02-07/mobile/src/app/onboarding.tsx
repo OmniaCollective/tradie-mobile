@@ -29,6 +29,7 @@ import { type Trade, getTradeConfig } from '@/lib/trades';
 import { COUNTRY_OPTIONS, type Country } from '@/lib/region';
 import { useAccount, useAuthStore } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
+import { VOICE_ENABLED } from '@/lib/features';
 import { Group, RowDivider, PrimaryButton, FieldRow, NumberFieldRow, SectionHeader, Segmented } from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { currencySymbol } from '@/lib/money';
@@ -56,7 +57,7 @@ const benefits = (country: Country): { icon: LucideIcon; title: string; body: st
     title: 'Book jobs that fit your day',
     body: country === 'US' ? 'Around your schedule and drive' : 'Around your diary and drive',
   },
-  { icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' },
+  ...(VOICE_ENABLED ? [{ icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' }] : []),
   { icon: FileText, title: 'Quote and invoice in a tap', body: 'Professional PDFs from your own prices' },
   {
     icon: country === 'US' ? DollarSign : PoundSterling,
@@ -167,7 +168,7 @@ export default function OnboardingScreen() {
             <Text className="text-fg text-base font-semibold">Not now</Text>
           </Pressable>
           <Text className="text-secondary text-xs text-center leading-5 mt-1">
-            Signing in keeps Pro on a new phone and lets voice work. Your jobs stay on your phone.{' '}
+            Signing in keeps Pro on a new phone and turns on drive times. Your jobs stay on your phone.{' '}
             <Text
               className="text-link"
               onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}

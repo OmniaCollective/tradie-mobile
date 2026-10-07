@@ -691,6 +691,8 @@ export default function JobDetailScreen() {
                   accessibilityLabel="Notes"
                 />
                 <View className="flex-row items-center justify-end gap-5 mt-2">
+                  {/* Dictation is built into the iPhone keyboard; this just points to it */}
+                  <Text className="flex-1 text-secondary text-[13px]">Tip: tap the microphone key on the keyboard to speak it.</Text>
                   <Pressable onPress={() => setEditingNotes(false)} hitSlop={8} accessibilityRole="button">
                     <Text className="text-secondary text-[15px] font-semibold">Cancel</Text>
                   </Pressable>

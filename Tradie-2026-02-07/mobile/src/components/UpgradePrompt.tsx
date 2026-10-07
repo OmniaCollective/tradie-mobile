@@ -17,7 +17,7 @@ const CONTENT: Record<LimitedFeature, { icon: typeof FileText; title: string; bo
   invoices: {
     icon: FileText,
     title: `You’ve used this month’s ${FREE_LIMITS.invoicesPerMonth} free invoices`,
-    body: 'Pro gives you unlimited invoices, plus the tax tracker, expenses and voice jobs. Your free invoices reset on the 1st.',
+    body: 'Pro gives you unlimited invoices, plus the tax tracker and expenses. Your free invoices reset on the 1st.',
   },
   voice: {
     icon: Mic,

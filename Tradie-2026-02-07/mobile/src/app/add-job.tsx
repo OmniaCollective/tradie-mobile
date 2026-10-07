@@ -12,6 +12,7 @@ import { formatMoney } from '@/lib/money';
 import { useTradeStore, useCustomers, usePricingPresets, type JobType, type Urgency, type Customer } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/store';
 import { processVoiceNote, useVoiceAllowance, type ExtractedJobData } from '@/lib/voice';
+import { VOICE_ENABLED } from '@/lib/features';
 import { ApiError } from '@/lib/api';
 import { useAccount } from '@/lib/auth';
 import { scheduleJob } from '@/lib/booking';
@@ -63,7 +64,7 @@ export default function AddJobScreen() {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   // Most people type, so Add Job opens on the form; voice is an option (or chosen from Home).
-  const [mode, setMode] = useState<Mode>(params.mode === 'voice' && !params.date ? 'voice' : 'form');
+  const [mode, setMode] = useState<Mode>(VOICE_ENABLED && params.mode === 'voice' && !params.date ? 'voice' : 'form');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [transcription, setTranscription] = useState('');
@@ -372,7 +373,7 @@ export default function AddJobScreen() {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
       >
-        {!transcription && (
+        {VOICE_ENABLED && !transcription && (
           <Pressable
             onPress={() => setMode('voice')}
             className="flex-row items-center justify-center min-h-[48px] rounded-xl bg-surface mb-6 active:opacity-70"

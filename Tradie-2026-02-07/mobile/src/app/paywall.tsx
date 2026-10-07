@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import type { PurchasesPackage, PurchasesIntroPrice } from 'react-native-purchases';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { FREE_LIMITS, useRefreshPro } from '@/lib/useProAccess';
+import { VOICE_ENABLED } from '@/lib/features';
 import { formatMoney } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -21,7 +22,7 @@ const BENEFITS = [
   { title: 'Unlimited invoices', detail: `Free plan is ${FREE_LIMITS.invoicesPerMonth} a month` },
   { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
   { title: 'Expenses and receipts', detail: 'Tax-year exports for your accountant' },
-  { title: 'Add jobs by voice', detail: 'Unlimited voice jobs' },
+  ...(VOICE_ENABLED ? [{ title: 'Add jobs by voice', detail: 'Unlimited voice jobs' }] : []),
 ];
 
 const TERMS_URL = 'https://omniacollective.github.io/tradie-legal/terms.html';

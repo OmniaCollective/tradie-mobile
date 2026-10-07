@@ -392,6 +392,7 @@ export default function JobsScreen() {
             </>
           )}
         </Group>
+        <Text className="text-secondary text-[13px] mx-1 mt-2">Tip: tap the microphone key on the keyboard to speak a reminder.</Text>
       </View>
     </ScrollView>
   );

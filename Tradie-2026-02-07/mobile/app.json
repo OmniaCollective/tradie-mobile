@@ -15,7 +15,7 @@
         "NSCameraUsageDescription": "Tradie uses your camera to take photos of job sites and completed work for quotes and invoices.",
         "NSCalendarsUsageDescription": "Tradie adds your scheduled jobs to your calendar and checks when you're busy so it only suggests free times.",
         "NSPhotoLibraryUsageDescription": "Tradie accesses your photo library to attach photos of job sites and completed work.",
-        "NSMicrophoneUsageDescription": "Tradie uses your microphone so you can add jobs by voice.",
+        "NSMicrophoneUsageDescription": "Tradie only uses the microphone if you choose to record something.",
         "NSCalendarsFullAccessUsageDescription": "Tradie adds your scheduled jobs to your calendar and checks when you're busy so it only suggests free times.",
         "NSCalendarsWriteOnlyAccessUsageDescription": "Tradie adds your scheduled jobs to your calendar."
       },
