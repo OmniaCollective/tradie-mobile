@@ -94,9 +94,15 @@ export default function AddJobScreen() {
     }
   }, [recordingState, pulse]);
 
+  // Stop a recording left running when the screen closes. Expo may already have released the
+  // native recorder by then, and touching a released recorder throws, so every access is guarded.
   useEffect(
     () => () => {
-      if (recorder.isRecording) recorder.stop().catch(() => {});
+      try {
+        if (recorder.isRecording) recorder.stop().catch(() => {});
+      } catch {
+        // already released: nothing to stop
+      }
     },
     [recorder],
   );
