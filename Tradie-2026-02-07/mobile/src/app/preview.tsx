@@ -16,6 +16,7 @@ import { createInvoicePdf, createQuotePdf, sharePdfFile } from '@/lib/invoiceExp
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow } from '@/components/ui';
+import { toast } from '@/components/Toast';
 import { formatMoney, currencySymbol } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
 
@@ -100,6 +101,7 @@ export default function PreviewScreen() {
     else updateQuote(job.id, prices);
     updateJob(job.id, { description: edit.description.trim() });
     setEdit(null);
+    toast(kind === 'invoice' ? 'Invoice updated' : 'Quote updated');
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -237,6 +239,7 @@ export default function PreviewScreen() {
         confirmText="Yes, mark as sent"
         cancelText="Not yet"
         onConfirm={() => {
+          toast(`${kind === 'invoice' ? 'Invoice' : 'Quote'} marked as sent`);
           if (kind === 'invoice' && invoice) updateInvoice(invoice.id, { status: 'sent', sentAt: new Date().toISOString() });
           if (kind === 'quote')
             updateJob(job.id, {

@@ -54,7 +54,19 @@ import { exportQuotePdf } from '@/lib/invoiceExport';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, LinkRow, Sheet, NumberFieldRow, FieldRow, ChoiceRow } from '@/components/ui';
+import {
+  Group,
+  RowDivider,
+  SectionHeader,
+  PrimaryButton,
+  Segmented,
+  LinkRow,
+  Sheet,
+  NumberFieldRow,
+  FieldRow,
+  ChoiceRow,
+} from '@/components/ui';
+import { toast } from '@/components/Toast';
 
 type PhotoTab = 'before' | 'during' | 'after';
 
@@ -124,7 +136,13 @@ export default function JobDetailScreen() {
   const [editJob, setEditJob] = useState<{ type: JobType; description: string; urgency: Urgency } | null>(null);
   const pricingPresets = usePricingPresets();
   const calculateQuote = useTradeStore((s) => s.calculateQuote);
-  const [editCustomer, setEditCustomer] = useState<{ name: string; phone: string; email: string; address: string; postcode: string } | null>(null);
+  const [editCustomer, setEditCustomer] = useState<{
+    name: string;
+    phone: string;
+    email: string;
+    address: string;
+    postcode: string;
+  } | null>(null);
   const [limitPrompt, setLimitPrompt] = useState(false);
 
   if (!job || !customer) {
@@ -176,6 +194,7 @@ export default function JobDetailScreen() {
     setShowSchedule(false);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await scheduleJob(job, customer, scheduleDate);
+    toast('Job booked');
   };
 
   /** Customer replied with one of the offered times: book it and send a confirmation. */
@@ -183,6 +202,7 @@ export default function JobDetailScreen() {
     const when = slotDate(slot);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await scheduleJob(job, customer, when);
+    toast('Job booked');
     // The job is booked either way; the confirmation text is signed, so it waits for a name.
     if (customer.phone && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
       requireDetails('message', async () => {
@@ -283,7 +303,10 @@ export default function JobDetailScreen() {
       return;
     }
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (createInvoice(job.id)) router.push('/(tabs)/finances');
+    if (createInvoice(job.id)) {
+      toast('Invoice created');
+      router.push('/(tabs)/finances');
+    }
   };
 
   const savePart = () => {
@@ -291,6 +314,7 @@ export default function JobDetailScreen() {
     const cost = parseFloat(partCost.replace(',', '.'));
     if (!partName.trim() || !(qty > 0) || !(cost > 0)) return;
     addPart(job.id, { name: partName.trim(), quantity: qty, unitCost: cost });
+    toast('Part added');
     cancelPart();
   };
   const cancelPart = () => {
@@ -318,6 +342,7 @@ export default function JobDetailScreen() {
           run: async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             updateJob(job.id, { status: 'IN_PROGRESS' });
+            toast('Job started');
           },
         };
       case 'IN_PROGRESS':
@@ -456,7 +481,12 @@ export default function JobDetailScreen() {
                       <View className="flex-row items-center px-4 min-h-[52px]">
                         <Text className="text-secondary text-base w-7">{i + 1})</Text>
                         <Text className="flex-1 text-fg text-base">{formatSlot(slotDate(slot))}</Text>
-                        <Pressable onPress={() => bookOffered(slot)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Book ${formatSlot(slotDate(slot))}`}>
+                        <Pressable
+                          onPress={() => bookOffered(slot)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Book ${formatSlot(slotDate(slot))}`}
+                        >
                           <Text className="text-link text-[15px] font-semibold">Book</Text>
                         </Pressable>
                       </View>
@@ -473,7 +503,11 @@ export default function JobDetailScreen() {
                   <RowDivider />
                 </>
               )}
-              <LinkRow icon={CalendarClock} label={offers.length || expired ? 'Offer new times' : 'Suggest times'} onPress={openSuggest} />
+              <LinkRow
+                icon={CalendarClock}
+                label={offers.length || expired ? 'Offer new times' : 'Suggest times'}
+                onPress={openSuggest}
+              />
               <RowDivider />
               <LinkRow icon={Calendar} label="Pick a time myself" onPress={openPicker} />
             </Group>
@@ -570,7 +604,9 @@ export default function JobDetailScreen() {
                   <LinkRow
                     icon={Pencil}
                     label="Edit quote"
-                    onPress={() => setEditQuote({ labour: job.quote!.labour, materials: job.quote!.materials, travel: job.quote!.travel })}
+                    onPress={() =>
+                      setEditQuote({ labour: job.quote!.labour, materials: job.quote!.materials, travel: job.quote!.travel })
+                    }
                   />
                 </>
               )}
@@ -713,7 +749,9 @@ export default function JobDetailScreen() {
                 />
                 <View className="flex-row items-center justify-end gap-5 mt-2">
                   {/* Dictation is built into the iPhone keyboard; this just points to it */}
-                  <Text className="flex-1 text-secondary text-[13px]">Tip: tap the microphone key on the keyboard to speak it.</Text>
+                  <Text className="flex-1 text-secondary text-[13px]">
+                    Tip: tap the microphone key on the keyboard to speak it.
+                  </Text>
                   <Pressable onPress={() => setEditingNotes(false)} hitSlop={8} accessibilityRole="button">
                     <Text className="text-secondary text-[15px] font-semibold">Cancel</Text>
                   </Pressable>
@@ -912,6 +950,7 @@ export default function JobDetailScreen() {
               status: 'COMPLETED',
               completedAt: new Date().toISOString(),
             });
+            toast('Job marked done');
             setShowComplete(false);
           }}
         />
@@ -968,7 +1007,9 @@ export default function JobDetailScreen() {
             const priced = priceQuote(settings, editQuote, job.quote.emergencySurcharge);
             return (
               <View className="px-1 mb-5">
-                {priced.emergencySurcharge > 0 && <Line label="Emergency call-out" value={formatMoney(priced.emergencySurcharge)} />}
+                {priced.emergencySurcharge > 0 && (
+                  <Line label="Emergency call-out" value={formatMoney(priced.emergencySurcharge)} />
+                )}
                 {priced.vat > 0 && <Line label={`VAT (${settings.vatRate}%)`} value={formatMoney(priced.vat)} />}
                 <Line label="Total" value={formatMoney(priced.total)} strong />
               </View>
@@ -978,11 +1019,16 @@ export default function JobDetailScreen() {
             label="Save quote"
             onPress={async () => {
               updateQuote(job.id, editQuote);
+              toast('Quote updated');
               setEditQuote(null);
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }}
           />
-          <Pressable onPress={() => setEditQuote(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+          <Pressable
+            onPress={() => setEditQuote(null)}
+            className="min-h-[48px] items-center justify-center mt-1"
+            accessibilityRole="button"
+          >
             <Text className="text-secondary text-base font-semibold">Cancel</Text>
           </Pressable>
         </Sheet>
@@ -998,7 +1044,11 @@ export default function JobDetailScreen() {
               {pricingPresets.map((p, i) => (
                 <View key={p.type}>
                   {i > 0 && <RowDivider />}
-                  <ChoiceRow label={p.label} selected={editJob.type === p.type} onPress={() => setEditJob({ ...editJob, type: p.type })} />
+                  <ChoiceRow
+                    label={p.label}
+                    selected={editJob.type === p.type}
+                    onPress={() => setEditJob({ ...editJob, type: p.type })}
+                  />
                 </View>
               ))}
             </Group>
@@ -1027,7 +1077,8 @@ export default function JobDetailScreen() {
             />
             {job.quote && !hasInvoice && (editJob.type !== job.type || editJob.urgency !== job.urgency) && (
               <Text className="text-secondary text-[13px] mx-1 mb-2">
-                Labour changes to {formatMoney(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel stay as they are.
+                Labour changes to {formatMoney(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel stay
+                as they are.
               </Text>
             )}
             <PrimaryButton
@@ -1045,10 +1096,15 @@ export default function JobDetailScreen() {
                   });
                 }
                 setEditJob(null);
+                toast('Job updated');
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               }}
             />
-            <Pressable onPress={() => setEditJob(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+            <Pressable
+              onPress={() => setEditJob(null)}
+              className="min-h-[48px] items-center justify-center mt-1"
+              accessibilityRole="button"
+            >
               <Text className="text-secondary text-base font-semibold">Cancel</Text>
             </Pressable>
           </ScrollView>
@@ -1060,13 +1116,41 @@ export default function JobDetailScreen() {
         <Sheet visible onClose={() => setEditCustomer(null)}>
           <Text className="text-fg text-[20px] font-semibold mb-4">Customer details</Text>
           <Group className="bg-bg mb-5">
-            <FieldRow label="Name" value={editCustomer.name} onChangeText={(v) => setEditCustomer({ ...editCustomer, name: v })} placeholder="Name" autoCapitalize="words" width="w-48" />
+            <FieldRow
+              label="Name"
+              value={editCustomer.name}
+              onChangeText={(v) => setEditCustomer({ ...editCustomer, name: v })}
+              placeholder="Name"
+              autoCapitalize="words"
+              width="w-48"
+            />
             <RowDivider />
-            <FieldRow label="Phone" value={editCustomer.phone} onChangeText={(v) => setEditCustomer({ ...editCustomer, phone: v })} placeholder="Phone" keyboardType="phone-pad" width="w-48" />
+            <FieldRow
+              label="Phone"
+              value={editCustomer.phone}
+              onChangeText={(v) => setEditCustomer({ ...editCustomer, phone: v })}
+              placeholder="Phone"
+              keyboardType="phone-pad"
+              width="w-48"
+            />
             <RowDivider />
-            <FieldRow label="Email" value={editCustomer.email} onChangeText={(v) => setEditCustomer({ ...editCustomer, email: v })} placeholder="Optional" keyboardType="email-address" autoCapitalize="none" width="w-48" />
+            <FieldRow
+              label="Email"
+              value={editCustomer.email}
+              onChangeText={(v) => setEditCustomer({ ...editCustomer, email: v })}
+              placeholder="Optional"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              width="w-48"
+            />
             <RowDivider />
-            <FieldRow label="Address" value={editCustomer.address} onChangeText={(v) => setEditCustomer({ ...editCustomer, address: v })} placeholder="Street" width="w-48" />
+            <FieldRow
+              label="Address"
+              value={editCustomer.address}
+              onChangeText={(v) => setEditCustomer({ ...editCustomer, address: v })}
+              placeholder="Street"
+              width="w-48"
+            />
             <RowDivider />
             <FieldRow
               label={getRegion().postcodeLabel === 'ZIP code' ? 'ZIP code' : 'Postcode'}
@@ -1087,10 +1171,15 @@ export default function JobDetailScreen() {
                 address: editCustomer.address.trim(),
                 postcode: editCustomer.postcode.trim(),
               });
+              toast('Customer updated');
               setEditCustomer(null);
             }}
           />
-          <Pressable onPress={() => setEditCustomer(null)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+          <Pressable
+            onPress={() => setEditCustomer(null)}
+            className="min-h-[48px] items-center justify-center mt-1"
+            accessibilityRole="button"
+          >
             <Text className="text-secondary text-base font-semibold">Cancel</Text>
           </Pressable>
         </Sheet>
@@ -1102,12 +1191,13 @@ export default function JobDetailScreen() {
         message={`Mark the quote to ${customer.name} as sent?`}
         confirmText="Yes, mark as sent"
         cancelText="Not yet"
-        onConfirm={() =>
+        onConfirm={() => {
           updateJob(job.id, {
             quoteSentAt: new Date().toISOString(),
             ...(job.status === 'REQUESTED' && { status: 'QUOTED' as const }),
-          })
-        }
+          });
+          toast('Quote marked as sent');
+        }}
         onCancel={() => {}}
         onDismiss={() => setConfirmQuoteSent(false)}
       />
@@ -1123,6 +1213,7 @@ export default function JobDetailScreen() {
           await cancelJobReminder(job.id);
           await removeJobFromCalendar(job.id);
           updateJob(job.id, { status: 'APPROVED', scheduledDate: undefined, scheduledTime: undefined });
+          toast('Booking cancelled');
         }}
         onCancel={() => {}}
         onDismiss={() => setConfirmCancelBooking(false)}
@@ -1139,6 +1230,7 @@ export default function JobDetailScreen() {
           await cancelJobReminder(job.id);
           await removeJobFromCalendar(job.id);
           deleteJob(job.id);
+          toast('Job deleted');
           goBack();
         }}
         onCancel={() => {}}

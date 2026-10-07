@@ -2,8 +2,28 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, User, Phone, Mail, MapPin, Mic, Square, Keyboard, Wrench, Calendar, Clock, type LucideIcon } from 'lucide-react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing, cancelAnimation } from 'react-native-reanimated';
+import {
+  Check,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Mic,
+  Square,
+  Keyboard,
+  Wrench,
+  Calendar,
+  Clock,
+  type LucideIcon,
+} from 'lucide-react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -22,6 +42,7 @@ import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, Segmented, LinkRow, Sheet } from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { toast } from '@/components/Toast';
 
 type Mode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
@@ -153,7 +174,7 @@ export default function AddJobScreen() {
         setHasDate(true);
       }
     },
-     
+
     [customers, pricingPresets],
   );
 
@@ -241,9 +262,11 @@ export default function AddJobScreen() {
       const customer = all.find((c) => c.id === customerId);
       if (hasDate && job && customer) {
         await scheduleJob(job, customer, when);
+        toast('Job saved and booked');
         goBack();
       } else {
         // Not booked yet: open the job so times can be suggested straight away.
+        toast('Job saved');
         router.replace(`/job/${jobId}`);
       }
     } catch (error) {
@@ -253,7 +276,10 @@ export default function AddJobScreen() {
   };
 
   const header = (title: string, right?: React.ReactNode) => (
-    <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
+    <View
+      className="flex-row items-center justify-between px-4"
+      style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
+    >
       <Pressable
         onPress={() => (mode === 'form' && transcription ? setMode('voice') : goBack())}
         hitSlop={10}
@@ -282,7 +308,10 @@ export default function AddJobScreen() {
           <View className="items-center justify-center" style={{ width: 176, height: 176 }}>
             {recording && (
               <Animated.View
-                style={[{ position: 'absolute', width: 112, height: 112, borderRadius: 56, backgroundColor: t.alert }, pulseStyle]}
+                style={[
+                  { position: 'absolute', width: 112, height: 112, borderRadius: 56, backgroundColor: t.alert },
+                  pulseStyle,
+                ]}
               />
             )}
             <Pressable
@@ -358,7 +387,13 @@ export default function AddJobScreen() {
     <View className="flex-1 bg-bg">
       {header(
         transcription ? 'Check the job' : 'New job',
-        <Pressable onPress={handleSave} disabled={!canSave} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
+        <Pressable
+          onPress={handleSave}
+          disabled={!canSave}
+          hitSlop={10}
+          className="min-h-[44px] justify-center"
+          accessibilityRole="button"
+        >
           {saving ? (
             <ActivityIndicator color={t.link} />
           ) : (
@@ -423,7 +458,15 @@ export default function AddJobScreen() {
             accessibilityLabel="Customer name"
           />
           <RowDivider />
-          <InputRow boxed={checking} icon={Phone} placeholder="Phone" value={customerPhone} onChangeText={setCustomerPhone} keyboardType="phone-pad" accessibilityLabel="Phone" />
+          <InputRow
+            boxed={checking}
+            icon={Phone}
+            placeholder="Phone"
+            value={customerPhone}
+            onChangeText={setCustomerPhone}
+            keyboardType="phone-pad"
+            accessibilityLabel="Phone"
+          />
           <RowDivider />
           <InputRow
             boxed={checking}
@@ -436,7 +479,14 @@ export default function AddJobScreen() {
             accessibilityLabel="Email"
           />
           <RowDivider />
-          <InputRow boxed={checking} icon={MapPin} placeholder="Address" value={customerAddress} onChangeText={setCustomerAddress} accessibilityLabel="Address" />
+          <InputRow
+            boxed={checking}
+            icon={MapPin}
+            placeholder="Address"
+            value={customerAddress}
+            onChangeText={setCustomerAddress}
+            accessibilityLabel="Address"
+          />
           <RowDivider />
           <InputRow
             boxed={checking}
@@ -496,7 +546,12 @@ export default function AddJobScreen() {
           {hasDate && (
             <>
               <RowDivider />
-              <LinkRow icon={Calendar} label="Date" value={formatDateObj(when)} onPress={() => setPicker(picker === 'date' ? null : 'date')} />
+              <LinkRow
+                icon={Calendar}
+                label="Date"
+                value={formatDateObj(when)}
+                onPress={() => setPicker(picker === 'date' ? null : 'date')}
+              />
               {picker === 'date' && (
                 <View className="items-center pb-2">
                   <DateTimePicker
@@ -505,7 +560,8 @@ export default function AddJobScreen() {
                     display={Platform.OS === 'ios' ? 'inline' : 'default'}
                     minimumDate={new Date()}
                     onChange={(_, d) => {
-                      if (d) setWhen((cur) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), cur.getHours(), cur.getMinutes()));
+                      if (d)
+                        setWhen((cur) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), cur.getHours(), cur.getMinutes()));
                       if (Platform.OS === 'android') setPicker(null);
                     }}
                     themeVariant={t.mode}
@@ -514,7 +570,12 @@ export default function AddJobScreen() {
                 </View>
               )}
               <RowDivider />
-              <LinkRow icon={Clock} label="Time" value={formatTimeObj(when)} onPress={() => setPicker(picker === 'time' ? null : 'time')} />
+              <LinkRow
+                icon={Clock}
+                label="Time"
+                value={formatTimeObj(when)}
+                onPress={() => setPicker(picker === 'time' ? null : 'time')}
+              />
               {picker === 'time' && (
                 <View className="items-center pb-2">
                   <DateTimePicker
@@ -523,7 +584,10 @@ export default function AddJobScreen() {
                     display="spinner"
                     minuteInterval={15}
                     onChange={(_, d) => {
-                      if (d) setWhen((cur) => new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), d.getHours(), d.getMinutes()));
+                      if (d)
+                        setWhen(
+                          (cur) => new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), d.getHours(), d.getMinutes()),
+                        );
                       if (Platform.OS === 'android') setPicker(null);
                     }}
                     themeVariant={t.mode}

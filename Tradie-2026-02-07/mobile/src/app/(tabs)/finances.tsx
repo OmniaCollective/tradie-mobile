@@ -40,7 +40,18 @@ import { chaseInvoice } from '@/lib/chase';
 import { useProAccess, FREE_LIMITS } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, ProgressBar, ProTeaser, Sheet, LinkRow } from '@/components/ui';
+import {
+  Group,
+  RowDivider,
+  SectionHeader,
+  PrimaryButton,
+  Segmented,
+  ProgressBar,
+  ProTeaser,
+  Sheet,
+  LinkRow,
+} from '@/components/ui';
+import { toast } from '@/components/Toast';
 
 type ViewMode = 'income' | 'expenses';
 type ExportType = 'invoices' | 'expenses' | 'tax_summary';
@@ -52,7 +63,7 @@ const money = formatMoney;
 const wholePounds = formatPounds;
 
 /** What the customer actually pays the tradie: the total less any CIS the contractor deducted. */
-const received = (invoice: Invoice) => invoice.quote.total - (invoice.cisDeducted ? invoice.cisDeductionAmount ?? 0 : 0);
+const received = (invoice: Invoice) => invoice.quote.total - (invoice.cisDeducted ? (invoice.cisDeductionAmount ?? 0) : 0);
 
 export default function MoneyScreen() {
   const router = useRouter();
@@ -134,7 +145,9 @@ export default function MoneyScreen() {
     const year = new Date().getFullYear();
     const inYear = (iso?: string) => !!iso && parseDate(iso).getFullYear() === year;
     return calculateUSTax({
-      grossIncome: invoices.filter((i) => i.status === 'paid' && inYear(i.paidAt)).reduce((sum, i) => sum + i.quote.total - i.quote.vat, 0),
+      grossIncome: invoices
+        .filter((i) => i.status === 'paid' && inYear(i.paidAt))
+        .reduce((sum, i) => sum + i.quote.total - i.quote.vat, 0),
       businessExpenses: expenses.filter((e) => inYear(e.date)).reduce((sum, e) => sum + e.amount, 0),
       filingStatus: settings.usFilingStatus ?? 'single',
       otherIncome: settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome,
@@ -220,6 +233,7 @@ export default function MoneyScreen() {
     requireDetails('invoice', async (current) => {
       try {
         if (await chaseInvoice(invoice, job, customer, current)) {
+          toast('Reminder sent');
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } catch (error) {
@@ -237,6 +251,7 @@ export default function MoneyScreen() {
       cisDeducted: cisDeducted || undefined,
       cisDeductionAmount: cisDeducted ? cisDeductionAmount : undefined,
     });
+    toast('Marked as paid');
     setCisModal(null);
   };
 
@@ -311,6 +326,7 @@ export default function MoneyScreen() {
     const total = parseFloat(setAsideAmount.replace(',', '.'));
     if (Number.isFinite(total) && total >= 0) {
       setTaxSetAside(total);
+      toast('Amount set aside updated');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setSetAsideAmount('');
@@ -369,7 +385,11 @@ export default function MoneyScreen() {
               <Text
                 className={cn(
                   'text-sm',
-                  invoice.status === 'paid' ? 'text-link ml-1' : daysOverdue(invoice, settings) > 0 ? 'text-alert' : 'text-secondary',
+                  invoice.status === 'paid'
+                    ? 'text-link ml-1'
+                    : daysOverdue(invoice, settings) > 0
+                      ? 'text-alert'
+                      : 'text-secondary',
                 )}
                 numberOfLines={1}
               >
@@ -486,7 +506,9 @@ export default function MoneyScreen() {
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-fg text-sm">Already set aside</Text>
                   <Text className="text-fg text-sm font-semibold">
-                    {taxView.owed > 0 ? `${wholePounds(taxSetAsideTotal)} of ${wholePounds(taxView.owed)}` : wholePounds(taxSetAsideTotal)}
+                    {taxView.owed > 0
+                      ? `${wholePounds(taxSetAsideTotal)} of ${wholePounds(taxView.owed)}`
+                      : wholePounds(taxSetAsideTotal)}
                   </Text>
                 </View>
                 {taxView.owed > 0 ? (
@@ -553,7 +575,11 @@ export default function MoneyScreen() {
                 </Text>
               )}
               <RowDivider />
-              <Pressable onPress={() => setShowExplainer(true)} className="px-4 py-3 active:opacity-70" accessibilityRole="button">
+              <Pressable
+                onPress={() => setShowExplainer(true)}
+                className="px-4 py-3 active:opacity-70"
+                accessibilityRole="button"
+              >
                 <Text className="text-link text-[15px] font-semibold">How this is worked out</Text>
                 <Text className="text-secondary text-xs mt-0.5">{taxView.footnote}</Text>
               </Pressable>
@@ -722,13 +748,17 @@ export default function MoneyScreen() {
                 onPress={then(() => router.push(`/preview?kind=invoice&id=${invoice.id}`))}
               />
               <RowDivider />
-              {invoice.status === 'pending' && <LinkRow icon={Send} label="Send invoice" onPress={then(() => handleSendInvoice(invoice))} />}
+              {invoice.status === 'pending' && (
+                <LinkRow icon={Send} label="Send invoice" onPress={then(() => handleSendInvoice(invoice))} />
+              )}
               {invoice.status === 'sent' && (
                 <>
                   <LinkRow
                     icon={BellRing}
                     label={daysOverdue(invoice, settings) > 0 ? 'Chase payment' : 'Send payment reminder'}
-                    value={invoice.chasedAt?.length ? `Chased ${formatDate(invoice.chasedAt[invoice.chasedAt.length - 1])}` : undefined}
+                    value={
+                      invoice.chasedAt?.length ? `Chased ${formatDate(invoice.chasedAt[invoice.chasedAt.length - 1])}` : undefined
+                    }
                     onPress={then(() => handleChase(invoice))}
                   />
                   <RowDivider />
@@ -746,12 +776,13 @@ export default function MoneyScreen() {
                 <LinkRow
                   icon={Undo2}
                   label="Mark as not paid"
-                  onPress={then(() =>
+                  onPress={then(() => {
                     updateInvoice(invoice.id, {
                       status: invoice.sentAt ? 'sent' : 'pending',
                       paidAt: undefined,
-                    }),
-                  )}
+                    });
+                    toast('Marked as not paid');
+                  })}
                 />
               ) : (
                 <LinkRow icon={CircleCheck} label="Mark paid" onPress={then(() => handleMarkPaid(invoice))} />
@@ -759,7 +790,12 @@ export default function MoneyScreen() {
               <RowDivider />
               <LinkRow icon={Wrench} label="Open job" onPress={then(() => router.push(`/job/${invoice.jobId}`))} />
               <RowDivider />
-              <LinkRow icon={Trash2} label="Delete invoice" destructive onPress={then(() => setConfirmDeleteInvoice(invoice.id))} />
+              <LinkRow
+                icon={Trash2}
+                label="Delete invoice"
+                destructive
+                onPress={then(() => setConfirmDeleteInvoice(invoice.id))}
+              />
             </Group>
           </Sheet>
         );
@@ -774,6 +810,7 @@ export default function MoneyScreen() {
         onConfirm={async () => {
           if (!confirmSent) return;
           updateInvoice(confirmSent.invoiceId, { status: 'sent', sentAt: new Date().toISOString() });
+          toast('Invoice marked as sent');
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }}
         onCancel={() => {}}
@@ -791,6 +828,7 @@ export default function MoneyScreen() {
           if (!confirmDeleteExpense) return;
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           deleteExpense(confirmDeleteExpense);
+          toast('Expense deleted');
         }}
         onCancel={() => {}}
         onDismiss={() => setConfirmDeleteExpense(null)}
@@ -803,7 +841,11 @@ export default function MoneyScreen() {
         confirmText="Delete invoice"
         cancelText="Cancel"
         variant="error"
-        onConfirm={() => confirmDeleteInvoice && deleteInvoice(confirmDeleteInvoice)}
+        onConfirm={() => {
+          if (!confirmDeleteInvoice) return;
+          deleteInvoice(confirmDeleteInvoice);
+          toast('Invoice deleted');
+        }}
         onCancel={() => {}}
         onDismiss={() => setConfirmDeleteInvoice(null)}
       />

@@ -16,6 +16,7 @@ import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, LinkRow, FieldRow, Sheet } from '@/components/ui';
+import { toast } from '@/components/Toast';
 
 const CATEGORIES: ExpenseCategory[] = [
   'materials',
@@ -87,7 +88,7 @@ export default function AddExpenseScreen() {
   const [editing] = useState(() => (editId ? useTradeStore.getState().expenses.find((e) => e.id === editId) : undefined));
   const fullAmount = editing
     ? editing.businessUsePercent
-      ? Math.round((editing.amount * 100) / editing.businessUsePercent * 100) / 100
+      ? Math.round(((editing.amount * 100) / editing.businessUsePercent) * 100) / 100
       : editing.amount
     : undefined;
   const expenses = useTradeStore((s) => s.expenses);
@@ -132,7 +133,11 @@ export default function AddExpenseScreen() {
   })();
 
   const claimable =
-    category === 'phone_internet' ? (num(amount) * Math.min(100, num(businessUse))) / 100 : isMileage ? mileageAmount : num(amount);
+    category === 'phone_internet'
+      ? (num(amount) * Math.min(100, num(businessUse))) / 100
+      : isMileage
+        ? mileageAmount
+        : num(amount);
   const canSave = !!category && claimable > 0 && !saving;
 
   const linkableJobs = jobs
@@ -174,6 +179,7 @@ export default function AddExpenseScreen() {
       };
       if (editing) updateExpense(editing.id, fields);
       else addExpense(fields);
+      toast(editing ? 'Expense updated' : 'Expense added');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goBack();
     } catch (error) {
@@ -185,12 +191,21 @@ export default function AddExpenseScreen() {
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
+      <View
+        className="flex-row items-center justify-between px-4"
+        style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
+      >
         <Pressable onPress={() => goBack()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
           <Text className="text-link text-[17px]">Cancel</Text>
         </Pressable>
         <Text className="text-fg text-[17px] font-semibold">{editing ? 'Edit expense' : 'New expense'}</Text>
-        <Pressable onPress={handleSave} disabled={!canSave} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
+        <Pressable
+          onPress={handleSave}
+          disabled={!canSave}
+          hitSlop={10}
+          className="min-h-[44px] justify-center"
+          accessibilityRole="button"
+        >
           <Text className={cn('text-[17px] font-semibold', canSave ? 'text-link' : 'text-secondary opacity-50')}>Save</Text>
         </Pressable>
       </View>
@@ -251,19 +266,42 @@ export default function AddExpenseScreen() {
 
         {/* Details */}
         <Group className="mb-6">
-          <LinkRow icon={Tag} label="Category" value={category ? EXPENSE_CATEGORY_LABELS[category] : 'Choose'} onPress={() => setPicker('category')} />
+          <LinkRow
+            icon={Tag}
+            label="Category"
+            value={category ? EXPENSE_CATEGORY_LABELS[category] : 'Choose'}
+            onPress={() => setPicker('category')}
+          />
           {category === 'phone_internet' && (
             <>
               <RowDivider />
-              <FieldRow label="Business use" suffix="%" value={businessUse} onChangeText={setBusinessUse} keyboardType="number-pad" />
+              <FieldRow
+                label="Business use"
+                suffix="%"
+                value={businessUse}
+                onChangeText={setBusinessUse}
+                keyboardType="number-pad"
+              />
             </>
           )}
           {settings.vatRegistered && category && !isMileage && category !== 'phone_internet' && (
             <>
               <RowDivider />
-              <FieldRow label="VAT included" hint="Reclaimable" prefix={currencySymbol()} value={vatAmount} onChangeText={setVatAmount} placeholder="0.00" keyboardType="decimal-pad" />
+              <FieldRow
+                label="VAT included"
+                hint="Reclaimable"
+                prefix={currencySymbol()}
+                value={vatAmount}
+                onChangeText={setVatAmount}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
               {num(amount) > 0 && !vatAmount && (
-                <Pressable onPress={() => setVatAmount((num(amount) - num(amount) / 1.2).toFixed(2))} className="px-4 pb-3" accessibilityRole="button">
+                <Pressable
+                  onPress={() => setVatAmount((num(amount) - num(amount) / 1.2).toFixed(2))}
+                  className="px-4 pb-3"
+                  accessibilityRole="button"
+                >
                   <Text className="text-link text-sm font-semibold">Work out 20% VAT</Text>
                 </Pressable>
               )}
@@ -290,7 +328,12 @@ export default function AddExpenseScreen() {
             </View>
           )}
           <RowDivider />
-          <LinkRow icon={Briefcase} label="Job" value={linkedJob ? jobLabel(linkedJob.id) : 'None'} onPress={() => setPicker('job')} />
+          <LinkRow
+            icon={Briefcase}
+            label="Job"
+            value={linkedJob ? jobLabel(linkedJob.id) : 'None'}
+            onPress={() => setPicker('job')}
+          />
         </Group>
 
         {/* Receipt */}
@@ -298,7 +341,11 @@ export default function AddExpenseScreen() {
           {receiptUri ? (
             <View className="p-4">
               <Image source={{ uri: receiptUri }} style={{ width: '100%', height: 220, borderRadius: 12 }} resizeMode="cover" />
-              <Pressable onPress={() => setReceiptUri(null)} className="min-h-[44px] items-center justify-center mt-1" accessibilityRole="button">
+              <Pressable
+                onPress={() => setReceiptUri(null)}
+                className="min-h-[44px] items-center justify-center mt-1"
+                accessibilityRole="button"
+              >
                 <Text className="text-alert text-[15px] font-semibold">Remove receipt</Text>
               </Pressable>
             </View>

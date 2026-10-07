@@ -14,6 +14,7 @@ import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, PrimaryButton, Sheet, LinkRow } from '@/components/ui';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { toast } from '@/components/Toast';
 
 const SUGGESTIONS = {
   GB: ['Public liability insurance', 'Gas Safe registration', 'Van insurance', 'Part P / NICEIC', 'Waste carrier licence'],
@@ -59,6 +60,7 @@ export function RenewalsSection() {
     if (draft.id) updateRenewal(draft.id, fields);
     setDraft(null);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    toast('Saved. Reminders set');
     await scheduleRenewalReminders({ id, name: fields.name, expires: fields.expires });
   };
 
@@ -195,6 +197,7 @@ export function RenewalsSection() {
           if (!pendingDelete) return;
           await cancelRenewalReminders(pendingDelete.id);
           deleteRenewal(pendingDelete.id);
+          toast('Deleted');
         }}
         onCancel={() => {}}
         onDismiss={() => setPendingDelete(null)}

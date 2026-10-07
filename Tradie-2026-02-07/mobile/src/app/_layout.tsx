@@ -11,6 +11,7 @@ import { palettes, themeVars, useColorMode, applyAppearance } from '@/lib/theme'
 import { useAuthSync } from '@/lib/auth';
 import { useTradeStore } from '@/lib/store';
 import { addNotificationResponseListener } from '@/lib/notifications';
+import { ToastHost } from '@/components/Toast';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -107,6 +108,7 @@ function RootLayoutNav() {
           }}
         />
       </Stack>
+      <ToastHost />
     </ThemeProvider>
     </View>
   );

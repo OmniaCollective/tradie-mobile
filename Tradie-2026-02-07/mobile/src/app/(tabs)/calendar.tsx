@@ -10,6 +10,7 @@ import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, PrimaryButton } from '@/components/ui';
 import { JobStatus } from '@/components/JobStatus';
+import { toast } from '@/components/Toast';
 import { activeOffer, formatSlot, slotDate } from '@/lib/booking';
 
 // UK weeks start on Monday.
@@ -244,7 +245,10 @@ export default function JobsScreen() {
                     </Pressable>
                     {job.status === 'SCHEDULED' ? (
                       <Pressable
-                        onPress={() => updateJob(job.id, { status: 'IN_PROGRESS' })}
+                        onPress={() => {
+                          updateJob(job.id, { status: 'IN_PROGRESS' });
+                          toast('Job started');
+                        }}
                         hitSlop={8}
                         className="min-h-[44px] justify-center pl-2"
                         accessibilityRole="button"
@@ -392,7 +396,9 @@ export default function JobsScreen() {
             </>
           )}
         </Group>
-        <Text className="text-secondary text-[13px] mx-1 mt-2">Tip: tap the microphone key on the keyboard to speak a reminder.</Text>
+        <Text className="text-secondary text-[13px] mx-1 mt-2">
+          Tip: tap the microphone key on the keyboard to speak a reminder.
+        </Text>
       </View>
     </ScrollView>
   );
