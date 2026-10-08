@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FileText,
@@ -74,7 +73,6 @@ function StepBars({ step }: { step: 1 | 2 }) {
 }
 
 export default function OnboardingScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const refreshPro = useRefreshPro();
@@ -127,10 +125,9 @@ export default function OnboardingScreen() {
       updateSettings(updates);
     }
     setCountry(country); // saves the choice, so a later change of phone region doesn't move them
-    completeOnboarding();
     track('setup_finished');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace('/(tabs)');
+    completeOnboarding(); // the root stack then opens the tabs
   };
 
   const topBar = (current: 1 | 2) => (

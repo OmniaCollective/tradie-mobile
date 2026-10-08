@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { regionFor, type Country, type RegionInfo } from './region';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -887,6 +888,13 @@ export const useInvoices = () => useTradeStore(useShallow((s) => s.invoices));
 export const useExpenses = () => useTradeStore(useShallow((s) => s.expenses));
 export const useTodos = () => useTradeStore(useShallow((s) => s.todos));
 export const useRenewals = () => useTradeStore(useShallow((s) => s.renewals));
+
+/** True once saved data has loaded from the phone; decide nothing about the tradie before then. */
+export const useHasHydrated = () =>
+  useSyncExternalStore(
+    (onChange) => useTradeStore.persist.onFinishHydration(onChange),
+    () => useTradeStore.persist.hasHydrated(),
+  );
 
 /** Days until a renewal expires (negative once it has). */
 export function daysUntil(day: string, now: Date = new Date()): number {
