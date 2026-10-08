@@ -1,42 +1,36 @@
+/**
+ * Home answers "what needs me?": jobs grouped by where they are (lib/jobSteps.ts), with
+ * Remind on quiet quotes and Chase on overdue invoices. Dates and money live in Diary and
+ * Money. Agreed design: release/ux-journey-review.md.
+ */
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Plus, ChevronRight, ChevronDown, ShieldAlert, Circle, CircleCheck } from 'lucide-react-native';
 import {
-  Plus,
-  Phone,
-  Navigation,
-  ChevronRight,
-  CircleAlert,
-  Mic,
-  Check,
-  ShieldAlert,
-  Keyboard,
-  Circle,
-  CircleCheck,
-} from 'lucide-react-native';
-import {
-  useTradeStore,
   useJobs,
   useInvoices,
   useSettings,
   useRenewals,
+  useCustomers,
   type Job,
+  type Invoice,
   getRegion,
-  daysOverdue,
   daysUntil,
 } from '@/lib/store';
-import { renewalStatus } from '@/components/Renewals';
 import { getJobTypeLabel } from '@/lib/store';
-import { formatTime, toDateKey } from '@/lib/dates';
+import { jobPosition, GROUP_ORDER, GROUP_TITLES, type JobGroup, type JobPosition } from '@/lib/jobSteps';
+import { renewalStatus } from '@/components/Renewals';
+import { formatTime, toDateKey, parseDate } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
-import { VOICE_ENABLED } from '@/lib/features';
 import { formatAmount } from '@/lib/money';
-import { Group, RowDivider, SectionHeader, PrimaryButton, SecondaryButton } from '@/components/ui';
+import { chaseInvoice, remindAboutQuote } from '@/lib/chase';
+import { Group, RowDivider, SectionHeader, PrimaryButton } from '@/components/ui';
+import { Tip } from '@/components/Tip';
+import { toast } from '@/components/Toast';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const money = formatAmount;
 
 function greeting(name: string): string {
   const hour = new Date().getHours();
@@ -45,25 +39,44 @@ function greeting(name: string): string {
   return first ? `${part}, ${first}` : `Good ${part.toLowerCase()}`;
 }
 
-function dayLabel(dateStr: string | undefined, todayStr: string): string {
-  if (!dateStr) return '';
-  if (dateStr === todayStr) return 'Today';
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (dateStr === toDateKey(tomorrow)) return 'Tomorrow';
-  // Parse the stored local date as local noon so it can't slip a day in any timezone.
-  return new Date(`${dateStr}T12:00:00`).toLocaleDateString(getRegion().locale, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-}
-
-function daysAgo(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS);
+function ago(iso: string, now: number): string {
+  const days = Math.floor((now - new Date(iso).getTime()) / DAY_MS);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   return `${days} days ago`;
+}
+
+function dayLabel(dateKey: string, now: Date): string {
+  if (dateKey === toDateKey(now)) return 'Today';
+  if (dateKey === toDateKey(new Date(now.getTime() + DAY_MS))) return 'Tomorrow';
+  return parseDate(dateKey).toLocaleDateString(getRegion().locale, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** The second line of a job row, in a tradie's words. */
+function whereText(job: Job, invoice: Invoice | undefined, p: JobPosition, first: string, now: Date, terms: number): string {
+  switch (p.group) {
+    case 'send':
+      return 'Quote not sent yet';
+    case 'waiting':
+      return p.facts.offered
+        ? `Times offered · waiting for ${first}`
+        : `Quote sent ${ago(job.quoteSentAt!, now.getTime())} · waiting for ${first}`;
+    case 'tobook':
+      return 'Said yes · needs a time';
+    case 'booked':
+      return `${dayLabel(job.scheduledDate!, now)} · ${formatTime(job.scheduledTime)}`;
+    case 'invoice':
+      return 'Done · ready to invoice';
+    case 'unpaid': {
+      if (p.overdueDays > 0) return `Invoice ${p.overdueDays} ${p.overdueDays === 1 ? 'day' : 'days'} overdue`;
+      const dueIn = Math.max(0, terms - Math.floor((now.getTime() - new Date(invoice!.sentAt!).getTime()) / DAY_MS));
+      return `Invoiced ${ago(invoice!.sentAt!, now.getTime())} · due in ${dueIn} ${dueIn === 1 ? 'day' : 'days'}`;
+    }
+    case 'paid':
+      return invoice?.paidAt ? `Paid ${ago(invoice.paidAt, now.getTime())}` : 'Paid';
+    case 'lost':
+      return 'Didn’t go ahead';
+  }
 }
 
 export default function HomeScreen() {
@@ -72,50 +85,59 @@ export default function HomeScreen() {
   const t = useTheme();
   const jobs = useJobs();
   const invoices = useInvoices();
+  const customers = useCustomers();
   const settings = useSettings();
-  const getCustomer = useTradeStore((s) => s.getCustomer);
-  const updateJob = useTradeStore((s) => s.updateJob);
-
-  // Read the clock once per visit; the figures don't need to tick while open.
-  const [nowMs] = useState(() => Date.now());
-  const todayStr = toDateKey(new Date(nowMs));
-
-  const money_ = useMemo(() => {
-    const now = new Date(nowMs);
-    const unpaid = invoices.filter((i) => i.status !== 'paid');
-    const overdue = unpaid.filter((i) => daysOverdue(i, settings, now) > 0);
-    const paidThisMonth = invoices.filter((i) => {
-      if (i.status !== 'paid' || !i.paidAt) return false;
-      const d = new Date(i.paidAt);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    });
-    return {
-      unpaidTotal: unpaid.reduce((sum, i) => sum + i.quote.total, 0),
-      overdueCount: overdue.length,
-      paidTotal: paidThisMonth.reduce((sum, i) => sum + i.quote.total, 0),
-      paidCount: paidThisMonth.length,
-    };
-  }, [invoices, nowMs, settings]);
-
-  const inProgress = jobs.find((j) => j.status === 'IN_PROGRESS');
-  const upcoming = useMemo(
-    () =>
-      jobs
-        .filter((j) => j.status === 'SCHEDULED' && j.scheduledDate && j.scheduledDate >= todayStr)
-        .sort((a, b) =>
-          `${a.scheduledDate}T${a.scheduledTime || '00:00'}`.localeCompare(`${b.scheduledDate}T${b.scheduledTime || '00:00'}`),
-        ),
-    [jobs, todayStr],
-  );
-  const nextUp: Job | undefined = inProgress ?? upcoming[0];
-  const comingUp = upcoming.filter((j) => j.id !== nextUp?.id).slice(0, 3);
-  // Quotes not yet accepted (sent or still to send), and accepted jobs that still need a time.
-  const quotes = jobs.filter((j) => j.status === 'REQUESTED' || j.status === 'QUOTED');
-  const toBook = jobs.filter((j) => j.status === 'APPROVED' && !j.scheduledDate);
-  // Insurance and licences expiring within 30 days, or already expired.
   const renewals = useRenewals();
+  const [showLost, setShowLost] = useState(false);
+
+  // Read the clock once per visit; the lists don't need to tick while open.
+  const [nowMs] = useState(() => Date.now());
+  const now = useMemo(() => new Date(nowMs), [nowMs]);
+  const terms = settings.paymentTermsDays ?? 14;
+
+  const rows = useMemo(() => {
+    const invoiceFor = new Map(invoices.map((inv) => [inv.jobId, inv]));
+    const byId = new Map(customers.map((c) => [c.id, c]));
+    return jobs.map((job) => {
+      const invoice = invoiceFor.get(job.id);
+      const customer = byId.get(job.customerId);
+      const p = jobPosition(job, invoice, terms, now);
+      const first = customer?.name.trim().split(/\s+/)[0] || 'the customer';
+      return { job, invoice, customer, p, text: whereText(job, invoice, p, first, now, terms) };
+    });
+  }, [jobs, invoices, customers, terms, now]);
+  type Row = (typeof rows)[number];
+
+  const groups = useMemo(() => {
+    const thisMonth = (iso?: string) => {
+      if (!iso) return false;
+      const d = new Date(iso);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    };
+    const sorted = Object.fromEntries(GROUP_ORDER.map((g) => [g, [] as Row[]])) as Record<JobGroup, Row[]>;
+    for (const r of rows) {
+      // Paid: only this month's, so Home stays about what's live.
+      if (r.p.group === 'paid' && !thisMonth(r.invoice?.paidAt)) continue;
+      sorted[r.p.group].push(r);
+    }
+    const when = (r: Row) => `${r.job.scheduledDate ?? ''}T${r.job.scheduledTime ?? ''}`;
+    sorted.booked.sort((a, b) => when(a).localeCompare(when(b)));
+    sorted.unpaid.sort((a, b) => b.p.overdueDays - a.p.overdueDays);
+    sorted.waiting.sort((a, b) => b.p.quoteWaitingDays - a.p.quoteWaitingDays);
+    return sorted;
+  }, [rows, now]);
+
+  const overdueCount = groups.unpaid.filter((r) => r.p.overdueDays > 0).length;
+  const tally = [
+    { label: 'To send', n: groups.send.length, alert: false },
+    { label: 'Waiting', n: groups.waiting.length + groups.tobook.length, alert: false },
+    { label: 'To invoice', n: groups.invoice.length, alert: false },
+    overdueCount
+      ? { label: 'Overdue', n: overdueCount, alert: true }
+      : { label: 'Unpaid', n: groups.unpaid.length, alert: false },
+  ];
+
   const dueRenewals = renewals.filter((r) => daysUntil(r.expires) <= 30).sort((x, y) => x.expires.localeCompare(y.expires));
-  // First-run checklist: what quotes and invoices need from the profile.
   const setupSteps = [
     {
       label: 'Business details',
@@ -125,120 +147,104 @@ export default function HomeScreen() {
     { label: 'How customers pay you', hint: 'Bank or payment details for invoices', done: !!settings.paymentDetails.trim() },
     { label: 'Insurance and licences', hint: 'Optional · reminders before they expire', done: renewals.length > 0 },
   ];
-
+  const setupLeft = setupSteps.some((s) => !s.done);
+  const hasJobs = jobs.length > 0;
+  const today = now.toLocaleDateString(getRegion().locale, { weekday: 'long', day: 'numeric', month: 'long' });
   const label = (job: Job) => getJobTypeLabel(settings.trade, job.type);
-  const customerName = (job: Job) => getCustomer(job.customerId)?.name ?? 'Unknown customer';
 
-  const nextCustomer = nextUp ? getCustomer(nextUp.customerId) : undefined;
-  const callNext = () => nextCustomer?.phone && Linking.openURL(`tel:${nextCustomer.phone}`);
-  const directionsNext = () => {
-    if (!nextCustomer) return;
-    const address = encodeURIComponent(`${nextCustomer.address}, ${nextCustomer.postcode}`);
-    Linking.openURL(`https://maps.apple.com/?daddr=${address}`);
+  const nudge = async (r: Row) => {
+    if (!r.customer) return;
+    if (r.p.nudge === 'chase' && r.invoice) {
+      if (await chaseInvoice(r.invoice, r.job, r.customer, settings)) toast('Reminder sent');
+    } else if (await remindAboutQuote(r.job, r.customer, label(r.job), settings)) {
+      toast('Reminder sent');
+    }
   };
 
-  const today = new Date().toLocaleDateString(getRegion().locale, { weekday: 'long', day: 'numeric', month: 'long' });
+  const jobList = (g: JobGroup, items: Row[]) => (
+    <Group>
+      {items.map((r, i) => {
+        const amount = (r.invoice?.quote ?? r.job.quote)?.total;
+        return (
+          <View key={r.job.id}>
+            {i > 0 && <RowDivider />}
+            <View className="flex-row items-center">
+              <Pressable
+                onPress={() => router.push(`/job/${r.job.id}`)}
+                className="flex-1 flex-row items-center pl-4 pr-2 py-3 min-h-[62px] active:opacity-70"
+                accessibilityRole="button"
+                accessibilityLabel={`${label(r.job)}, ${r.customer?.name ?? ''}, ${r.text}${amount !== undefined ? ', ' + formatAmount(amount) : ''}`}
+              >
+                <View className="flex-1 mr-3">
+                  <Text className="text-fg text-base font-medium" numberOfLines={1}>
+                    {label(r.job)}
+                  </Text>
+                  <Text className={r.p.overdueDays > 0 ? 'text-alert text-sm' : 'text-secondary text-sm'} numberOfLines={1}>
+                    {r.customer?.name ?? 'Unknown customer'} · {r.text}
+                  </Text>
+                </View>
+                {amount !== undefined && (
+                  <Text className={g === 'paid' ? 'text-link text-base font-semibold' : 'text-fg text-base font-semibold'}>
+                    {formatAmount(amount)}
+                  </Text>
+                )}
+              </Pressable>
+              {r.p.nudge ? (
+                <Pressable
+                  onPress={() => nudge(r)}
+                  className="bg-bg rounded-xl h-9 px-3 mr-3 items-center justify-center active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityLabel={`${r.p.nudge === 'chase' ? 'Chase' : 'Remind'} ${r.customer?.name ?? ''}`}
+                >
+                  <Text className="text-link text-[15px] font-semibold">{r.p.nudge === 'chase' ? 'Chase' : 'Remind'}</Text>
+                </Pressable>
+              ) : (
+                <View className="mr-4">
+                  <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </Group>
+  );
 
   return (
     <ScrollView
       className="flex-1 bg-bg"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, paddingHorizontal: 16 }}
     >
-      {/* Header: greeting first, then the main action full width */}
-      <View className="mb-7">
+      <View className="mb-6">
         <Text className="text-secondary text-sm">{today}</Text>
-        <Text className="text-fg text-[28px] font-bold tracking-tight" numberOfLines={1}>
+        <Text className="text-fg text-[28px] font-bold tracking-tight" numberOfLines={1} accessibilityRole="header">
           {greeting(settings.ownerName ?? '')}
         </Text>
-        {jobs.length > 0 && (
-          <PrimaryButton icon={Plus} label="New job" onPress={() => router.push('/add-job')} className="mt-4" />
-        )}
+        {hasJobs && <PrimaryButton icon={Plus} label="New job" onPress={() => router.push('/add-job')} className="mt-4" />}
       </View>
 
-      {jobs.length === 0 ? (
-        /* First run: a choice of what to do first, each one tappable */
-        <View>
-          <Group className="p-5 mb-8">
-            <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
-            <Text className="text-secondary text-[15px] leading-5 mb-4">
-              Add the customer and the job, and Tradie works out the quote from your prices.
-            </Text>
-            {VOICE_ENABLED ? (
-              <View className="flex-row gap-3">
-                <PrimaryButton
-                  icon={Keyboard}
-                  label="Type it in"
-                  onPress={() => router.push('/add-job?mode=type')}
-                  className="flex-1"
-                />
-                <SecondaryButton
-                  icon={Mic}
-                  label="Say it"
-                  onPress={() => router.push('/add-job?mode=voice')}
-                  className="flex-1"
-                />
-              </View>
-            ) : (
-              <PrimaryButton icon={Plus} label="Add a job" onPress={() => router.push('/add-job')} />
-            )}
-          </Group>
+      <Tip id="home" text="Start here: add a job, send the quote, and Tradie tracks it to paid." className="mb-6" />
 
-          <SectionHeader title="Set up your business" />
-          <Group className="mb-2">
-            {setupSteps.map((step, i) => (
-              <View key={step.label}>
-                {i > 0 && <RowDivider />}
-                <Pressable
-                  onPress={() => router.push('/(tabs)/settings')}
-                  className="flex-row items-center px-4 min-h-[56px] py-2 active:opacity-70"
-                  accessibilityRole="button"
-                  accessibilityState={{ checked: step.done }}
-                >
-                  {step.done ? (
-                    <CircleCheck size={22} color={t.link} strokeWidth={2} />
-                  ) : (
-                    <Circle size={22} color={t.secondary} strokeWidth={2} />
-                  )}
-                  <View className="flex-1 ml-3">
-                    <Text className={step.done ? 'text-secondary text-base' : 'text-fg text-base'}>{step.label}</Text>
-                    <Text className="text-secondary text-[13px]">{step.hint}</Text>
-                  </View>
-                  <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
-                </Pressable>
+      {!hasJobs ? (
+        <Group className="p-5 mb-8">
+          <Text className="text-fg text-[17px] font-semibold mb-1">Add your first job</Text>
+          <Text className="text-secondary text-[15px] leading-5 mb-4">
+            Add the customer and the job, and Tradie works out the quote from your prices.
+          </Text>
+          <PrimaryButton icon={Plus} label="Add a job" onPress={() => router.push('/add-job')} />
+        </Group>
+      ) : (
+        <>
+          {/* Where things stand */}
+          <Group className="flex-row mb-8 py-3">
+            {tally.map((x) => (
+              <View key={x.label} className="flex-1 items-center" accessible accessibilityLabel={`${x.n} ${x.label}`}>
+                <Text className={x.alert ? 'text-alert text-[22px] font-bold' : 'text-fg text-[22px] font-bold'}>{x.n}</Text>
+                <Text className="text-secondary text-xs">{x.label}</Text>
               </View>
             ))}
           </Group>
-          <Text className="text-secondary text-[13px] mx-1">These go on your quotes and invoices. You can do them any time.</Text>
-        </View>
-      ) : (
-        <>
-          {/* Money */}
-          <Pressable onPress={() => router.push('/(tabs)/finances')} accessibilityRole="button">
-            <Group className="flex-row mb-8">
-              <View className="flex-1 px-4 py-3.5">
-                <Text className="text-secondary text-[13px]">Unpaid</Text>
-                <Text className="text-fg text-[22px] font-bold tracking-tight mt-1">{money(money_.unpaidTotal)}</Text>
-                {money_.overdueCount > 0 ? (
-                  <View className="flex-row items-center mt-1">
-                    <CircleAlert size={14} color={t.alert} strokeWidth={2} />
-                    <Text className="text-alert text-xs ml-1">{money_.overdueCount} overdue</Text>
-                  </View>
-                ) : (
-                  <Text className="text-secondary text-xs mt-1">Nothing overdue</Text>
-                )}
-              </View>
-              <View className="w-px bg-divider" />
-              <View className="flex-1 px-4 py-3.5">
-                <Text className="text-secondary text-[13px]">Paid this month</Text>
-                <Text className="text-fg text-[22px] font-bold tracking-tight mt-1">{money(money_.paidTotal)}</Text>
-                <Text className="text-secondary text-xs mt-1">
-                  {money_.paidCount} {money_.paidCount === 1 ? 'invoice' : 'invoices'}
-                </Text>
-              </View>
-            </Group>
-          </Pressable>
 
-          {/* Renewals due */}
           {dueRenewals.length > 0 && (
             <View className="mb-8">
               <SectionHeader title="Renewals" />
@@ -268,180 +274,73 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Next up */}
-          <View className="mb-8">
-            <SectionHeader title={inProgress ? 'On now' : 'Next up'} />
-            {nextUp ? (
-              <Group className="px-4 pt-4">
-                <Pressable onPress={() => router.push(`/job/${nextUp.id}`)} accessibilityRole="button">
-                  <View className="flex-row items-baseline justify-between mb-2.5">
-                    <Text className="text-link text-sm font-semibold">
-                      {inProgress
-                        ? 'In progress'
-                        : `${dayLabel(nextUp.scheduledDate, todayStr)} · ${formatTime(nextUp.scheduledTime)}`}
-                    </Text>
-                    {nextUp.quote && <Text className="text-secondary text-sm">{money(nextUp.quote.total)}</Text>}
-                  </View>
-                  <Text className="text-fg text-[17px] font-semibold">{label(nextUp)}</Text>
-                  <Text className="text-secondary text-[15px] mt-0.5" numberOfLines={1}>
-                    {customerName(nextUp)}
-                    {nextCustomer?.address ? ` · ${nextCustomer.address}` : ''}
-                  </Text>
-                </Pressable>
-                <View className="flex-row border-t border-divider mt-3.5">
-                  {nextCustomer?.phone ? (
-                    <Pressable onPress={callNext} className="flex-row items-center min-h-[48px] mr-6" accessibilityRole="button">
-                      <Phone size={20} color={t.link} strokeWidth={2} />
-                      <Text className="text-link text-[15px] font-semibold ml-1.5">Call</Text>
-                    </Pressable>
-                  ) : null}
-                  {nextCustomer?.address ? (
-                    <Pressable
-                      onPress={directionsNext}
-                      className="flex-row items-center min-h-[48px] mr-6"
-                      accessibilityRole="button"
-                    >
-                      <Navigation size={20} color={t.link} strokeWidth={2} />
-                      <Text className="text-link text-[15px] font-semibold ml-1.5">Directions</Text>
-                    </Pressable>
-                  ) : null}
-                  {inProgress && (
-                    <Pressable
-                      onPress={() => updateJob(inProgress.id, { status: 'COMPLETED', completedAt: new Date().toISOString() })}
-                      className="flex-row items-center min-h-[48px] ml-auto"
-                      accessibilityRole="button"
-                    >
-                      <Check size={20} color={t.link} strokeWidth={2} />
-                      <Text className="text-link text-[15px] font-semibold ml-1.5">Mark done</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </Group>
-            ) : (
-              <Group className="p-4">
-                <Text className="text-secondary text-[15px]">Nothing booked yet.</Text>
-                <SecondaryButton
-                  compact
-                  className="self-start mt-3"
-                  label="Open calendar"
-                  onPress={() => router.push('/(tabs)/calendar')}
+          {GROUP_ORDER.filter((g) => g !== 'lost' && groups[g].length > 0).map((g) => (
+            <View key={g} className="mb-8">
+              <View className="flex-row justify-between items-baseline mx-1 mb-2">
+                <Text className="text-fg text-[17px] font-semibold" accessibilityRole="header">
+                  {g === 'paid' ? 'Paid this month' : GROUP_TITLES[g]}
+                </Text>
+                <Text className="text-secondary text-sm">{groups[g].length}</Text>
+              </View>
+              {jobList(g, groups[g])}
+            </View>
+          ))}
+
+          {groups.lost.length > 0 && (
+            <View className="mb-8">
+              <Pressable
+                onPress={() => setShowLost((v) => !v)}
+                className="flex-row items-center justify-between mx-1 mb-2 min-h-[44px]"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showLost }}
+              >
+                <Text className="text-secondary text-[15px]">
+                  {groups.lost.length} {groups.lost.length === 1 ? 'job' : 'jobs'} didn’t go ahead
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={t.secondary}
+                  strokeWidth={2}
+                  style={{ transform: [{ rotate: showLost ? '180deg' : '0deg' }] }}
                 />
-              </Group>
-            )}
-          </View>
-
-          {/* Coming up */}
-          {comingUp.length > 0 && (
-            <View className="mb-8">
-              <SectionHeader title="Coming up" actionLabel="See all" onAction={() => router.push('/(tabs)/calendar')} />
-              <Group>
-                {comingUp.map((job, i) => (
-                  <View key={job.id}>
-                    {i > 0 && <RowDivider />}
-                    <Pressable
-                      onPress={() => router.push(`/job/${job.id}`)}
-                      className="flex-row items-center px-4 py-3 active:opacity-70"
-                      accessibilityRole="button"
-                    >
-                      <View className="w-[88px]">
-                        <Text className="text-fg text-sm font-semibold">{dayLabel(job.scheduledDate, todayStr)}</Text>
-                        <Text className="text-secondary text-[13px]">{formatTime(job.scheduledTime)}</Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-fg text-base" numberOfLines={1}>
-                          {label(job)}
-                        </Text>
-                        <Text className="text-secondary text-sm" numberOfLines={1}>
-                          {customerName(job)}
-                        </Text>
-                      </View>
-                      <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
-                    </Pressable>
-                  </View>
-                ))}
-              </Group>
-            </View>
-          )}
-
-          {/* Quotes waiting */}
-          {quotes.length > 0 && (
-            <View className="mb-8">
-              <SectionHeader title="Quotes waiting" />
-              <Group>
-                {quotes.map((job, i) => {
-                  const sent = job.status === 'QUOTED' && !!job.quoteSentAt;
-                  const expired = sent && !!job.quote?.validUntil && new Date(job.quote.validUntil) < new Date();
-                  return (
-                    <JobRow
-                      key={job.id}
-                      first={i === 0}
-                      title={label(job)}
-                      detail={`${customerName(job)} · ${expired ? 'expired' : sent ? `sent ${daysAgo(job.quoteSentAt!)}` : 'not sent yet'}`}
-                      alert={expired}
-                      amount={job.quote ? money(job.quote.total) : undefined}
-                      onPress={() => router.push(`/job/${job.id}`)}
-                    />
-                  );
-                })}
-              </Group>
-            </View>
-          )}
-
-          {/* Accepted, not booked yet */}
-          {toBook.length > 0 && (
-            <View className="mb-8">
-              <SectionHeader title="To book" />
-              <Group>
-                {toBook.map((job, i) => (
-                  <JobRow
-                    key={job.id}
-                    first={i === 0}
-                    title={label(job)}
-                    detail={`${customerName(job)} · ${job.offeredSlots?.length ? 'times offered' : 'quote accepted'}`}
-                    amount={job.quote ? money(job.quote.total) : undefined}
-                    onPress={() => router.push(`/job/${job.id}`)}
-                  />
-                ))}
-              </Group>
+              </Pressable>
+              {showLost && jobList('lost', groups.lost)}
             </View>
           )}
         </>
       )}
-    </ScrollView>
-  );
-}
 
-function JobRow({
-  first,
-  title,
-  detail,
-  alert,
-  amount,
-  onPress,
-}: {
-  first: boolean;
-  title: string;
-  detail: string;
-  alert?: boolean;
-  amount?: string;
-  onPress: () => void;
-}) {
-  const t = useTheme();
-  return (
-    <View>
-      {!first && <RowDivider />}
-      <Pressable onPress={onPress} className="flex-row items-center px-4 py-3 active:opacity-70" accessibilityRole="button">
-        <View className="flex-1 mr-3">
-          <Text className="text-fg text-base font-medium" numberOfLines={1}>
-            {title}
-          </Text>
-          <Text className={alert ? 'text-alert text-sm' : 'text-secondary text-sm'} numberOfLines={1}>
-            {detail}
-          </Text>
-        </View>
-        {!!amount && <Text className="text-fg text-base font-semibold mr-2">{amount}</Text>}
-        <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
-      </Pressable>
-    </View>
+      {/* Set-up list (option A): under the first-job card, and under the jobs until it's done */}
+      {setupLeft && (
+        <>
+          <SectionHeader title="Set up your business" />
+          <Group className="mb-2">
+            {setupSteps.map((step, i) => (
+              <View key={step.label}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => router.push('/(tabs)/settings')}
+                  className="flex-row items-center px-4 min-h-[56px] py-2 active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityState={{ checked: step.done }}
+                >
+                  {step.done ? (
+                    <CircleCheck size={22} color={t.link} strokeWidth={2} />
+                  ) : (
+                    <Circle size={22} color={t.secondary} strokeWidth={2} />
+                  )}
+                  <View className="flex-1 ml-3">
+                    <Text className={step.done ? 'text-secondary text-base' : 'text-fg text-base'}>{step.label}</Text>
+                    <Text className="text-secondary text-[13px]">{step.hint}</Text>
+                  </View>
+                  <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
+                </Pressable>
+              </View>
+            ))}
+          </Group>
+          <Text className="text-secondary text-[13px] mx-1">These go on your quotes and invoices. You can do them any time.</Text>
+        </>
+      )}
+    </ScrollView>
   );
 }

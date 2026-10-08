@@ -75,3 +75,28 @@ export async function chaseInvoice(invoice: Invoice, job: Job, customer: Custome
   }
   return sent;
 }
+
+/** "Remind" on a quote with no reply (the agreed friendly wording, editable before it's sent). */
+export function quoteReminderMessage(job: Job, customer: Customer, jobLabel: string, settings: BusinessSettings): string {
+  const first = customer.name.trim().split(/\s+/)[0] || customer.name;
+  const amount = job.quote ? ` (${formatMoney(job.quote.total)})` : '';
+  const me = settings.ownerName.trim().split(/\s+/)[0];
+  const business = settings.businessName.trim();
+  const sign = [me, business].filter(Boolean).join(', ') || businessDisplayName(settings);
+  return `Hi ${first}, just checking you got my quote for the ${jobLabel.toLowerCase()}${amount}. Happy to answer any questions. ${sign}`;
+}
+
+/** Opens the quote reminder in Messages (or the share sheet) and records it if it was sent. */
+export async function remindAboutQuote(job: Job, customer: Customer, jobLabel: string, settings: BusinessSettings): Promise<boolean> {
+  const message = quoteReminderMessage(job, customer, jobLabel, settings);
+  let sent = false;
+  if (customer.phone?.trim() && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
+    const { result } = await SMS.sendSMSAsync([customer.phone], message);
+    sent = result !== 'cancelled';
+  } else {
+    const r = await Share.share({ message });
+    sent = r.action !== Share.dismissedAction;
+  }
+  if (sent) useTradeStore.getState().recordQuoteReminder(job.id);
+  return sent;
+}

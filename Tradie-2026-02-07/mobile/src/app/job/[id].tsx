@@ -336,7 +336,7 @@ export default function JobDetailScreen() {
       case 'QUOTED':
         return {
           label: 'Customer approved the quote',
-          run: () => updateJob(job.id, { status: 'APPROVED' }),
+          run: () => updateJob(job.id, { status: 'APPROVED', acceptedAt: job.acceptedAt ?? new Date().toISOString() }),
         };
       case 'APPROVED':
         // Once times are offered, booking happens from the offered times.
@@ -1220,7 +1220,7 @@ export default function JobDetailScreen() {
         onConfirm={async () => {
           await cancelJobReminder(job.id);
           await removeJobFromCalendar(job.id);
-          updateJob(job.id, { status: 'APPROVED', scheduledDate: undefined, scheduledTime: undefined });
+          updateJob(job.id, { status: 'APPROVED', acceptedAt: job.acceptedAt ?? new Date().toISOString(), scheduledDate: undefined, scheduledTime: undefined });
           toast('Booking cancelled');
         }}
         onCancel={() => {}}
