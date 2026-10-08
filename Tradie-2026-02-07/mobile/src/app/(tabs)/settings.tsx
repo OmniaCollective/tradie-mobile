@@ -112,8 +112,9 @@ export default function AccountScreen() {
                   <Text className="flex-1 text-fg text-base mr-3">{r.label}</Text>
                   {!!r.value && (
                     <Text
-                      className={cn('text-[15px] mr-2 max-w-[60%]', r.alert ? 'text-alert' : 'text-secondary')}
-                      numberOfLines={1}
+                      // Wraps rather than cutting off, so it still reads with larger text.
+                      className={cn('text-[15px] mr-2 max-w-[60%] text-right', r.alert ? 'text-alert' : 'text-secondary')}
+                      numberOfLines={2}
                     >
                       {r.value}
                     </Text>

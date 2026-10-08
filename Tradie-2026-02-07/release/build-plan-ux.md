@@ -1,6 +1,6 @@
 # Build plan: the agreed UX (before build 28)
 
-**Progress (2026-10-08):** sections 1–11 built and committed, each checked natively on the simulator except section 11 (reminders), which still needs its phone check. Next: 12 analytics, 13 accessibility, 14 checks, 15 screenshots and listing.
+**Progress (2026-10-08):** sections 1–13 built, committed and checked natively on the simulator. Next: 14 checks, 15 screenshots and listing.
 
 Everything here was agreed with Paul in the clickable test (https://claude.ai/artifact/QXvzAs14oYerYAaEWkbxcz). Details and reasons: `ux-journey-review.md`. Built in this order, one section at a time, each checked in the simulator before the next.
 
@@ -104,6 +104,7 @@ Approved by Paul in the clickable test (2026-10-08).
 - VoiceOver: every button and row has a spoken name; pop-up sheets read as one block (fixes the job type sheet).
 - Larger Text: screens grow with the iPhone's text size without cutting words off.
 
+- **Done (2026-10-08):** every screen walked with Maestro, which reads the same accessibility tree as VoiceOver (buttons, rows and sheets reachable by name; sheets read as one block; toggle rows read as one switch). Larger Text checked at extra-extra-large on Home, New job, Diary, Money and Account: text grows and wraps without clipping; Account summaries wrap to two lines.
 ## 14. Checks before build 28
 
 - Typecheck, lint, expo-doctor, all unit tests (tax, scheduling) plus new ones: job steps, the 1.5 data update, reminders, Chase A/B.
