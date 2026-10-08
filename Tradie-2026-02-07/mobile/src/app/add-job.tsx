@@ -1,21 +1,8 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Check,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Mic,
-  Square,
-  Keyboard,
-  Wrench,
-  Calendar,
-  Clock,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { Check, Plus, Mic, Square, Keyboard, Wrench, Calendar, Clock } from 'lucide-react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -28,8 +15,16 @@ import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { formatDateObj, formatTimeObj, parseDate } from '@/lib/dates';
-import { formatAmount } from '@/lib/money';
-import { useTradeStore, useCustomers, usePricingPresets, type JobType, type Urgency, type Customer } from '@/lib/store';
+import { formatAmount, currencySymbol } from '@/lib/money';
+import {
+  useTradeStore,
+  useCustomers,
+  usePricingPresets,
+  getRegion,
+  type JobType,
+  type Urgency,
+  type Customer,
+} from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/store';
 import { processVoiceNote, useVoiceAllowance, type ExtractedJobData } from '@/lib/voice';
 import { VOICE_ENABLED } from '@/lib/features';
@@ -39,32 +34,24 @@ import { scheduleJob } from '@/lib/booking';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, Segmented, LinkRow, Sheet, ModalHeader, ModalFooter, PrimaryButton } from '@/components/ui';
+import {
+  Group,
+  RowDivider,
+  SectionHeader,
+  Segmented,
+  LinkRow,
+  Sheet,
+  ModalHeader,
+  ModalFooter,
+  PrimaryButton,
+  LabeledField,
+} from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { toast } from '@/components/Toast';
 
 type Mode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
-
-/** A form field. `boxed` draws an input box, used after voice so it's obvious each detail can be changed. */
-function InputRow({
-  icon: Icon,
-  boxed,
-  ...props
-}: { icon: LucideIcon; boxed?: boolean } & React.ComponentProps<typeof TextInput>) {
-  const t = useTheme();
-  return (
-    <View className={cn('flex-row items-center px-4 min-h-[52px]', boxed && 'py-1.5')}>
-      <Icon size={20} color={t.secondary} strokeWidth={2} />
-      <TextInput
-        className={cn('flex-1 text-fg text-base ml-3 py-3', boxed && 'bg-bg rounded-lg px-3 border border-divider')}
-        placeholderTextColor={t.secondary}
-        {...props}
-      />
-    </View>
-  );
-}
 
 export default function AddJobScreen() {
   const router = useRouter();
@@ -79,6 +66,7 @@ export default function AddJobScreen() {
   const addJob = useTradeStore((s) => s.addJob);
   const addCustomer = useTradeStore((s) => s.addCustomer);
   const calculateQuote = useTradeStore((s) => s.calculateQuote);
+  const calculateCustomQuote = useTradeStore((s) => s.calculateCustomQuote);
   const account = useAccount();
   const { isPro } = useProAccess();
   const freeVoiceLeft = useVoiceAllowance((s) => s.freeLeft);
@@ -110,6 +98,11 @@ export default function AddJobScreen() {
   const [picker, setPicker] = useState<'date' | 'time' | null>(null);
   const [showJobTypes, setShowJobTypes] = useState(false);
   const [saving, setSaving] = useState(false);
+  // "Something else": the tradie's own job name and price.
+  const [customName, setCustomName] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
+  const [askDiscard, setAskDiscard] = useState(false);
+  const priceRef = useRef<TextInput>(null);
 
   // Listening pulse
   const pulse = useSharedValue(1);
@@ -136,9 +129,32 @@ export default function AddJobScreen() {
     [recorder],
   );
 
-  const quote = useMemo(() => (jobType ? calculateQuote(jobType, urgency) : null), [jobType, urgency, calculateQuote]);
-  const jobLabel = jobType ? getJobTypeLabel(settings.trade, jobType) : '';
-  const canSave = !!customerName.trim() && !!customerPhone.trim() && !!jobType && !saving;
+  const custom = jobType === 'custom';
+  const customAmount = parseFloat(customPrice.replace(/[£$,\s]/g, ''));
+  const quote = useMemo(() => {
+    if (!jobType) return null;
+    if (jobType === 'custom') return customAmount > 0 ? calculateCustomQuote(customAmount, urgency) : null;
+    return calculateQuote(jobType, urgency);
+  }, [jobType, urgency, customAmount, calculateQuote, calculateCustomQuote]);
+  const jobLabel = custom ? customName.trim() : jobType ? getJobTypeLabel(settings.trade, jobType) : '';
+  // What's still needed before Save, in plain words.
+  const missing = [
+    !customerName.trim() && 'a name',
+    !customerPhone.trim() && 'a mobile',
+    (!jobType || (custom && !customName.trim())) && 'the job',
+    custom && !(customAmount > 0) && 'your price',
+  ].filter(Boolean) as string[];
+  const canSave = missing.length === 0 && !saving;
+  const missingText = missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0];
+  const typed = !!(
+    customerName ||
+    customerPhone ||
+    customerEmail ||
+    customerAddress ||
+    customerPostcode ||
+    jobType ||
+    description
+  );
 
   const applyCustomer = (c: Customer | null) => {
     setMatchedCustomer(c);
@@ -245,9 +261,10 @@ export default function AddJobScreen() {
           address: customerAddress.trim(),
           postcode: customerPostcode.trim().toUpperCase(),
         });
-      const jobId = addJob({
+      addJob({
         customerId,
         type: jobType,
+        ...(custom && { customName: customName.trim() }),
         description: description.trim() || jobLabel,
         urgency,
         // The quote is ready but not sent; sharing it from the job marks it Quoted.
@@ -257,18 +274,17 @@ export default function AddJobScreen() {
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      // Saving closes New job; the job waits on Home, where its next step is one tap away.
       const { jobs, customers: all } = useTradeStore.getState();
-      const job = jobs.find((j) => j.id === jobId);
+      const job = jobs[jobs.length - 1];
       const customer = all.find((c) => c.id === customerId);
       if (hasDate && job && customer) {
         await scheduleJob(job, customer, when);
         toast('Job saved and booked');
-        goBack();
       } else {
-        // Not booked yet: open the job so times can be suggested straight away.
-        toast('Job saved');
-        router.replace(`/job/${jobId}`);
+        toast('Job saved · quote not sent yet');
       }
+      goBack();
     } catch (error) {
       if (__DEV__) console.error('Save error:', error);
       setSaving(false);
@@ -276,7 +292,11 @@ export default function AddJobScreen() {
   };
 
   // Back to the recording only after voice; otherwise the X closes New job.
-  const close = () => (mode === 'form' && transcription ? setMode('voice') : goBack());
+  const close = () => {
+    if (mode === 'form' && transcription) setMode('voice');
+    else if (typed) setAskDiscard(true);
+    else goBack();
+  };
   const header = (title: string) => <ModalHeader title={title} onClose={close} />;
 
   // ── Voice ─────────────────────────────────────────────────────────────────
@@ -366,8 +386,6 @@ export default function AddJobScreen() {
   }
 
   // ── Form ──────────────────────────────────────────────────────────────────
-  // After voice the fields are boxed, so it's clear each one can be corrected.
-  const checking = !!transcription;
 
   return (
     <View className="flex-1 bg-bg">
@@ -413,11 +431,9 @@ export default function AddJobScreen() {
         ) : null}
 
         <SectionHeader title="Customer" />
-        <Group className="mb-2">
-          <InputRow
-            boxed={checking}
-            icon={User}
-            placeholder="Name"
+        <View className="gap-3.5">
+          <LabeledField
+            label="Name"
             value={customerName}
             onChangeText={(text) => {
               setCustomerName(text);
@@ -425,57 +441,81 @@ export default function AddJobScreen() {
               if (match) applyCustomer(match);
               else setMatchedCustomer(null);
             }}
+            placeholder="e.g. Sarah Jones"
             autoCapitalize="words"
-            accessibilityLabel="Customer name"
+            textContentType="name"
           />
-          <RowDivider />
-          <InputRow
-            boxed={checking}
-            icon={Phone}
-            placeholder="Phone"
+          <LabeledField
+            label="Mobile"
             value={customerPhone}
             onChangeText={setCustomerPhone}
+            placeholder="For texts about the job"
             keyboardType="phone-pad"
-            accessibilityLabel="Phone"
+            textContentType="telephoneNumber"
           />
-          <RowDivider />
-          <InputRow
-            boxed={checking}
-            icon={Mail}
-            placeholder="Email (optional)"
+          <LabeledField
+            label="Email"
+            optional
             value={customerEmail}
             onChangeText={setCustomerEmail}
             keyboardType="email-address"
             autoCapitalize="none"
-            accessibilityLabel="Email"
+            textContentType="emailAddress"
           />
-          <RowDivider />
-          <InputRow
-            boxed={checking}
-            icon={MapPin}
-            placeholder="Address"
+          <LabeledField
+            label="Address"
+            optional
             value={customerAddress}
             onChangeText={setCustomerAddress}
-            accessibilityLabel="Address"
+            textContentType="streetAddressLine1"
           />
-          <RowDivider />
-          <InputRow
-            boxed={checking}
-            icon={MapPin}
-            placeholder="Postcode"
+          <LabeledField
+            label={getRegion().country === 'US' ? 'ZIP code' : 'Postcode'}
+            optional
+            hint="For drive times when you suggest times."
             value={customerPostcode}
             onChangeText={(v) => setCustomerPostcode(v.toUpperCase())}
             autoCapitalize="characters"
-            accessibilityLabel="Postcode"
+            textContentType="postalCode"
           />
-        </Group>
-        <Text className={cn('text-[13px] mx-1 mb-8', matchedCustomer ? 'text-link' : 'text-secondary')}>
-          {matchedCustomer ? 'Existing customer — details filled in.' : 'The postcode lets Tradie plan drive times.'}
-        </Text>
+        </View>
+        {matchedCustomer && <Text className="text-link text-[13px] mx-1 mt-2">Existing customer: details filled in.</Text>}
+        <View className="h-8" />
 
         <SectionHeader title="Job" />
         <Group className="mb-8">
-          <LinkRow icon={Wrench} label="Job type" value={jobType ? jobLabel : 'Choose'} onPress={() => setShowJobTypes(true)} />
+          <LinkRow
+            icon={Wrench}
+            label="Job type"
+            value={custom ? 'Something else' : jobType ? jobLabel : 'Choose'}
+            onPress={() => setShowJobTypes(true)}
+          />
+          {custom && (
+            <>
+              <RowDivider />
+              <View className="px-4 py-3 gap-3">
+                {/* Opens ready to type, so the new boxes are never missed below the fold */}
+                <LabeledField
+                  label="What’s the job?"
+                  value={customName}
+                  onChangeText={setCustomName}
+                  placeholder="e.g. Fit an outside tap"
+                  autoFocus
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => priceRef.current?.focus()}
+                />
+                <LabeledField
+                  label="Your price"
+                  inputRef={priceRef}
+                  value={customPrice}
+                  onChangeText={setCustomPrice}
+                  placeholder={currencySymbol()}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </>
+          )}
           <RowDivider />
           <TextInput
             className="text-fg text-base px-4 py-3.5 min-h-[52px]"
@@ -573,65 +613,85 @@ export default function AddJobScreen() {
           {hasDate ? 'You’ll get a reminder before the job.' : 'After saving, Tradie can suggest times that fit your diary.'}
         </Text>
 
-        {quote && (
-          <>
-            <SectionHeader title="Quote" />
-            <Group className="px-4 py-3">
-              {(
-                [
-                  [urgency === 'standard' ? 'Labour' : `Labour (${urgency} rate)`, quote.labour],
-                  ...(quote.vat > 0 ? [['VAT', quote.vat]] : []),
-                ] as [string, number][]
-              ).map(([k, v]) => (
-                <View key={k} className="flex-row justify-between py-1">
-                  <Text className="text-secondary text-[15px]">{k}</Text>
-                  <Text className="text-fg text-[15px]">{formatAmount(v)}</Text>
-                </View>
-              ))}
-              <View className="h-px bg-divider my-2" />
-              <View className="flex-row justify-between py-1">
-                <Text className="text-fg text-base font-semibold">Total</Text>
-                <Text className="text-fg text-[17px] font-bold">{formatAmount(quote.total)}</Text>
-              </View>
-            </Group>
-            <Text className="text-secondary text-[13px] mx-1 mt-2">
-              Your price for this job type. After saving you can change it and add materials or travel.
-            </Text>
-          </>
-        )}
+        <Text className="text-secondary text-[13px] mx-1">
+          After saving, open the job to send the quote, book it in, invoice and more.
+        </Text>
       </ScrollView>
 
       <ModalFooter>
         <View className="flex-row justify-between items-baseline mb-2.5 px-0.5">
-          <Text className="text-secondary text-[15px]">{urgency === 'standard' ? 'Quote' : `Quote · ${urgency} rate`}</Text>
+          <Text className="text-secondary text-[15px]">
+            {urgency === 'standard' ? 'Quote' : `Quote · ${urgency} rate`}
+            {quote && quote.vat > 0 ? ' · inc. VAT' : ''}
+          </Text>
           <Text className="text-fg text-[20px] font-bold">{quote ? formatAmount(quote.total) : '—'}</Text>
         </View>
         <PrimaryButton label="Save job" onPress={handleSave} disabled={!canSave} loading={saving} />
+        {!!missingText && !saving && (
+          <Text className="text-secondary text-[13px] text-center mt-2">Add {missingText} to save</Text>
+        )}
       </ModalFooter>
+
+      {/* X with anything typed: don't lose it by accident */}
+      <Sheet visible={askDiscard} onClose={() => setAskDiscard(false)}>
+        <Text className="text-fg text-[20px] font-semibold mb-1" accessibilityRole="header">
+          Discard this job?
+        </Text>
+        <Text className="text-secondary text-[15px] mb-5">What you’ve typed won’t be saved.</Text>
+        <PrimaryButton label="Keep editing" onPress={() => setAskDiscard(false)} />
+        <Pressable
+          onPress={() => {
+            setAskDiscard(false);
+            goBack();
+          }}
+          className="min-h-[48px] items-center justify-center mt-1"
+          accessibilityRole="button"
+        >
+          <Text className="text-alert text-base font-semibold">Discard</Text>
+        </Pressable>
+      </Sheet>
 
       <Sheet visible={showJobTypes} onClose={() => setShowJobTypes(false)}>
         <Text className="text-fg text-[17px] font-semibold text-center mb-3">Job type</Text>
         <ScrollView style={{ maxHeight: 440 }} className="bg-bg rounded-2xl">
-          {pricingPresets.map((preset, i) => (
-            <View key={preset.type}>
-              {i > 0 && <RowDivider />}
-              <Pressable
-                onPress={() => {
-                  setJobType(preset.type);
-                  setShowJobTypes(false);
-                  Haptics.selectionAsync();
-                }}
-                className="flex-row items-center px-4 min-h-[48px] active:opacity-70"
-                accessibilityRole="button"
-                accessibilityState={{ selected: jobType === preset.type }}
-              >
-                <Text className="flex-1 text-fg text-base">{preset.label}</Text>
-                <Text className="text-secondary text-[15px] mr-3">from {formatAmount(preset.basePrice)}</Text>
-                {jobType === preset.type && <Check size={20} color={t.link} strokeWidth={2} />}
-              </Pressable>
-            </View>
-          ))}
+          {pricingPresets
+            .filter((p) => p.type !== 'emergency')
+            .map((preset, i) => (
+              <View key={preset.type}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => {
+                    setJobType(preset.type);
+                    setShowJobTypes(false);
+                    Haptics.selectionAsync();
+                  }}
+                  className="flex-row items-center px-4 min-h-[48px] active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: jobType === preset.type }}
+                >
+                  <Text className="flex-1 text-fg text-base">{preset.label}</Text>
+                  <Text className="text-secondary text-[15px] mr-3">from {formatAmount(preset.basePrice)}</Text>
+                  {jobType === preset.type && <Check size={20} color={t.link} strokeWidth={2} />}
+                </Pressable>
+              </View>
+            ))}
+          <RowDivider />
+          <Pressable
+            onPress={() => {
+              setJobType('custom');
+              setShowJobTypes(false);
+              Haptics.selectionAsync();
+            }}
+            className="flex-row items-center px-4 min-h-[48px] active:opacity-70"
+            accessibilityRole="button"
+            accessibilityState={{ selected: custom }}
+          >
+            <Plus size={20} color={t.link} strokeWidth={2} />
+            <Text className="flex-1 text-link text-base font-semibold ml-3">Something else</Text>
+            {custom && <Check size={20} color={t.link} strokeWidth={2} />}
+          </Pressable>
         </ScrollView>
+        <Text className="text-secondary text-[13px] mx-1 mt-2.5">Your prices. Change them in Account.</Text>
       </Sheet>
     </View>
   );

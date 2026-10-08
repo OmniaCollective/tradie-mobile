@@ -19,6 +19,7 @@ import {
   type Customer,
   type BusinessSettings,
   EXPENSE_CATEGORY_LABELS,
+  jobName,
 } from '@/lib/store';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { TaxExplainer } from '@/components/TaxExplainer';
@@ -349,7 +350,7 @@ export default function MoneyScreen() {
             ? `${daysOverdue(invoice, settings)} ${daysOverdue(invoice, settings) === 1 ? 'day' : 'days'} overdue`
             : `Sent ${formatDate(invoice.sentAt)}`
           : job
-            ? getJobTypeLabel(settings.trade, job.type)
+            ? jobName(job, settings.trade)
             : formatDate(invoice.createdAt);
     const detail = `${invoiceNumberLabel(invoice)} · ${state}`;
 

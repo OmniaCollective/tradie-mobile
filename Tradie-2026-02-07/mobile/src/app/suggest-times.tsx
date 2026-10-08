@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Circle, CircleCheck, Plus, Route, Car, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
-import { useTradeStore, getJobTypeLabel } from '@/lib/store';
+import { useTradeStore, getJobTypeLabel, jobName } from '@/lib/store';
 import { buildSuggestions, formatSlot, offerMessage, toSlot, type SuggestResult, type TravelNote } from '@/lib/booking';
 import type { Suggestion } from '@/lib/scheduling';
 import { useAccount } from '@/lib/auth';
@@ -62,7 +62,7 @@ export default function SuggestTimesScreen() {
   const [sending, setSending] = useState(false);
 
   const times = useMemo(() => [...chosen].sort((a, b) => a.start.getTime() - b.start.getTime()), [chosen]);
-  const label = job ? getJobTypeLabel(trade, job.type) : '';
+  const label = job ? jobName(job, trade) : '';
   const message = customer && times.length ? offerMessage(customer, label, times.map((s) => s.start)) : '';
 
   if (!job || !customer) {

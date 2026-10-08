@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Plus, Circle, CircleCheck, Trash2, Mic, CalendarClock } from 'lucide-react-native';
-import { useTradeStore, useJobs, useTodos, useSettings, type Job, getRegion, OfferedSlot } from '@/lib/store';
+import { useTradeStore, useJobs, useTodos, useSettings, type Job, getRegion, OfferedSlot, jobName } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatTime, toDateKey, parseDate } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
@@ -240,7 +240,7 @@ export default function JobsScreen() {
                       <Text className="text-fg text-sm font-semibold w-[72px]">{formatTime(job.scheduledTime)}</Text>
                       <View className="flex-1 mr-2">
                         <Text className="text-fg text-base font-medium" numberOfLines={1}>
-                          {getJobTypeLabel(settings.trade, job.type)}
+                          {jobName(job, settings.trade)}
                         </Text>
                         <Text className="text-secondary text-sm" numberOfLines={1}>
                           {customer?.name ?? 'Unknown customer'}
@@ -284,7 +284,7 @@ export default function JobsScreen() {
                     <Text className="text-secondary text-sm font-semibold w-[72px]">{formatTime(slot.time)}</Text>
                     <View className="flex-1 mr-2">
                       <Text className="text-secondary text-base" numberOfLines={1}>
-                        {getJobTypeLabel(settings.trade, job.type)}
+                        {jobName(job, settings.trade)}
                       </Text>
                       <Text className="text-secondary text-sm" numberOfLines={1}>
                         {customer?.name ?? 'Unknown customer'}
@@ -318,7 +318,7 @@ export default function JobsScreen() {
                 >
                   <View className="flex-1 mr-2">
                     <Text className="text-fg text-base font-medium" numberOfLines={1}>
-                      {getJobTypeLabel(settings.trade, job.type)}
+                      {jobName(job, settings.trade)}
                     </Text>
                     <Text className="text-secondary text-sm" numberOfLines={1}>
                       {getCustomer(job.customerId)?.name ?? 'Unknown customer'}

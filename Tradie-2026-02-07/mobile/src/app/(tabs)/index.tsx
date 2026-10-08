@@ -18,6 +18,7 @@ import {
   type Invoice,
   getRegion,
   daysUntil,
+  jobName,
 } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/store';
 import { jobPosition, GROUP_ORDER, GROUP_TITLES, type JobGroup, type JobPosition } from '@/lib/jobSteps';
@@ -150,7 +151,7 @@ export default function HomeScreen() {
   const setupLeft = setupSteps.some((s) => !s.done);
   const hasJobs = jobs.length > 0;
   const today = now.toLocaleDateString(getRegion().locale, { weekday: 'long', day: 'numeric', month: 'long' });
-  const label = (job: Job) => getJobTypeLabel(settings.trade, job.type);
+  const label = (job: Job) => jobName(job, settings.trade);
 
   const nudge = async (r: Row) => {
     if (!r.customer) return;

@@ -13,6 +13,7 @@ import {
   businessDisplayName,
   invoiceNumberLabel,
   invoiceDueDate,
+  jobName,
 } from './store';
 import { getTaxYearBounds } from './taxEstimator';
 import { parseDate, toDateKey } from './dates';
@@ -139,7 +140,7 @@ export const exportCsv = async (
     const job = ctx.getJob(inv.jobId);
     const customer = ctx.getCustomer(inv.customerId);
     const jobLabel = job
-      ? getJobTypeLabel(ctx.settings.trade, job.type)
+      ? jobName(job, ctx.settings.trade)
       : '';
 
     return [
@@ -292,7 +293,7 @@ export const exportTaxSummaryCsv = async (ctx: TaxSummaryCsvContext): Promise<vo
     return [
       escCsv(dayKey(inv.paidAt || inv.createdAt)),
       escCsv(customer?.name ?? ''),
-      escCsv(job ? getJobTypeLabel(ctx.settings.trade, job.type) : ''),
+      escCsv(job ? jobName(job, ctx.settings.trade) : ''),
       inv.quote.labour.toFixed(2),
       inv.quote.materials.toFixed(2),
       inv.quote.travel.toFixed(2),
@@ -480,7 +481,7 @@ export const createQuotePdf = async ({ job, customer, settings }: QuotePdfContex
     <div class="card" style="flex:1">${fromBlock(settings)}</div>
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
-  ${pricesBlock(q, settings, getJobTypeLabel(settings.trade, job.type), job.description)}
+  ${pricesBlock(q, settings, jobName(job, settings.trade), job.description)}
   <div style="text-align:center;margin-top:8px"><span class="badge">Quote · reply to accept</span></div>`),
     `Quote-${customer.name}`,
   );
@@ -522,7 +523,7 @@ export const createInvoicePdf = async ({ invoice, job, customer, settings }: Pdf
     <div class="card" style="flex:1">${fromBlock(settings)}</div>
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
-  ${pricesBlock(q, settings, getJobTypeLabel(settings.trade, job.type), job.description)}
+  ${pricesBlock(q, settings, jobName(job, settings.trade), job.description)}
   ${cis ? `<div class="card"><table><tr class="line"><td class="muted">Less CIS deduction</td><td style="text-align:right">−${formatMoney(cis)}</td></tr><tr class="total-row"><td>To pay</td><td class="total-amount">${formatMoney(q.total - cis)}</td></tr></table></div>` : ''}
   ${
     invoice.paidAt

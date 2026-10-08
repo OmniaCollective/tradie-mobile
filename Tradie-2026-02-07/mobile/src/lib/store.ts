@@ -32,7 +32,9 @@ export type JobType =
   | 'service_6'
   | 'service_7'
   | 'service_8'
-  | 'emergency';
+  | 'emergency'
+  /** "Something else": the tradie names the job and sets its price (Job.customName). */
+  | 'custom';
 
 export type Urgency = 'standard' | 'urgent' | 'emergency';
 
@@ -78,6 +80,8 @@ export interface Job {
   id: string;
   customerId: string;
   type: JobType;
+  /** The job's own name when it's "Something else". */
+  customName?: string;
   description: string;
   urgency: Urgency;
   status: JobStatus;
@@ -417,6 +421,8 @@ interface TradeStore {
 
   // Quote calculation
   calculateQuote: (jobType: JobType, urgency: Urgency) => Quote;
+  /** A quote for "Something else" at the tradie's own price, at the urgency rate. */
+  calculateCustomQuote: (price: number, urgency: Urgency) => Quote;
   /** Changes a job's quote; VAT and total are worked out again. */
   updateQuote: (jobId: string, prices: QuotePrices) => void;
 }
@@ -860,6 +866,21 @@ export const useTradeStore = create<TradeStore>()(
         };
       },
 
+      calculateCustomQuote: (price, urgency) => {
+        const { settings } = get();
+        let labour = Math.max(0, price);
+        if (urgency === 'urgent') labour *= settings.urgentMultiplier;
+        else if (urgency === 'emergency') labour *= settings.emergencyMultiplier;
+        const now = new Date();
+        return {
+          id: generateId(),
+          jobId: '',
+          ...priceQuote(settings, { labour, materials: 0, travel: 0 }),
+          validUntil: new Date(now.getTime() + QUOTE_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          createdAt: now.toISOString(),
+        };
+      },
+
       updateQuote: (jobId, prices) => {
         const { settings } = get();
         set((state) => ({
@@ -996,6 +1017,9 @@ export const getJobTypeLabel = (trade: Trade, type: JobType): string => {
   const own = settings.trade === trade ? pricingPresets.find((p) => p.type === type)?.label : undefined;
   return own ?? getTradeConfig(trade, regionFor(settings.country).country).jobTypes.find((j) => j.type === type)?.label ?? type;
 };
+/** What a job is called: its own name ("Something else"), or the tradie's name for its job type. */
+export const jobName = (job: Pick<Job, 'type' | 'customName'>, trade: Trade): string =>
+  job.customName?.trim() || getJobTypeLabel(trade, job.type);
 export const usePricingPresets = () => useTradeStore(useShallow((s) => s.pricingPresets));
 export const useJobExpenses = (jobId: string) =>
   useTradeStore(useShallow((s) => s.expenses.filter((e) => e.jobId === jobId)));

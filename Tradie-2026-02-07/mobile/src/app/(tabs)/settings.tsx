@@ -13,6 +13,7 @@ import {
   useRegion,
   type JobType,
   type USFilingStatus,
+  jobName,
 } from '@/lib/store';
 import { COUNTRY_OPTIONS } from '@/lib/region';
 import { mileageRate } from '@/lib/data/usTax2026';
@@ -111,7 +112,7 @@ export default function AccountScreen() {
     setCalendarEnabled(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSyncing(true);
-    const { synced } = await syncAllJobsToCalendar(jobs, getCustomer, (type) => getJobTypeLabel(settings.trade, type as JobType));
+    const { synced } = await syncAllJobsToCalendar(jobs, getCustomer, (job) => jobName(job, settings.trade));
     setSyncing(false);
     if (synced > 0) {
       setModal({

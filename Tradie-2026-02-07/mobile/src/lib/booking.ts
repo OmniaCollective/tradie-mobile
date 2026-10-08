@@ -3,7 +3,7 @@
  * Both the date picker and "book an offered time" go through scheduleJob, so
  * confirmations, reminders and calendar sync always behave the same.
  */
-import { useTradeStore, OFFER_HOLD_HOURS, type Job, type Customer, type OfferedSlot, getRegion, getJobTypeLabel } from './store';
+import { useTradeStore, OFFER_HOLD_HOURS, type Job, type Customer, type OfferedSlot, getRegion, getJobTypeLabel, jobName } from './store';
 import { scheduleJobReminder } from './notifications';
 import { syncJobToCalendar, hasCalendarPermissions, getBusyCalendarTimes } from './calendarSync';
 import { suggestTimes, rankTimes, type BusyBlock, type Suggestion } from './scheduling';
@@ -59,7 +59,7 @@ export async function scheduleJob(job: Job, customer: Customer, when: Date): Pro
 
   // The job is booked above; each follow-up is independent, so one failing
   // (notifications off, calendar unavailable) never undoes or blocks the others.
-  const label = getJobTypeLabel(store.settings.trade, job.type);
+  const label = jobName(job, store.settings.trade);
   const attempt = async (what: string, run: () => Promise<unknown>) => {
     try {
       await run();

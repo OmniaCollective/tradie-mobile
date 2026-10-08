@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTradeStore, useJobs, useRegion, type ExpenseCategory, EXPENSE_CATEGORY_LABELS } from '@/lib/store';
+import { useTradeStore, useJobs, useRegion, type ExpenseCategory, EXPENSE_CATEGORY_LABELS, jobName } from '@/lib/store';
 import { mileageRate } from '@/lib/data/usTax2026';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatDateObjLong, toDateKey, parseDate } from '@/lib/dates';
@@ -146,7 +146,7 @@ export default function AddExpenseScreen() {
   const jobLabel = (id: string) => {
     const j = jobs.find((x) => x.id === id);
     if (!j) return 'Unknown job';
-    return `${getJobTypeLabel(settings.trade, j.type)} · ${getCustomer(j.customerId)?.name ?? ''}`;
+    return `${jobName(j, settings.trade)} · ${getCustomer(j.customerId)?.name ?? ''}`;
   };
 
   const pickReceipt = async (fromCamera: boolean) => {

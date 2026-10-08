@@ -68,7 +68,14 @@ export function PrimaryButton({ label, onPress, icon: Icon, compact, loading, di
       ) : (
         <>
           {Icon && <Icon size={20} color={off ? t.secondary : t.onAccent} strokeWidth={2} />}
-          <Text className={cn(off ? 'text-secondary' : 'text-on-accent', 'font-semibold', compact ? 'text-[15px]' : 'text-[17px]', Icon && 'ml-1.5')}>
+          <Text
+            className={cn(
+              off ? 'text-secondary' : 'text-on-accent',
+              'font-semibold',
+              compact ? 'text-[15px]' : 'text-[17px]',
+              Icon && 'ml-1.5',
+            )}
+          >
             {label}
           </Text>
         </>
@@ -447,10 +454,19 @@ export function LabeledField({
   optional,
   hint,
   className,
+  inputRef,
   ...input
-}: { label: string; optional?: boolean; hint?: string; className?: string } & React.ComponentProps<typeof TextInput>) {
+}: {
+  label: string;
+  optional?: boolean;
+  hint?: string;
+  className?: string;
+  /** To move focus here from another field (the keyboard's Next key). */
+  inputRef?: React.RefObject<TextInput | null>;
+} & React.ComponentProps<typeof TextInput>) {
   const t = useTheme();
-  const ref = React.useRef<TextInput>(null);
+  const ownRef = React.useRef<TextInput>(null);
+  const ref = inputRef ?? ownRef;
   return (
     <View className={className}>
       {/* Tapping the label puts you in the box, as on a good web form */}

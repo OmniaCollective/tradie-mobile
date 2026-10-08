@@ -65,6 +65,14 @@ Everything here was agreed with Paul in the clickable test (https://claude.ai/ar
 - Empty state: "Send your first invoice and it shows here…"
 - One-off tip (X): "What you're owed, what's come in, and what to put aside for tax."
 
+## 8a. Search and customers (agreed 2026-10-08, for hundreds of jobs and invoices)
+
+Approved by Paul in the clickable test (2026-10-08).
+
+- **One search** (magnifier on Home and Money): finds customers, jobs and invoices by name, INV number, job type, postcode or amount; results grouped Customers · Jobs · Invoices.
+- **Customer page:** everything for one customer (jobs, invoices, total paid, anything owed) plus "New job for Sarah".
+- **Money stays short:** Paid shows this month open and older months as one line each ("September · £2,340 · 18 invoices"); a tax-year switch (this year / last year).
+
 ## 9. Account (me, my business, my settings)
 
 - Short list of pages with summaries ("Not added" when empty): Your business · Getting paid · Prices and tax · Insurance and licences | Diary and reminders · **Reminders** · Appearance | Plan · Sign in · Help and legal | Delete all my data.

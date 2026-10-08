@@ -55,7 +55,11 @@ const benefits = (isUS: boolean): { icon: LucideIcon; title: string; body: strin
   { icon: ListChecks, title: 'Know where every job is', body: 'Quoted, booked, invoiced or paid' },
   { icon: Banknote, title: 'Get paid on time', body: 'Due dates, reminders and one tap to chase' },
   { icon: isUS ? DollarSign : PoundSterling, title: 'Your tax, worked out', body: 'What to set aside, as you go (Pro)' },
-  { icon: ShieldCheck, title: 'Never miss a renewal', body: isUS ? 'Insurance and licenses with reminders' : 'Insurance and licences with reminders' },
+  {
+    icon: ShieldCheck,
+    title: 'Never miss a renewal',
+    body: isUS ? 'Insurance and licenses with reminders' : 'Insurance and licences with reminders',
+  },
 ];
 
 /** Two short steps after Welcome; the bars show where you are. */
@@ -321,7 +325,11 @@ export default function OnboardingScreen() {
       </ScrollView>
       <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
         <PrimaryButton label="Start using Tradie" onPress={() => finish(true)} />
-        <Pressable onPress={() => finish(false)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+        <Pressable
+          onPress={() => finish(false)}
+          className="min-h-[48px] items-center justify-center mt-1"
+          accessibilityRole="button"
+        >
           <Text className="text-secondary text-base font-semibold">Skip for now</Text>
         </Pressable>
       </View>

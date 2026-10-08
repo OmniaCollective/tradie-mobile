@@ -249,7 +249,7 @@ export async function removeJobFromCalendar(jobId: string): Promise<void> {
 export async function syncAllJobsToCalendar(
   jobs: Job[],
   getCustomer: (id: string) => Customer | undefined,
-  getJobTypeLabel: (type: string) => string
+  nameOf: (job: Job) => string
 ): Promise<{ synced: number; failed: number }> {
   const scheduledJobs = jobs.filter(
     (j) => j.status === 'SCHEDULED' && j.scheduledDate && j.scheduledTime
@@ -265,7 +265,7 @@ export async function syncAllJobsToCalendar(
       continue;
     }
 
-    const success = await syncJobToCalendar(job, customer, getJobTypeLabel(job.type));
+    const success = await syncJobToCalendar(job, customer, nameOf(job));
     if (success) {
       synced++;
     } else {

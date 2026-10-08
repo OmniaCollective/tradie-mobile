@@ -40,6 +40,7 @@ import {
   type Urgency,
   type OfferedSlot,
   type BusinessSettings,
+  jobName,
 } from '@/lib/store';
 import { syncJobToCalendar, requestCalendarPermissions, hasCalendarPermissions, removeJobFromCalendar } from '@/lib/calendarSync';
 import { cancelJobReminder } from '@/lib/notifications';
@@ -159,7 +160,7 @@ export default function JobDetailScreen() {
     );
   }
 
-  const label = getJobTypeLabel(settings.trade, job.type);
+  const label = jobName(job, settings.trade);
   const parts = job.parts ?? [];
   const partsTotal = parts.reduce((s, p) => s + p.quantity * p.unitCost, 0);
   const expensesTotal = jobExpenses.reduce((s, e) => s + e.amount, 0);
