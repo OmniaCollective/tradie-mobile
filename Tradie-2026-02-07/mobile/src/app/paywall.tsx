@@ -9,7 +9,6 @@ import type { PurchasesPackage, PurchasesIntroPrice } from 'react-native-purchas
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { FREE_LIMITS, useRefreshPro } from '@/lib/useProAccess';
 import { VOICE_ENABLED } from '@/lib/features';
-import { formatMoney } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { PrimaryButton } from '@/components/ui';
@@ -54,7 +53,12 @@ export default function PaywallScreen() {
   const refreshPro = useRefreshPro();
   const [plan, setPlan] = useState<Plan>('yearly');
   const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
-  const [modal, setModal] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'warning'; done?: boolean } | null>(null);
+  const [modal, setModal] = useState<{
+    title: string;
+    message: string;
+    variant?: 'success' | 'error' | 'warning';
+    done?: boolean;
+  } | null>(null);
 
   const offerings = useQuery({
     queryKey: ['paywall-packages'],
@@ -77,7 +81,8 @@ export default function PaywallScreen() {
       detail: yearly
         ? [
             yearly.introPrice?.price === 0 ? `${trialLength(yearly.introPrice)} free` : null,
-            `${formatMoney(yearly.price / 12)} a month`,
+            // The App Store's own per-month figure, so it's in the same currency as the price.
+            yearly.pricePerMonthString ? `${yearly.pricePerMonthString} a month` : null,
             freeMonths >= 1 ? `${freeMonths} months free` : null,
           ]
             .filter(Boolean)
@@ -99,7 +104,7 @@ export default function PaywallScreen() {
     if (!selected) return 'Start Pro';
     const intro = selected.product.introPrice;
     if (intro?.price === 0) return `Start ${trialLength(intro)} free trial`;
-    return `Start Pro — ${selected.product.priceString} a ${plan === 'yearly' ? 'year' : 'month'}`;
+    return `Start Pro · ${selected.product.priceString} a ${plan === 'yearly' ? 'year' : 'month'}`;
   })();
 
   const buy = async () => {
@@ -126,7 +131,10 @@ export default function PaywallScreen() {
     if ((result.error as { userCancelled?: boolean } | undefined)?.userCancelled) return;
     setModal({
       title: 'Purchase didn’t go through',
-      message: result.reason === 'not_configured' ? 'In-app purchases aren’t available right now.' : 'You haven’t been charged. Please try again.',
+      message:
+        result.reason === 'not_configured'
+          ? 'In-app purchases aren’t available right now.'
+          : 'You haven’t been charged. Please try again.',
       variant: 'error',
     });
   };
@@ -144,13 +152,19 @@ export default function PaywallScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setModal({ title: 'Pro restored', message: 'Everything is unlocked again.', variant: 'success', done: true });
     } else {
-      setModal({ title: 'No subscription found', message: 'This Apple ID doesn’t have an active Tradie Pro subscription.', variant: 'warning' });
+      setModal({
+        title: 'No subscription found',
+        message: 'This Apple ID doesn’t have an active Tradie Pro subscription.',
+        variant: 'warning',
+      });
     }
   };
 
   return (
     <View className="flex-1 bg-bg">
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 260 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+      >
         <View className="flex-row justify-end">
           <Pressable
             onPress={() => goBack()}
@@ -164,7 +178,9 @@ export default function PaywallScreen() {
 
         <View className="mx-1 mb-6">
           <Text className="text-link text-[15px] font-extrabold tracking-[2px]">TRADIE PRO</Text>
-          <Text className="text-fg text-[28px] leading-[32px] font-bold tracking-tight mt-2">Get paid and stay on top of tax</Text>
+          <Text className="text-fg text-[28px] leading-[32px] font-bold tracking-tight mt-2">
+            Get paid and stay on top of tax
+          </Text>
         </View>
 
         <View className="mx-1 gap-3.5 mb-8">
@@ -205,7 +221,10 @@ export default function PaywallScreen() {
                       Haptics.selectionAsync();
                       setPlan(o.key);
                     }}
-                    className={cn('flex-row items-center bg-surface rounded-2xl px-4 min-h-[68px] border-2', on ? 'border-accent' : 'border-surface')}
+                    className={cn(
+                      'flex-row items-center bg-surface rounded-2xl px-4 min-h-[68px] border-2',
+                      on ? 'border-accent' : 'border-surface',
+                    )}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: on }}
                   >
@@ -220,26 +239,38 @@ export default function PaywallScreen() {
               })}
           </View>
         )}
-      </ScrollView>
-
-      <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
-        <PrimaryButton label={ctaLabel} onPress={buy} loading={busy === 'buy'} disabled={!selected || busy !== null} />
-        <View className="flex-row justify-center gap-5 mt-1">
-          <Pressable onPress={restore} disabled={busy !== null} className="min-h-[44px] justify-center" accessibilityRole="button">
-            <Text className="text-fg text-sm font-semibold">{busy === 'restore' ? 'Restoring…' : 'Restore purchase'}</Text>
-          </Pressable>
-          <Pressable onPress={() => Linking.openURL(TERMS_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
-            <Text className="text-secondary text-sm">Terms of use</Text>
-          </Pressable>
-          <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} className="min-h-[44px] justify-center" accessibilityRole="link">
-            <Text className="text-secondary text-sm">Privacy policy</Text>
-          </Pressable>
+        <View className="mt-6">
+          <PrimaryButton label={ctaLabel} onPress={buy} loading={busy === 'buy'} disabled={!selected || busy !== null} />
+          <View className="flex-row justify-center gap-5 mt-1">
+            <Pressable
+              onPress={restore}
+              disabled={busy !== null}
+              className="min-h-[44px] justify-center"
+              accessibilityRole="button"
+            >
+              <Text className="text-fg text-sm font-semibold">{busy === 'restore' ? 'Restoring…' : 'Restore purchase'}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => Linking.openURL(TERMS_URL)}
+              className="min-h-[44px] justify-center"
+              accessibilityRole="link"
+            >
+              <Text className="text-secondary text-sm">Terms of use</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => Linking.openURL(PRIVACY_URL)}
+              className="min-h-[44px] justify-center"
+              accessibilityRole="link"
+            >
+              <Text className="text-secondary text-sm">Privacy policy</Text>
+            </Pressable>
+          </View>
+          <Text className="text-secondary text-xs text-center leading-4">
+            Renews automatically until cancelled in your Apple ID settings at least 24 hours before the end of the period. Free
+            plan: {FREE_LIMITS.invoicesPerMonth} invoices a month.
+          </Text>
         </View>
-        <Text className="text-secondary text-xs text-center leading-4">
-          Renews automatically until cancelled in your Apple ID settings at least 24 hours before the end of the period.
-          Free plan: {FREE_LIMITS.invoicesPerMonth} invoices a month.
-        </Text>
-      </View>
+      </ScrollView>
 
       {modal && (
         <ConfirmModal
