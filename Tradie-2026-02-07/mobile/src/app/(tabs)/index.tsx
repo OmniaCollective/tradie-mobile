@@ -31,12 +31,12 @@ import { getJobTypeLabel } from '@/lib/store';
 import { formatTime, toDateKey } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
 import { VOICE_ENABLED } from '@/lib/features';
-import { formatMoney } from '@/lib/money';
+import { formatAmount } from '@/lib/money';
 import { Group, RowDivider, SectionHeader, PrimaryButton, SecondaryButton } from '@/components/ui';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const money = formatMoney;
+const money = formatAmount;
 
 function greeting(name: string): string {
   const hour = new Date().getHours();

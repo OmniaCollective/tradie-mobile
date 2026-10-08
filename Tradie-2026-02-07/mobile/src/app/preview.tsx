@@ -15,7 +15,7 @@ import { useTradeStore, useSettings, invoiceNumberLabel, priceQuote, type Busine
 import { createInvoicePdf, createQuotePdf, sharePdfFile } from '@/lib/invoiceExport';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow } from '@/components/ui';
+import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow, ModalHeader } from '@/components/ui';
 import { toast } from '@/components/Toast';
 import { formatMoney, currencySymbol } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
@@ -108,16 +108,11 @@ export default function PreviewScreen() {
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <View
-        className="flex-row items-center justify-between px-4"
-        style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
-      >
-        <Pressable onPress={goBack} hitSlop={10} className="min-h-[44px] justify-center min-w-[56px]" accessibilityRole="button">
-          <Text className="text-link text-[17px]">Close</Text>
-        </Pressable>
-        <Text className="text-fg text-[17px] font-semibold">{title}</Text>
-        <View className="min-w-[56px] items-end">
-          {editable && (
+      <ModalHeader
+        title={title}
+        onClose={goBack}
+        left={
+          editable ? (
             <Pressable
               onPress={() =>
                 setEdit({
@@ -133,9 +128,9 @@ export default function PreviewScreen() {
             >
               <Text className="text-link text-[17px] font-semibold">Edit</Text>
             </Pressable>
-          )}
-        </View>
-      </View>
+          ) : undefined
+        }
+      />
 
       {/* The document, exactly as the customer sees it */}
       <View className="flex-1 mx-4 mt-2 mb-3 rounded-2xl overflow-hidden bg-surface">

@@ -12,6 +12,7 @@ import { useAuthSync } from '@/lib/auth';
 import { useTradeStore } from '@/lib/store';
 import { addNotificationResponseListener } from '@/lib/notifications';
 import { ToastHost } from '@/components/Toast';
+import { CloseButton } from '@/components/ui';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -63,14 +64,19 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="job/[id]"
-          options={{
+          options={({ navigation }) => ({
+            // A job opens on top of where you were, and the X puts you back there.
+            presentation: 'modal',
             headerShown: true,
             headerTitle: 'Job',
-            headerBackTitle: 'Back',
+            headerLeft: () => null,
+            headerRight: () => (
+              <CloseButton plain onPress={() => (navigation.canGoBack() ? navigation.goBack() : router.replace('/(tabs)'))} />
+            ),
             headerStyle: { backgroundColor: p.bg },
             headerTintColor: p.fg,
             headerShadowVisible: false,
-          }}
+          })}
         />
         <Stack.Screen
           name="add-job"

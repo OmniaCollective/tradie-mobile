@@ -1,4 +1,6 @@
 import React, { useSyncExternalStore } from 'react';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect, Tabs } from 'expo-router';
 import { House, Calendar, PoundSterling, DollarSign, UserRound } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
@@ -11,13 +13,16 @@ export default function TabLayout() {
   );
   const hasCompletedOnboarding = useTradeStore((s) => s.hasCompletedOnboarding);
   const t = useTheme();
-  const MoneyIcon = useRegion().country === 'US' ? DollarSign : PoundSterling;
+  const insets = useSafeAreaInsets();
+  const isUS = useRegion().country === 'US';
+  const MoneyIcon = isUS ? DollarSign : PoundSterling;
 
   // Wait for saved data to load before deciding, so existing users never flash onboarding
   if (!hasHydrated) return null;
   if (!hasCompletedOnboarding) return <Redirect href="/onboarding" />;
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: t.link,
@@ -57,7 +62,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: 'Jobs',
+          title: isUS ? 'Schedule' : 'Diary',
           headerShown: false,
           tabBarIcon: ({ color }) => <Calendar size={24} color={color} strokeWidth={2} />,
         }}
@@ -79,5 +84,8 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    {/* A solid bar behind the clock, so pages never scroll under it */}
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: t.bg }} />
+    </View>
   );
 }

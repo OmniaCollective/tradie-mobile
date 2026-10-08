@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Image, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Camera, ImageIcon, Calendar, Tag, Briefcase } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,11 +10,11 @@ import { useTradeStore, useJobs, useRegion, type ExpenseCategory, EXPENSE_CATEGO
 import { mileageRate } from '@/lib/data/usTax2026';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatDateObjLong, toDateKey, parseDate } from '@/lib/dates';
-import { formatMoney, currencySymbol } from '@/lib/money';
+import { formatAmount, currencySymbol } from '@/lib/money';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, LinkRow, FieldRow, Sheet } from '@/components/ui';
+import { Group, RowDivider, LinkRow, FieldRow, Sheet, ModalHeader, ModalFooter, PrimaryButton } from '@/components/ui';
 import { toast } from '@/components/Toast';
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -79,7 +78,6 @@ export default function AddExpenseScreen() {
   const router = useRouter();
   // Opened from a link or notification there may be nothing to go back to; then go Home.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
-  const insets = useSafeAreaInsets();
   const t = useTheme();
   const { jobId: routeJobId, id: editId } = useLocalSearchParams<{ jobId?: string; id?: string }>();
   const addExpense = useTradeStore((s) => s.addExpense);
@@ -191,30 +189,13 @@ export default function AddExpenseScreen() {
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <View
-        className="flex-row items-center justify-between px-4"
-        style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
-      >
-        <Pressable onPress={() => goBack()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
-          <Text className="text-link text-[17px]">Cancel</Text>
-        </Pressable>
-        <Text className="text-fg text-[17px] font-semibold">{editing ? 'Edit expense' : 'New expense'}</Text>
-        <Pressable
-          onPress={handleSave}
-          disabled={!canSave}
-          hitSlop={10}
-          className="min-h-[44px] justify-center"
-          accessibilityRole="button"
-        >
-          <Text className={cn('text-[17px] font-semibold', canSave ? 'text-link' : 'text-secondary opacity-50')}>Save</Text>
-        </Pressable>
-      </View>
+      <ModalHeader title={editing ? 'Edit expense' : 'New expense'} onClose={() => goBack()} />
 
       <ScrollView
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         {/* Amount */}
         <Group className="px-4 py-5 mb-6 items-center">
@@ -236,10 +217,10 @@ export default function AddExpenseScreen() {
               <Text className="text-secondary text-sm mt-1">
                 {isUS
                   ? mileageAmount > 0
-                    ? `You can claim ${formatMoney(mileageAmount)} at the IRS rate`
+                    ? `You can claim ${formatAmount(mileageAmount)} at the IRS rate`
                     : `IRS rate: ${Math.round(mileageRate(date) * 1000) / 10}¢ a mile`
                   : mileageAmount > 0
-                    ? `You can claim ${formatMoney(mileageAmount)} at HMRC rates`
+                    ? `You can claim ${formatAmount(mileageAmount)} at HMRC rates`
                     : '45p a mile, 25p after 10,000 this tax year'}
               </Text>
             </>
@@ -258,7 +239,7 @@ export default function AddExpenseScreen() {
                 />
               </View>
               {category === 'phone_internet' && num(amount) > 0 && (
-                <Text className="text-secondary text-sm mt-1">You can claim {formatMoney(claimable)}</Text>
+                <Text className="text-secondary text-sm mt-1">You can claim {formatAmount(claimable)}</Text>
               )}
             </>
           )}
@@ -358,6 +339,10 @@ export default function AddExpenseScreen() {
           )}
         </Group>
       </ScrollView>
+
+      <ModalFooter>
+        <PrimaryButton label={editing ? 'Save changes' : 'Save expense'} onPress={handleSave} disabled={!canSave} loading={saving} />
+      </ModalFooter>
 
       {/* Category picker */}
       <Sheet visible={picker === 'category'} onClose={() => setPicker(null)}>

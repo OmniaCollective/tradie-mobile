@@ -3,9 +3,9 @@
  * Screens compose these so spacing, corners and colours stay identical everywhere.
  */
 import React from 'react';
-import { View, Text, Pressable, ActivityIndicator, TextInput, Switch, Modal } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, TextInput, Switch, Modal, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Lock, ChevronRight, ExternalLink, Check, type LucideIcon } from 'lucide-react-native';
+import { Lock, ChevronRight, ExternalLink, Check, X, type LucideIcon } from 'lucide-react-native';
 import { cn } from '@/lib/cn';
 import { useTheme, themeVars } from '@/lib/theme';
 
@@ -434,25 +434,95 @@ export function NumberFieldRow({
  * Bottom sheet. Modals render outside the app's root view, so the sheet sets
  * the theme variables itself; tapping the dimmed backdrop closes it.
  */
+/** The X that closes anything opened on top: screens, sheets, pop-ups. 44pt to tap. */
+export function CloseButton({ onPress, label = 'Close', plain }: { onPress: () => void; label?: string; plain?: boolean }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      // plain: in the iPhone's own header bar, which already draws a round button around it
+      className={cn('w-11 h-11 rounded-full items-center justify-center active:opacity-70', !plain && 'bg-surface')}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <X size={20} color={t.fg} strokeWidth={2} />
+    </Pressable>
+  );
+}
+
+/** Header for a screen opened on top: title in the middle, X on the right. */
+export function ModalHeader({ title, onClose, left }: { title: string; onClose: () => void; left?: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      className="flex-row items-center justify-between px-4 pb-2"
+      style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
+    >
+      <View className="min-w-[44px]">{left}</View>
+      <Text className="text-fg text-[17px] font-semibold flex-1 text-center" numberOfLines={1} accessibilityRole="header">
+        {title}
+      </Text>
+      <CloseButton onPress={onClose} />
+    </View>
+  );
+}
+
+/** Pinned to the bottom of a screen opened on top, for its one main button. */
+export function ModalFooter({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View className="bg-bg px-4 pt-3 border-t border-divider" style={{ paddingBottom: insets.bottom + 12 }}>
+      {children}
+    </View>
+  );
+}
+
+/**
+ * A sheet that slides up from the bottom. Every sheet has an X (top right); tapping
+ * outside it closes it too. Read by VoiceOver as one block.
+ */
 export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable
-        onPress={onClose}
-        className="flex-1 bg-black/50 justify-end"
-        style={themeVars[t.mode]}
-        accessibilityLabel="Close"
-      >
+      <View className="flex-1 justify-end" style={themeVars[t.mode]}>
         <Pressable
-          onPress={() => {}}
-          className="bg-surface rounded-t-3xl px-4 pt-5"
+          onPress={onClose}
+          className="absolute inset-0 bg-black/50"
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+        />
+        <View
+          className="bg-surface rounded-t-3xl px-4 pt-2"
           style={{ paddingBottom: insets.bottom + 16 }}
+          accessibilityViewIsModal
         >
+          <View className="flex-row items-center justify-between mb-1">
+            <View className="w-11" />
+            <View className="w-9 h-[5px] rounded-full bg-divider" />
+            <CloseButtonOnSurface onPress={onClose} />
+          </View>
           {children}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
+  );
+}
+
+/** The sheet's X sits on the surface colour, so it uses the page colour behind it. */
+function CloseButtonOnSurface({ onPress }: { onPress: () => void }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      className="w-11 h-11 rounded-full bg-bg items-center justify-center active:opacity-70"
+      accessibilityRole="button"
+      accessibilityLabel="Close"
+    >
+      <X size={20} color={t.fg} strokeWidth={2} />
+    </Pressable>
   );
 }

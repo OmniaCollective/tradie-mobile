@@ -50,7 +50,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { JobStatus, nextStep as nextStepText } from '@/components/JobStatus';
 import { formatDateFull, formatTime, toDateKey } from '@/lib/dates';
-import { formatMoney, currencySymbol } from '@/lib/money';
+import { formatAmount, currencySymbol } from '@/lib/money';
 import { exportQuotePdf } from '@/lib/invoiceExport';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
@@ -596,15 +596,15 @@ export default function JobDetailScreen() {
                 </>
               )}
               <View className="px-4 py-3">
-                <Line label="Labour" value={formatMoney(job.quote.labour)} />
-                {job.quote.materials > 0 && <Line label="Materials" value={formatMoney(job.quote.materials)} />}
-                {job.quote.travel > 0 && <Line label="Travel" value={formatMoney(job.quote.travel)} />}
+                <Line label="Labour" value={formatAmount(job.quote.labour)} />
+                {job.quote.materials > 0 && <Line label="Materials" value={formatAmount(job.quote.materials)} />}
+                {job.quote.travel > 0 && <Line label="Travel" value={formatAmount(job.quote.travel)} />}
                 {job.quote.emergencySurcharge > 0 && (
-                  <Line label="Emergency call-out" value={formatMoney(job.quote.emergencySurcharge)} />
+                  <Line label="Emergency call-out" value={formatAmount(job.quote.emergencySurcharge)} />
                 )}
-                {job.quote.vat > 0 && <Line label="VAT" value={formatMoney(job.quote.vat)} />}
+                {job.quote.vat > 0 && <Line label="VAT" value={formatAmount(job.quote.vat)} />}
                 <View className="h-px bg-divider my-2" />
-                <Line label="Total" value={formatMoney(job.quote.total)} strong />
+                <Line label="Total" value={formatAmount(job.quote.total)} strong />
               </View>
               {quoteEditable && (
                 <>
@@ -640,13 +640,13 @@ export default function JobDetailScreen() {
                 const profit = revenue - partsTotal - expensesTotal;
                 return (
                   <>
-                    <Line label="Charged (before VAT)" value={formatMoney(revenue)} />
-                    {partsTotal > 0 && <Line label={`Parts (${parts.length})`} value={formatMoney(-partsTotal)} />}
-                    {expensesTotal > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatMoney(-expensesTotal)} />}
+                    <Line label="Charged (before VAT)" value={formatAmount(revenue)} />
+                    {partsTotal > 0 && <Line label={`Parts (${parts.length})`} value={formatAmount(-partsTotal)} />}
+                    {expensesTotal > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatAmount(-expensesTotal)} />}
                     <View className="h-px bg-divider my-2" />
                     <Line
                       label={revenue > 0 ? `Profit · ${Math.round((profit / revenue) * 100)}%` : 'Profit'}
-                      value={formatMoney(profit)}
+                      value={formatAmount(profit)}
                       strong
                     />
                     {partsTotal === 0 && expensesTotal === 0 && (
@@ -670,10 +670,10 @@ export default function JobDetailScreen() {
                   <View className="flex-1 py-2.5">
                     <Text className="text-fg text-base">{part.name}</Text>
                     <Text className="text-secondary text-sm">
-                      {part.quantity} × {formatMoney(part.unitCost)}
+                      {part.quantity} × {formatAmount(part.unitCost)}
                     </Text>
                   </View>
-                  <Text className="text-fg text-base">{formatMoney(part.quantity * part.unitCost)}</Text>
+                  <Text className="text-fg text-base">{formatAmount(part.quantity * part.unitCost)}</Text>
                   <Pressable
                     onPress={() => removePart(job.id, part.id)}
                     className="w-11 h-11 items-center justify-center active:opacity-60"
@@ -732,7 +732,7 @@ export default function JobDetailScreen() {
               >
                 <Plus size={20} color={t.link} strokeWidth={2} />
                 <Text className="text-link text-base font-semibold ml-2">Add part</Text>
-                {partsTotal > 0 && <Text className="ml-auto text-secondary text-[15px]">Total {formatMoney(partsTotal)}</Text>}
+                {partsTotal > 0 && <Text className="ml-auto text-secondary text-[15px]">Total {formatAmount(partsTotal)}</Text>}
               </Pressable>
             )}
           </Group>
@@ -843,7 +843,7 @@ export default function JobDetailScreen() {
                     <Text className="text-fg text-base">{expense.description}</Text>
                     <Text className="text-secondary text-sm">{EXPENSE_CATEGORY_LABELS[expense.category]}</Text>
                   </View>
-                  <Text className="text-fg text-base">{formatMoney(expense.amount)}</Text>
+                  <Text className="text-fg text-base">{formatAmount(expense.amount)}</Text>
                 </View>
               </View>
             ))}
@@ -856,7 +856,7 @@ export default function JobDetailScreen() {
               {isPro ? <Plus size={20} color={t.link} strokeWidth={2} /> : <Lock size={16} color={t.link} strokeWidth={2} />}
               <Text className="text-link text-base font-semibold ml-2">{isPro ? 'Add expense' : 'Add expenses with Pro'}</Text>
               {expensesTotal > 0 && (
-                <Text className="ml-auto text-secondary text-[15px]">Total {formatMoney(expensesTotal)}</Text>
+                <Text className="ml-auto text-secondary text-[15px]">Total {formatAmount(expensesTotal)}</Text>
               )}
             </Pressable>
           </Group>
@@ -929,9 +929,9 @@ export default function JobDetailScreen() {
         <View className="bg-bg rounded-2xl px-4 py-3 mb-4">
           <Line label="Job" value={label} />
           <Line label="Customer" value={customer.name} />
-          {job.quote && <Line label="Quote" value={formatMoney(job.quote.total)} />}
-          {parts.length > 0 && <Line label={`Parts (${parts.length})`} value={formatMoney(partsTotal)} />}
-          {jobExpenses.length > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatMoney(expensesTotal)} />}
+          {job.quote && <Line label="Quote" value={formatAmount(job.quote.total)} />}
+          {parts.length > 0 && <Line label={`Parts (${parts.length})`} value={formatAmount(partsTotal)} />}
+          {jobExpenses.length > 0 && <Line label={`Expenses (${jobExpenses.length})`} value={formatAmount(expensesTotal)} />}
           {(job.photos ?? []).length > 0 && <Line label="Photos" value={String((job.photos ?? []).length)} />}
         </View>
         {job.quote && partsTotal > job.quote.materials && (
@@ -945,7 +945,7 @@ export default function JobDetailScreen() {
           >
             <CircleAlert size={16} color={t.secondary} strokeWidth={2} />
             <Text className="flex-1 text-secondary text-[14px] ml-2">
-              Your quote doesn’t include {formatMoney(partsTotal)} of parts.{' '}
+              Your quote doesn’t include {formatAmount(partsTotal)} of parts.{' '}
               <Text className="text-link font-semibold">Add them to the price</Text>
             </Text>
           </Pressable>
@@ -1007,7 +1007,7 @@ export default function JobDetailScreen() {
               accessibilityRole="button"
             >
               <Text className="text-link text-[15px] font-semibold">
-                Use parts total for materials ({formatMoney(partsTotal)})
+                Use parts total for materials ({formatAmount(partsTotal)})
               </Text>
             </Pressable>
           )}
@@ -1016,10 +1016,10 @@ export default function JobDetailScreen() {
             return (
               <View className="px-1 mb-5">
                 {priced.emergencySurcharge > 0 && (
-                  <Line label="Emergency call-out" value={formatMoney(priced.emergencySurcharge)} />
+                  <Line label="Emergency call-out" value={formatAmount(priced.emergencySurcharge)} />
                 )}
-                {priced.vat > 0 && <Line label={`VAT (${settings.vatRate}%)`} value={formatMoney(priced.vat)} />}
-                <Line label="Total" value={formatMoney(priced.total)} strong />
+                {priced.vat > 0 && <Line label={`VAT (${settings.vatRate}%)`} value={formatAmount(priced.vat)} />}
+                <Line label="Total" value={formatAmount(priced.total)} strong />
               </View>
             );
           })()}
@@ -1085,7 +1085,7 @@ export default function JobDetailScreen() {
             />
             {job.quote && !hasInvoice && (editJob.type !== job.type || editJob.urgency !== job.urgency) && (
               <Text className="text-secondary text-[13px] mx-1 mb-2">
-                Labour changes to {formatMoney(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel stay
+                Labour changes to {formatAmount(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel stay
                 as they are.
               </Text>
             )}

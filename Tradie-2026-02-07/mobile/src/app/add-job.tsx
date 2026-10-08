@@ -28,7 +28,7 @@ import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { formatDateObj, formatTimeObj, parseDate } from '@/lib/dates';
-import { formatMoney } from '@/lib/money';
+import { formatAmount } from '@/lib/money';
 import { useTradeStore, useCustomers, usePricingPresets, type JobType, type Urgency, type Customer } from '@/lib/store';
 import { getJobTypeLabel } from '@/lib/store';
 import { processVoiceNote, useVoiceAllowance, type ExtractedJobData } from '@/lib/voice';
@@ -39,7 +39,7 @@ import { scheduleJob } from '@/lib/booking';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, Segmented, LinkRow, Sheet } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, Segmented, LinkRow, Sheet, ModalHeader, ModalFooter, PrimaryButton } from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { toast } from '@/components/Toast';
@@ -275,23 +275,9 @@ export default function AddJobScreen() {
     }
   };
 
-  const header = (title: string, right?: React.ReactNode) => (
-    <View
-      className="flex-row items-center justify-between px-4"
-      style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
-    >
-      <Pressable
-        onPress={() => (mode === 'form' && transcription ? setMode('voice') : goBack())}
-        hitSlop={10}
-        className="min-h-[44px] justify-center min-w-[56px]"
-        accessibilityRole="button"
-      >
-        <Text className="text-link text-[17px]">{mode === 'form' && transcription ? 'Back' : 'Cancel'}</Text>
-      </Pressable>
-      <Text className="text-fg text-[17px] font-semibold">{title}</Text>
-      <View className="min-w-[56px] items-end">{right}</View>
-    </View>
-  );
+  // Back to the recording only after voice; otherwise the X closes New job.
+  const close = () => (mode === 'form' && transcription ? setMode('voice') : goBack());
+  const header = (title: string) => <ModalHeader title={title} onClose={close} />;
 
   // ── Voice ─────────────────────────────────────────────────────────────────
 
@@ -385,28 +371,13 @@ export default function AddJobScreen() {
 
   return (
     <View className="flex-1 bg-bg">
-      {header(
-        transcription ? 'Check the job' : 'New job',
-        <Pressable
-          onPress={handleSave}
-          disabled={!canSave}
-          hitSlop={10}
-          className="min-h-[44px] justify-center"
-          accessibilityRole="button"
-        >
-          {saving ? (
-            <ActivityIndicator color={t.link} />
-          ) : (
-            <Text className={cn('text-[17px] font-semibold', canSave ? 'text-link' : 'text-secondary opacity-50')}>Save</Text>
-          )}
-        </Pressable>,
-      )}
+      {header(transcription ? 'Check the job' : 'New job')}
 
       <ScrollView
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         {VOICE_ENABLED && !transcription && (
           <Pressable
@@ -614,13 +585,13 @@ export default function AddJobScreen() {
               ).map(([k, v]) => (
                 <View key={k} className="flex-row justify-between py-1">
                   <Text className="text-secondary text-[15px]">{k}</Text>
-                  <Text className="text-fg text-[15px]">{formatMoney(v)}</Text>
+                  <Text className="text-fg text-[15px]">{formatAmount(v)}</Text>
                 </View>
               ))}
               <View className="h-px bg-divider my-2" />
               <View className="flex-row justify-between py-1">
                 <Text className="text-fg text-base font-semibold">Total</Text>
-                <Text className="text-fg text-[17px] font-bold">{formatMoney(quote.total)}</Text>
+                <Text className="text-fg text-[17px] font-bold">{formatAmount(quote.total)}</Text>
               </View>
             </Group>
             <Text className="text-secondary text-[13px] mx-1 mt-2">
@@ -629,6 +600,14 @@ export default function AddJobScreen() {
           </>
         )}
       </ScrollView>
+
+      <ModalFooter>
+        <View className="flex-row justify-between items-baseline mb-2.5 px-0.5">
+          <Text className="text-secondary text-[15px]">{urgency === 'standard' ? 'Quote' : `Quote · ${urgency} rate`}</Text>
+          <Text className="text-fg text-[20px] font-bold">{quote ? formatAmount(quote.total) : '—'}</Text>
+        </View>
+        <PrimaryButton label="Save job" onPress={handleSave} disabled={!canSave} loading={saving} />
+      </ModalFooter>
 
       <Sheet visible={showJobTypes} onClose={() => setShowJobTypes(false)}>
         <Text className="text-fg text-[17px] font-semibold text-center mb-3">Job type</Text>
@@ -647,7 +626,7 @@ export default function AddJobScreen() {
                 accessibilityState={{ selected: jobType === preset.type }}
               >
                 <Text className="flex-1 text-fg text-base">{preset.label}</Text>
-                <Text className="text-secondary text-[15px] mr-3">from {formatMoney(preset.basePrice)}</Text>
+                <Text className="text-secondary text-[15px] mr-3">from {formatAmount(preset.basePrice)}</Text>
                 {jobType === preset.type && <Check size={20} color={t.link} strokeWidth={2} />}
               </Pressable>
             </View>

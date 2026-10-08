@@ -13,7 +13,7 @@ import { useAccount } from '@/lib/auth';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, FieldRow, Sheet } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, PrimaryButton, FieldRow, Sheet, ModalHeader } from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 
 const MAX_TIMES = 3;
@@ -118,13 +118,7 @@ export default function SuggestTimesScreen() {
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4" style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}>
-        <Pressable onPress={() => goBack()} hitSlop={10} className="min-h-[44px] justify-center" accessibilityRole="button">
-          <Text className="text-link text-[17px]">Cancel</Text>
-        </Pressable>
-        <Text className="text-fg text-[17px] font-semibold">Suggest times</Text>
-        <View className="w-14" />
-      </View>
+      <ModalHeader title="Suggest times" onClose={() => goBack()} />
 
       <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         <View className="mb-6 mx-1">

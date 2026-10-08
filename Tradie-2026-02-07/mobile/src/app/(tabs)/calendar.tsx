@@ -133,7 +133,7 @@ export default function JobsScreen() {
     >
       {/* Header */}
       <View className="flex-row items-center justify-between mb-5">
-        <Text className="text-fg text-[28px] font-bold tracking-tight">Jobs</Text>
+        <Text className="text-fg text-[28px] font-bold tracking-tight">{getRegion().country === 'US' ? 'Schedule' : 'Diary'}</Text>
         <PrimaryButton compact icon={Plus} label="New job" onPress={() => router.push(`/add-job?date=${selected}`)} />
       </View>
 

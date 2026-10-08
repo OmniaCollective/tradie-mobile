@@ -34,7 +34,7 @@ import {
 import { calculateTaxEstimate, calculateRolling12MonthTurnover } from '@/lib/taxEstimator';
 import { calculateUSTax } from '@/lib/usTaxEstimator';
 import { formatDate, parseDate } from '@/lib/dates';
-import { formatMoney, formatPounds, currencySymbol } from '@/lib/money';
+import { formatAmount, formatPounds, currencySymbol } from '@/lib/money';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { chaseInvoice } from '@/lib/chase';
 import { useProAccess, FREE_LIMITS } from '@/lib/useProAccess';
@@ -60,7 +60,7 @@ type ExportType = 'invoices' | 'expenses' | 'tax_summary';
 const DATE_PRESETS: DatePreset[] = ['this_month', 'this_quarter', 'tax_year', 'all'];
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
-const money = formatMoney;
+const money = formatAmount;
 const wholePounds = formatPounds;
 
 /** What the customer actually pays the tradie: the total less any CIS the contractor deducted. */
