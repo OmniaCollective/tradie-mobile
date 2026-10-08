@@ -1,5 +1,7 @@
 # Build plan: the agreed UX (before build 28)
 
+**Progress (2026-10-08):** sections 1–11 built and committed, each checked natively on the simulator except section 11 (reminders), which still needs its phone check. Next: 12 analytics, 13 accessibility, 14 checks, 15 screenshots and listing.
+
 Everything here was agreed with Paul in the clickable test (https://claude.ai/artifact/QXvzAs14oYerYAaEWkbxcz). Details and reasons: `ux-journey-review.md`. Built in this order, one section at a time, each checked in the simulator before the next.
 
 ## 1. Data and updating from 1.5
