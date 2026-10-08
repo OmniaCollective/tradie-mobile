@@ -15,6 +15,8 @@ import { useTradeStore, useSettings, invoiceNumberLabel, priceQuote, type Busine
 import { createInvoicePdf, createQuotePdf, sharePdfFile } from '@/lib/invoiceExport';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { useProAccess } from '@/lib/useProAccess';
 import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow, ModalHeader } from '@/components/ui';
 import { toast } from '@/components/Toast';
 import { formatMoney, currencySymbol } from '@/lib/money';
@@ -41,6 +43,8 @@ export default function PreviewScreen() {
   const [edit, setEdit] = useState<{ labour: number; materials: number; travel: number; description: string } | null>(null);
   const [askSent, setAskSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [limitPrompt, setLimitPrompt] = useState(false);
+  const { canCreateInvoice } = useProAccess();
 
   const quote = kind === 'invoice' ? invoice?.quote : job?.quote;
   // Paid invoices are final; a quote stops changing once it's on an invoice.
@@ -78,7 +82,16 @@ export default function PreviewScreen() {
         ? 'Send again'
         : 'Send quote';
 
-  const send = () =>
+  const send = () => {
+    // Free plan: the 3-a-month limit applies to invoices sent, so check before a first send.
+    if (kind === 'invoice' && invoice?.status === 'pending' && !invoice.sentAt && !canCreateInvoice) {
+      setLimitPrompt(true);
+      return;
+    }
+    sendNow();
+  };
+
+  const sendNow = () =>
     requireDetails(kind, async (current: BusinessSettings) => {
       setSending(true);
       try {
@@ -245,6 +258,7 @@ export default function PreviewScreen() {
         onCancel={() => {}}
         onDismiss={() => setAskSent(false)}
       />
+      <UpgradePrompt visible={limitPrompt} onClose={() => setLimitPrompt(false)} feature="invoices" />
       {prompt}
     </View>
   );

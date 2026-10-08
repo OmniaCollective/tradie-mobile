@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Circle, CircleCheck, Plus, Route, Car, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
-import { useTradeStore, getJobTypeLabel, jobName } from '@/lib/store';
+import { useTradeStore, jobName, getRegion } from '@/lib/store';
+import { toast } from '@/components/Toast';
 import { buildSuggestions, formatSlot, offerMessage, toSlot, type SuggestResult, type TravelNote } from '@/lib/booking';
 import type { Suggestion } from '@/lib/scheduling';
 import { useAccount } from '@/lib/auth';
@@ -38,13 +39,15 @@ export default function SuggestTimesScreen() {
   const job = useTradeStore((s) => s.jobs.find((j) => j.id === jobId));
   const customer = useTradeStore((s) => (job ? s.customers.find((c) => c.id === job.customerId) : undefined));
   const trade = useTradeStore((s) => s.settings.trade);
+  const basePostcode = useTradeStore((s) => s.settings.postcode);
+  const updateSettings = useTradeStore((s) => s.updateSettings);
   const updateJob = useTradeStore((s) => s.updateJob);
   const updateCustomer = useTradeStore((s) => s.updateCustomer);
   const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
 
   // Recalculates when the customer's postcode changes or the person signs in.
   const query = useQuery({
-    queryKey: ['suggest-times', jobId, customer?.postcode, account?.userId],
+    queryKey: ['suggest-times', jobId, customer?.postcode, basePostcode, account?.userId],
     queryFn: () => buildSuggestions(jobId!),
     enabled: !!jobId,
     gcTime: 0,
@@ -59,11 +62,19 @@ export default function SuggestTimesScreen() {
   const setChosen = (update: (cur: Suggestion[]) => Suggestion[]) => result && setPick({ from: result, list: update(chosen) });
   const [showMore, setShowMore] = useState(false);
   const [postcode, setPostcode] = useState('');
+  const [base, setBase] = useState('');
   const [sending, setSending] = useState(false);
 
   const times = useMemo(() => [...chosen].sort((a, b) => a.start.getTime() - b.start.getTime()), [chosen]);
   const label = job ? jobName(job, trade) : '';
-  const message = customer && times.length ? offerMessage(customer, label, times.map((s) => s.start)) : '';
+  const message =
+    customer && times.length
+      ? offerMessage(
+          customer,
+          label,
+          times.map((s) => s.start),
+        )
+      : '';
 
   if (!job || !customer) {
     return (
@@ -92,7 +103,11 @@ export default function SuggestTimesScreen() {
 
   const sendTimes = async () => {
     // Built now rather than at render, so a name added a moment ago is in it.
-    const text = offerMessage(customer, label, times.map((s) => s.start));
+    const text = offerMessage(
+      customer,
+      label,
+      times.map((s) => s.start),
+    );
     setSending(true);
     try {
       if (customer.phone && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {
@@ -120,12 +135,18 @@ export default function SuggestTimesScreen() {
       {/* Header */}
       <ModalHeader title="Suggest times" onClose={() => goBack()} />
 
-      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+      <ScrollView
+        className="flex-1"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+      >
         <View className="mb-6 mx-1">
           <Text className="text-fg text-[22px] font-bold tracking-tight">{customer.name}</Text>
           <Text className="text-secondary text-[15px] mt-0.5">
             {label}
-            {result ? ` · about ${result.durationMinutes >= 60 ? `${result.durationMinutes / 60} hr` : `${result.durationMinutes} min`}` : ''}
+            {result
+              ? ` · about ${result.durationMinutes >= 60 ? `${result.durationMinutes / 60} hr` : `${result.durationMinutes} min`}`
+              : ''}
             {area ? ` · ${area}` : ''}
           </Text>
         </View>
@@ -137,7 +158,7 @@ export default function SuggestTimesScreen() {
               hint="So the drive is counted"
               value={postcode}
               onChangeText={setPostcode}
-              placeholder="SE1 7TP"
+              placeholder="Add"
               autoCapitalize="characters"
               width="w-28"
             />
@@ -150,6 +171,36 @@ export default function SuggestTimesScreen() {
                   accessibilityRole="button"
                 >
                   <Text className="text-link text-base font-semibold">Use this postcode</Text>
+                </Pressable>
+              </>
+            )}
+          </Group>
+        )}
+
+        {/* Setup no longer asks for it, so ask here, the first time it helps */}
+        {!basePostcode?.trim() && (
+          <Group className="mb-6">
+            <FieldRow
+              label="Where your day starts"
+              hint={getRegion().country === 'US' ? 'Your base ZIP code, for drive times' : 'Your base postcode, for drive times'}
+              value={base}
+              onChangeText={setBase}
+              placeholder="Add"
+              autoCapitalize="characters"
+              width="w-28"
+            />
+            {base.trim().length >= 5 && (
+              <>
+                <RowDivider />
+                <Pressable
+                  onPress={() => {
+                    updateSettings({ postcode: base.trim().toUpperCase() });
+                    toast('Saved · you can change it in Account');
+                  }}
+                  className="px-4 min-h-[48px] justify-center"
+                  accessibilityRole="button"
+                >
+                  <Text className="text-link text-base font-semibold">Save and use it</Text>
                 </Pressable>
               </>
             )}
@@ -181,12 +232,21 @@ export default function SuggestTimesScreen() {
             {times.map((s, i) => (
               <View key={s.start.toISOString()}>
                 {i > 0 && <RowDivider />}
-                <Pressable onPress={() => toggle(s)} className="flex-row items-center px-4 py-3 active:opacity-70" accessibilityRole="checkbox" accessibilityState={{ checked: true }}>
+                <Pressable
+                  onPress={() => toggle(s)}
+                  className="flex-row items-center px-4 py-3 active:opacity-70"
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: true }}
+                >
                   <CircleCheck size={22} color={t.link} strokeWidth={2} />
                   <View className="flex-1 ml-3">
                     <Text className="text-fg text-base font-semibold">{formatSlot(s.start)}</Text>
                     <View className="flex-row items-center mt-0.5">
-                      {s.fitsRoute ? <Route size={14} color={t.link} strokeWidth={2} /> : <Car size={14} color={t.secondary} strokeWidth={2} />}
+                      {s.fitsRoute ? (
+                        <Route size={14} color={t.link} strokeWidth={2} />
+                      ) : (
+                        <Car size={14} color={t.secondary} strokeWidth={2} />
+                      )}
                       <Text className={cn('text-sm ml-1 flex-1', s.fitsRoute ? 'text-link' : 'text-secondary')} numberOfLines={1}>
                         {s.fitsRoute ? `Fits your route · ${s.reason}` : s.reason}
                       </Text>
@@ -199,7 +259,11 @@ export default function SuggestTimesScreen() {
             {times.length < MAX_TIMES && shown.length > 0 && (
               <>
                 {times.length > 0 && <RowDivider />}
-                <Pressable onPress={() => setShowMore(true)} className="flex-row items-center px-4 min-h-[52px] active:opacity-70" accessibilityRole="button">
+                <Pressable
+                  onPress={() => setShowMore(true)}
+                  className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+                  accessibilityRole="button"
+                >
                   <Plus size={20} color={t.link} strokeWidth={2} />
                   <Text className="text-link text-base font-semibold ml-2">Add another time</Text>
                 </Pressable>
@@ -225,14 +289,19 @@ export default function SuggestTimesScreen() {
               <Text className="text-fg text-[15px] leading-6">{message}</Text>
             </Group>
             {!customer.phone && (
-              <Text className="text-secondary text-[13px] mx-1 mt-2">No phone number saved, so you’ll choose how to send it.</Text>
+              <Text className="text-secondary text-[13px] mx-1 mt-2">
+                No phone number saved, so you’ll choose how to send it.
+              </Text>
             )}
           </View>
         )}
       </ScrollView>
 
       {times.length > 0 && (
-        <View className="absolute left-0 right-0 bottom-0 bg-bg border-t border-divider px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+        <View
+          className="absolute left-0 right-0 bottom-0 bg-bg border-t border-divider px-4 pt-3"
+          style={{ paddingBottom: insets.bottom + 12 }}
+        >
           <PrimaryButton
             label={customer.phone ? `Text ${times.length === 1 ? 'this time' : `these ${times.length} times`}` : 'Send times'}
             onPress={send}

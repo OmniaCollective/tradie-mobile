@@ -15,15 +15,13 @@ import {
   useRenewals,
   useCustomers,
   type Job,
-  type Invoice,
   getRegion,
   daysUntil,
   jobName,
 } from '@/lib/store';
-import { getJobTypeLabel } from '@/lib/store';
-import { jobPosition, GROUP_ORDER, GROUP_TITLES, type JobGroup, type JobPosition } from '@/lib/jobSteps';
+import { jobPosition, GROUP_ORDER, GROUP_TITLES, type JobGroup } from '@/lib/jobSteps';
 import { renewalStatus } from '@/components/Renewals';
-import { formatTime, toDateKey, parseDate } from '@/lib/dates';
+import { whereText } from '@/lib/jobText';
 import { useTheme } from '@/lib/theme';
 import { formatAmount } from '@/lib/money';
 import { chaseInvoice, remindAboutQuote } from '@/lib/chase';
@@ -31,53 +29,11 @@ import { Group, RowDivider, SectionHeader, PrimaryButton } from '@/components/ui
 import { Tip } from '@/components/Tip';
 import { toast } from '@/components/Toast';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function greeting(name: string): string {
   const hour = new Date().getHours();
   const part = hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
   const first = name.trim().split(/\s+/)[0];
   return first ? `${part}, ${first}` : `Good ${part.toLowerCase()}`;
-}
-
-function ago(iso: string, now: number): string {
-  const days = Math.floor((now - new Date(iso).getTime()) / DAY_MS);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days} days ago`;
-}
-
-function dayLabel(dateKey: string, now: Date): string {
-  if (dateKey === toDateKey(now)) return 'Today';
-  if (dateKey === toDateKey(new Date(now.getTime() + DAY_MS))) return 'Tomorrow';
-  return parseDate(dateKey).toLocaleDateString(getRegion().locale, { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-/** The second line of a job row, in a tradie's words. */
-function whereText(job: Job, invoice: Invoice | undefined, p: JobPosition, first: string, now: Date, terms: number): string {
-  switch (p.group) {
-    case 'send':
-      return 'Quote not sent yet';
-    case 'waiting':
-      return p.facts.offered
-        ? `Times offered · waiting for ${first}`
-        : `Quote sent ${ago(job.quoteSentAt!, now.getTime())} · waiting for ${first}`;
-    case 'tobook':
-      return 'Said yes · needs a time';
-    case 'booked':
-      return `${dayLabel(job.scheduledDate!, now)} · ${formatTime(job.scheduledTime)}`;
-    case 'invoice':
-      return 'Done · ready to invoice';
-    case 'unpaid': {
-      if (p.overdueDays > 0) return `Invoice ${p.overdueDays} ${p.overdueDays === 1 ? 'day' : 'days'} overdue`;
-      const dueIn = Math.max(0, terms - Math.floor((now.getTime() - new Date(invoice!.sentAt!).getTime()) / DAY_MS));
-      return `Invoiced ${ago(invoice!.sentAt!, now.getTime())} · due in ${dueIn} ${dueIn === 1 ? 'day' : 'days'}`;
-    }
-    case 'paid':
-      return invoice?.paidAt ? `Paid ${ago(invoice.paidAt, now.getTime())}` : 'Paid';
-    case 'lost':
-      return 'Didn’t go ahead';
-  }
 }
 
 export default function HomeScreen() {
@@ -104,7 +60,7 @@ export default function HomeScreen() {
       const customer = byId.get(job.customerId);
       const p = jobPosition(job, invoice, terms, now);
       const first = customer?.name.trim().split(/\s+/)[0] || 'the customer';
-      return { job, invoice, customer, p, text: whereText(job, invoice, p, first, now, terms) };
+      return { job, invoice, customer, p, text: whereText(job, invoice, p, first, terms, now) };
     });
   }, [jobs, invoices, customers, terms, now]);
   type Row = (typeof rows)[number];
