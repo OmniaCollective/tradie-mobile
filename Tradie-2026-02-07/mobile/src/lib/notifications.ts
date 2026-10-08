@@ -18,7 +18,7 @@ Notifications.setNotificationHandler({
 });
 
 export interface NotificationData extends Record<string, unknown> {
-  type: 'job_reminder' | 'daily_reminder' | 'renewal';
+  type: 'job_reminder' | 'daily_reminder' | 'renewal' | 'nudge';
   jobId?: string;
 }
 
@@ -70,30 +70,10 @@ const renewalReminderId = (id: string, daysBefore: number) => `renewal-${id}-${d
 /** Removes a renewal's reminders (on delete, or before rescheduling after an edit). */
 export async function cancelRenewalReminders(renewalId: string): Promise<void> {
   await Promise.all(
-    RENEWAL_DAYS_BEFORE.map((d) => Notifications.cancelScheduledNotificationAsync(renewalReminderId(renewalId, d)).catch(() => {})),
+    RENEWAL_DAYS_BEFORE.map((d) =>
+      Notifications.cancelScheduledNotificationAsync(renewalReminderId(renewalId, d)).catch(() => {}),
+    ),
   );
-}
-
-/** Reminders at 9am, 30 and 7 days before a renewal's expiry and on the day itself. */
-export async function scheduleRenewalReminders(renewal: { id: string; name: string; expires: string }): Promise<void> {
-  await cancelRenewalReminders(renewal.id);
-  const [y, m, d] = renewal.expires.split('-').map(Number);
-  const now = new Date();
-  const upcoming = RENEWAL_DAYS_BEFORE.map((before) => ({ before, at: new Date(y, m - 1, d - before, 9, 0, 0) })).filter(
-    ({ at }) => at > now,
-  );
-  if (upcoming.length === 0 || !(await ensureNotificationPermission())) return;
-  for (const { before, at } of upcoming) {
-    await Notifications.scheduleNotificationAsync({
-      identifier: renewalReminderId(renewal.id, before),
-      content: {
-        title: before === 0 ? `${renewal.name} expires today` : `${renewal.name} expires in ${before} days`,
-        body: 'Renew it so you stay covered. Update the new date in Account.',
-        data: { type: 'renewal' } satisfies NotificationData,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
-    });
-  }
 }
 
 /** Removes every scheduled reminder (used when all data is deleted). */
@@ -129,4 +109,41 @@ export async function setDailyReminder(on: boolean): Promise<boolean> {
 
 export function addNotificationResponseListener(callback: (response: Notifications.NotificationResponse) => void) {
   return Notifications.addNotificationResponseReceivedListener(callback);
+}
+
+/**
+ * Makes the phone's quote, invoice and renewal reminders match the plan (lib/nudgePlan.ts):
+ * cancels the ones no longer needed, schedules the rest. Never asks for permission itself;
+ * that happens when the tradie books a job, adds a renewal or turns a reminder on.
+ */
+export async function syncNudges(plan: import('./nudgePlan').PlannedNudge[]): Promise<void> {
+  try {
+    const { granted } = await Notifications.getPermissionsAsync();
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const wanted = new Set(granted ? plan.map((n) => n.id) : []);
+    const ours = (id: string) => id.startsWith('nudge-') || id.startsWith('renewal-');
+    for (const n of scheduled) {
+      if (ours(n.identifier) && !wanted.has(n.identifier)) {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
+      }
+    }
+    if (!granted) return;
+    const have = new Set(scheduled.map((n) => n.identifier));
+    for (const n of plan) {
+      // Rescheduling the same id replaces it, so text or time changes are picked up.
+      if (have.has(n.id)) await Notifications.cancelScheduledNotificationAsync(n.id).catch(() => {});
+      await Notifications.scheduleNotificationAsync({
+        identifier: n.id,
+        content: {
+          title: n.title,
+          body: n.body,
+          data: (n.jobId ? { type: 'nudge', jobId: n.jobId } : { type: 'renewal' }) satisfies NotificationData,
+          sound: 'default',
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: n.at },
+      });
+    }
+  } catch (error) {
+    if (__DEV__) console.warn('[Notifications] sync failed:', error);
+  }
 }

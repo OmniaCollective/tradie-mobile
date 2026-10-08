@@ -13,15 +13,7 @@ import { jobFacts, legacyStatus } from './jobSteps';
 import { useShallow } from 'zustand/react/shallow';
 
 // Types
-export type JobStatus =
-  | 'REQUESTED'
-  | 'QUOTED'
-  | 'APPROVED'
-  | 'SCHEDULED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
-  | 'INVOICED'
-  | 'PAID';
+export type JobStatus = 'REQUESTED' | 'QUOTED' | 'APPROVED' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'INVOICED' | 'PAID';
 
 export type JobType =
   | 'service_1'
@@ -249,24 +241,8 @@ export type Appearance = 'automatic' | 'light' | 'dark';
 /** One-off tips, each shown once: on Home, the first job opened, and Money. */
 export type TipKey = 'home' | 'job' | 'money';
 
-export interface ReminderPrefs {
-  /** A quote with no reply after a few days. */
-  quoteNoReply: boolean;
-  /** An invoice past its due date. */
-  invoiceOverdue: boolean;
-  /** The evening before a booked job. */
-  jobTomorrow: boolean;
-  /** Insurance or a licence running out. */
-  renewals: boolean;
-}
-
-export const DEFAULT_REMINDERS: ReminderPrefs = { quoteNoReply: true, invoiceOverdue: true, jobTomorrow: true, renewals: true };
-
-/** The tradie's reminder choices, with anything they haven't set left on. */
-export const reminderPrefs = (settings: Pick<BusinessSettings, 'reminders'>): ReminderPrefs => ({
-  ...DEFAULT_REMINDERS,
-  ...settings.reminders,
-});
+export { DEFAULT_REMINDERS, reminderPrefs, type ReminderPrefs } from './reminders';
+import type { ReminderPrefs } from './reminders';
 
 export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
 
@@ -302,7 +278,7 @@ const defaultSettings: BusinessSettings = {
   minimumCharge: 50,
   urgentMultiplier: 1.5,
   emergencyMultiplier: 2,
-  travelRatePerMile: 0.50,
+  travelRatePerMile: 0.5,
   serviceRadiusMiles: 25,
   vatRegistered: false,
   vatRate: 20,
@@ -459,9 +435,7 @@ export const useTradeStore = create<TradeStore>()(
 
       updateJob: (id, updates) => {
         set((state) => ({
-          jobs: state.jobs.map((job) =>
-            job.id === id ? { ...job, ...updates } : job
-          ),
+          jobs: state.jobs.map((job) => (job.id === id ? { ...job, ...updates } : job)),
         }));
       },
 
@@ -478,7 +452,12 @@ export const useTradeStore = create<TradeStore>()(
 
       unbook: (jobId) =>
         set((state) =>
-          withSyncedStatus(state, jobId, { scheduledDate: undefined, scheduledTime: undefined, offeredSlots: undefined, offeredAt: undefined }),
+          withSyncedStatus(state, jobId, {
+            scheduledDate: undefined,
+            scheduledTime: undefined,
+            offeredSlots: undefined,
+            offeredAt: undefined,
+          }),
         ),
 
       markDone: (jobId, done) =>
@@ -524,18 +503,16 @@ export const useTradeStore = create<TradeStore>()(
       recordQuoteReminder: (jobId) =>
         set((state) => {
           const job = state.jobs.find((j) => j.id === jobId);
-          return job ? withSyncedStatus(state, jobId, { quoteRemindedAt: [...(job.quoteRemindedAt ?? []), new Date().toISOString()] }) : {};
+          return job
+            ? withSyncedStatus(state, jobId, { quoteRemindedAt: [...(job.quoteRemindedAt ?? []), new Date().toISOString()] })
+            : {};
         }),
 
       // Parts actions
       addPart: (jobId, partData) => {
         const part: Part = { ...partData, id: generateId() };
         set((state) => ({
-          jobs: state.jobs.map((job) =>
-            job.id === jobId
-              ? { ...job, parts: [...(job.parts ?? []), part] }
-              : job
-          ),
+          jobs: state.jobs.map((job) => (job.id === jobId ? { ...job, parts: [...(job.parts ?? []), part] } : job)),
         }));
       },
 
@@ -545,11 +522,9 @@ export const useTradeStore = create<TradeStore>()(
             job.id === jobId
               ? {
                   ...job,
-                  parts: (job.parts ?? []).map((p) =>
-                    p.id === partId ? { ...p, ...updates } : p
-                  ),
+                  parts: (job.parts ?? []).map((p) => (p.id === partId ? { ...p, ...updates } : p)),
                 }
-              : job
+              : job,
           ),
         }));
       },
@@ -557,9 +532,7 @@ export const useTradeStore = create<TradeStore>()(
       removePart: (jobId, partId) => {
         set((state) => ({
           jobs: state.jobs.map((job) =>
-            job.id === jobId
-              ? { ...job, parts: (job.parts ?? []).filter((p) => p.id !== partId) }
-              : job
+            job.id === jobId ? { ...job, parts: (job.parts ?? []).filter((p) => p.id !== partId) } : job,
           ),
         }));
       },
@@ -568,20 +541,14 @@ export const useTradeStore = create<TradeStore>()(
       addPhoto: (jobId, photoData) => {
         const photo: JobPhoto = { ...photoData, id: generateId() };
         set((state) => ({
-          jobs: state.jobs.map((job) =>
-            job.id === jobId
-              ? { ...job, photos: [...(job.photos ?? []), photo] }
-              : job
-          ),
+          jobs: state.jobs.map((job) => (job.id === jobId ? { ...job, photos: [...(job.photos ?? []), photo] } : job)),
         }));
       },
 
       removePhoto: (jobId, photoId) => {
         set((state) => ({
           jobs: state.jobs.map((job) =>
-            job.id === jobId
-              ? { ...job, photos: (job.photos ?? []).filter((p) => p.id !== photoId) }
-              : job
+            job.id === jobId ? { ...job, photos: (job.photos ?? []).filter((p) => p.id !== photoId) } : job,
           ),
         }));
       },
@@ -596,9 +563,7 @@ export const useTradeStore = create<TradeStore>()(
 
       updateCustomer: (id, updates) => {
         set((state) => ({
-          customers: state.customers.map((customer) =>
-            customer.id === id ? { ...customer, ...updates } : customer
-          ),
+          customers: state.customers.map((customer) => (customer.id === id ? { ...customer, ...updates } : customer)),
         }));
       },
 
@@ -622,17 +587,13 @@ export const useTradeStore = create<TradeStore>()(
           status: 'pending',
           // Auto-apply CIS deduction if CIS registered
           cisDeducted: cis || undefined,
-          cisDeductionAmount: cis
-            ? Math.round(job.quote.total * (settings.cisRate / 100) * 100) / 100
-            : undefined,
+          cisDeductionAmount: cis ? Math.round(job.quote.total * (settings.cisRate / 100) * 100) / 100 : undefined,
           createdAt: new Date().toISOString(),
         };
 
         set((state) => ({
           invoices: [...state.invoices, invoice],
-          jobs: state.jobs.map((j) =>
-            j.id === jobId ? { ...j, status: 'INVOICED' } : j
-          ),
+          jobs: state.jobs.map((j) => (j.id === jobId ? { ...j, status: 'INVOICED' } : j)),
         }));
 
         return id;
@@ -647,7 +608,9 @@ export const useTradeStore = create<TradeStore>()(
             return {
               ...inv,
               quote,
-              cisDeductionAmount: inv.cisDeducted ? Math.round(quote.total * (settings.cisRate / 100) * 100) / 100 : inv.cisDeductionAmount,
+              cisDeductionAmount: inv.cisDeducted
+                ? Math.round(quote.total * (settings.cisRate / 100) * 100) / 100
+                : inv.cisDeductionAmount,
             };
           }),
         }));
@@ -671,7 +634,10 @@ export const useTradeStore = create<TradeStore>()(
             updates.status === 'paid' ? 'PAID' : updates.status && invoice?.status === 'paid' ? 'INVOICED' : undefined;
           return {
             invoices: state.invoices.map((inv) => (inv.id === id ? { ...inv, ...updates } : inv)),
-            jobs: jobStatus && invoice ? state.jobs.map((j) => (j.id === invoice.jobId ? { ...j, status: jobStatus } : j)) : state.jobs,
+            jobs:
+              jobStatus && invoice
+                ? state.jobs.map((j) => (j.id === invoice.jobId ? { ...j, status: jobStatus } : j))
+                : state.jobs,
           };
         });
       },
@@ -692,9 +658,7 @@ export const useTradeStore = create<TradeStore>()(
 
       updateExpense: (id, updates) => {
         set((state) => ({
-          expenses: state.expenses.map((exp) =>
-            exp.id === id ? { ...exp, ...updates } : exp
-          ),
+          expenses: state.expenses.map((exp) => (exp.id === id ? { ...exp, ...updates } : exp)),
         }));
       },
 
@@ -721,9 +685,7 @@ export const useTradeStore = create<TradeStore>()(
 
       toggleTodo: (id) => {
         set((state) => ({
-          todos: state.todos.map((todo) =>
-            todo.id === id ? { ...todo, completed: !todo.completed } : todo
-          ),
+          todos: state.todos.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)),
         }));
       },
 
@@ -756,9 +718,7 @@ export const useTradeStore = create<TradeStore>()(
 
       updatePricingPreset: (type, updates) => {
         set((state) => ({
-          pricingPresets: state.pricingPresets.map((preset) =>
-            preset.type === type ? { ...preset, ...updates } : preset
-          ),
+          pricingPresets: state.pricingPresets.map((preset) => (preset.type === type ? { ...preset, ...updates } : preset)),
         }));
       },
 
@@ -787,7 +747,7 @@ export const useTradeStore = create<TradeStore>()(
         const before = getTradeConfig(settings.trade, from);
         const after = getTradeConfig(settings.trade, country);
         // Anything the tradie changed themselves stays as they set it.
-        const follow = <T, >(current: T, oldDefault: T | undefined, newDefault: T): T =>
+        const follow = <T>(current: T, oldDefault: T | undefined, newDefault: T): T =>
           oldDefault === undefined || current === oldDefault ? newDefault : current;
         set({
           settings: {
@@ -885,7 +845,9 @@ export const useTradeStore = create<TradeStore>()(
         const { settings } = get();
         set((state) => ({
           jobs: state.jobs.map((j) =>
-            j.id === jobId && j.quote ? { ...j, quote: { ...j.quote, ...priceQuote(settings, prices, j.quote.emergencySurcharge) } } : j,
+            j.id === jobId && j.quote
+              ? { ...j, quote: { ...j.quote, ...priceQuote(settings, prices, j.quote.emergencySurcharge) } }
+              : j,
           ),
         }));
       },
@@ -895,8 +857,8 @@ export const useTradeStore = create<TradeStore>()(
       version: STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: migrateStore,
-    }
-  )
+    },
+  ),
 );
 
 /**
@@ -918,7 +880,6 @@ function withSyncedStatus(
     }),
   };
 }
-
 
 export const useJobs = () => useTradeStore(useShallow((s) => s.jobs));
 export const useCustomers = () => useTradeStore(useShallow((s) => s.customers));
@@ -948,12 +909,13 @@ export function taxYearKey(country: Country, now: Date = new Date()): string {
 
 /** Amount put aside for tax in the current tax year; a total from a past year counts as nothing. */
 export const useTaxSetAside = (): number =>
-  useTradeStore((s) =>
-    s.taxSetAsideTaxYear === taxYearKey(regionFor(s.settings.country).country) ? s.taxSetAsideTotal : 0,
-  );
+  useTradeStore((s) => (s.taxSetAsideTaxYear === taxYearKey(regionFor(s.settings.country).country) ? s.taxSetAsideTotal : 0));
 
 /** When a sent invoice is due: the send date plus the tradie's payment terms. Unsent invoices have no due date. */
-export function invoiceDueDate(invoice: Pick<Invoice, 'sentAt'>, settings: Pick<BusinessSettings, 'paymentTermsDays'>): Date | null {
+export function invoiceDueDate(
+  invoice: Pick<Invoice, 'sentAt'>,
+  settings: Pick<BusinessSettings, 'paymentTermsDays'>,
+): Date | null {
   if (!invoice.sentAt) return null;
   return new Date(new Date(invoice.sentAt).getTime() + (settings.paymentTermsDays ?? 14) * 24 * 60 * 60 * 1000);
 }
@@ -1021,5 +983,4 @@ export const getJobTypeLabel = (trade: Trade, type: JobType): string => {
 export const jobName = (job: Pick<Job, 'type' | 'customName'>, trade: Trade): string =>
   job.customName?.trim() || getJobTypeLabel(trade, job.type);
 export const usePricingPresets = () => useTradeStore(useShallow((s) => s.pricingPresets));
-export const useJobExpenses = (jobId: string) =>
-  useTradeStore(useShallow((s) => s.expenses.filter((e) => e.jobId === jobId)));
+export const useJobExpenses = (jobId: string) => useTradeStore(useShallow((s) => s.expenses.filter((e) => e.jobId === jobId)));

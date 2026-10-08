@@ -9,6 +9,7 @@ import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import { palettes, themeVars, useColorMode, applyAppearance } from '@/lib/theme';
 import { useAuthSync } from '@/lib/auth';
+import { useNudgeSync } from '@/lib/useNudgeSync';
 import { useTradeStore } from '@/lib/store';
 import { addNotificationResponseListener } from '@/lib/notifications';
 import { ToastHost } from '@/components/Toast';
@@ -22,6 +23,7 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const router = useRouter();
   useAuthSync();
+  useNudgeSync();
   const mode = useColorMode();
   const p = palettes[mode];
   const navigationTheme = useMemo(() => {

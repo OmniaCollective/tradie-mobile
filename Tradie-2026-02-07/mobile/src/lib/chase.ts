@@ -21,7 +21,7 @@ import { formatDateObj } from './dates';
 import { createInvoicePdf } from './invoiceExport';
 
 /** What the customer still owes: the total less any CIS the contractor holds back. */
-const owed = (invoice: Invoice) => invoice.quote.total - (invoice.cisDeducted ? invoice.cisDeductionAmount ?? 0 : 0);
+const owed = (invoice: Invoice) => invoice.quote.total - (invoice.cisDeducted ? (invoice.cisDeductionAmount ?? 0) : 0);
 
 export function chaseMessage(invoice: Invoice, customer: Customer, settings: BusinessSettings, now = new Date()): string {
   const first = customer.name.trim().split(/\s+/)[0] || customer.name;
@@ -42,10 +42,12 @@ export function chaseMessage(invoice: Invoice, customer: Customer, settings: Bus
     const when = due ? ` on ${formatDateObj(due)}` : ' soon';
     return `Hi ${first}, a friendly reminder that invoice ${ref} for ${amount} is due${when}.${pay}${sign}`;
   }
+  // Agreed wording: polite the first time, firmer after that.
+  const howToPay = pay || '\n\nPayment details are on the invoice.';
   if (!chasedBefore) {
-    return `Hi ${first}, just a reminder that invoice ${ref} for ${amount} was due on ${formatDateObj(due!)}. If you've already paid, thank you, and please ignore this.${pay}${sign}`;
+    return `Hi ${first}, a quick reminder that invoice ${ref} for ${amount} was due on ${formatDateObj(due!)}.${howToPay}${sign}`;
   }
-  return `Hi ${first}, invoice ${ref} for ${amount} is now ${late} ${late === 1 ? 'day' : 'days'} overdue. Please could you pay it today, or let me know when it will be paid.${pay}${sign}`;
+  return `Hi ${first}, invoice ${ref} for ${amount} is now ${late} ${late === 1 ? 'day' : 'days'} overdue. Could you settle it this week please?${pay}${sign}`;
 }
 
 /**
@@ -87,7 +89,12 @@ export function quoteReminderMessage(job: Job, customer: Customer, jobLabel: str
 }
 
 /** Opens the quote reminder in Messages (or the share sheet) and records it if it was sent. */
-export async function remindAboutQuote(job: Job, customer: Customer, jobLabel: string, settings: BusinessSettings): Promise<boolean> {
+export async function remindAboutQuote(
+  job: Job,
+  customer: Customer,
+  jobLabel: string,
+  settings: BusinessSettings,
+): Promise<boolean> {
   const message = quoteReminderMessage(job, customer, jobLabel, settings);
   let sent = false;
   if (customer.phone?.trim() && Platform.OS !== 'web' && (await SMS.isAvailableAsync())) {

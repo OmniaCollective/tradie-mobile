@@ -8,7 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, ShieldCheck, CircleAlert } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTradeStore, useRenewals, useRegion, getRegion, daysUntil, type Renewal } from '@/lib/store';
-import { scheduleRenewalReminders, cancelRenewalReminders } from '@/lib/notifications';
+import { ensureNotificationPermission, cancelRenewalReminders } from '@/lib/notifications';
 import { parseDate, toDateKey } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -61,7 +61,8 @@ export function RenewalsSection() {
     setDraft(null);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     toast('Saved. Reminders set');
-    await scheduleRenewalReminders({ id, name: fields.name, expires: fields.expires });
+    // Reminders are scheduled by the app-wide sync (lib/nudgePlan.ts); this only asks permission.
+    await ensureNotificationPermission();
   };
 
   return (
