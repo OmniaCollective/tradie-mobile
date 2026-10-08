@@ -47,7 +47,15 @@ export function offerExpired(job: Pick<Job, 'offeredSlots' | 'offeredAt' | 'sche
 export async function scheduleJob(job: Job, customer: Customer, when: Date): Promise<void> {
   const { date, time } = toSlot(when);
   const store = useTradeStore.getState();
-  store.updateJob(job.id, { status: 'SCHEDULED', scheduledDate: date, scheduledTime: time, offeredSlots: undefined, offeredAt: undefined });
+  // Booking counts as the customer saying yes.
+  store.updateJob(job.id, {
+    status: 'SCHEDULED',
+    scheduledDate: date,
+    scheduledTime: time,
+    offeredSlots: undefined,
+    offeredAt: undefined,
+    acceptedAt: job.acceptedAt ?? new Date().toISOString(),
+  });
 
   // The job is booked above; each follow-up is independent, so one failing
   // (notifications off, calendar unavailable) never undoes or blocks the others.

@@ -7,6 +7,11 @@ Everything here was agreed with Paul in the clickable test (https://claude.ai/ar
 - Jobs gain: quote sent date, times offered, booked time, done, invoice sent date, paid (+ month), **didn't go ahead**, notes, parts, **one photo list** (no before/during/after), reminder count (for Chase A then B).
 - Booking counts as the customer saying yes (no separate "approved" step).
 - Account gains: **any number of insurance and licence entries**, reminder switches, which one-off tips have been seen, Appearance.
+- **Done (2026-10-08):** `lib/jobSteps.ts` works out each job's place from its facts (one source for every screen); `lib/storeMigrations.ts` holds the update rules; store has checklist actions with undo; 49 tests (`npm run test:jobs`).
+  - A job that said yes but has no time yet sits in a **"To book"** group (needed for jobs "Approved" in 1.5).
+  - **Cash on the day:** "Mark paid" with no invoice records a paid invoice (so it counts in Money and tax) that doesn't use a free invoice; Undo removes it.
+  - **Next step** = the first step after the furthest one reached (a finished job that was never quoted suggests the invoice, not the quote).
+  - The old single status is kept in step in the background until every screen has moved over, then removed.
 - **Existing users keep everything:** their jobs map onto the new steps and their before/during/after photos merge into one list. Tested with real 1.5 data before building.
 
 ## 2. App frame
@@ -42,6 +47,7 @@ Everything here was agreed with Paul in the clickable test (https://claude.ai/ar
 - **Checklist:** Quote → Booked → Job done → Invoice → Paid, then **Didn't go ahead**. Any step, any order; done steps show tick, date and Undo; the next one highlighted, never forced. Each action saves and keeps you on the job.
 - Quote and invoice: preview, Edit, Send, then "Did you send it?".
 - Booking: Suggest 3 times or pick a time; offered times can be changed or cancelled; tap the one the customer picked.
+- **Paid on the day (cash):** the payment is recorded as a numbered invoice marked paid (counts for tax and exports, not a free invoice); the job offers **Send receipt**, a PDF stamped PAID.
 - Price (labour + parts), Parts and materials, Notes (first line shows under the title), Photos (add as many as you like).
 - One-off tip (X): "This is the job's checklist. Do any step, in any order. Everything saves."
 

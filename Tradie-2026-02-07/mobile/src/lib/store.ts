@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as generateId } from 'uuid';
 import { Trade, getTradeConfig } from './trades';
 import { generateSampleData } from './sampleData';
+import { migrateStore, STORE_VERSION } from './storeMigrations';
+import { jobFacts, legacyStatus } from './jobSteps';
 
 // Selector hooks for performance — useShallow prevents re-renders when
 // the returned object/array is structurally equal but referentially new.
@@ -67,7 +69,8 @@ export interface Part {
 export interface JobPhoto {
   id: string;
   uri: string;
-  type: 'before' | 'during' | 'after';
+  /** Only on photos from before 1.6: they're one list now. */
+  type?: 'before' | 'during' | 'after';
   createdAt: string;
 }
 
@@ -81,6 +84,12 @@ export interface Job {
   quote?: Quote;
   /** When the quote PDF was shared with the customer. Unset = not sent yet. */
   quoteSentAt?: string;
+  /** Each time the customer was reminded about the quote. */
+  quoteRemindedAt?: string[];
+  /** When the customer said yes. Booking also counts as yes. */
+  acceptedAt?: string;
+  /** Didn't go ahead (said no, or went elsewhere). Kept, not deleted, so it can be reopened. */
+  lostAt?: string;
   scheduledDate?: string;
   scheduledTime?: string;
   completedAt?: string;
@@ -118,6 +127,8 @@ export interface Invoice {
   cisDeductionAmount?: number;
   /** Each time the customer was chased for payment. */
   chasedAt?: string[];
+  /** Paid on the day with no invoice sent ("Mark paid" on the job): counts as income, not as a free invoice. */
+  recordedOnly?: boolean;
   createdAt: string;
 }
 
@@ -221,11 +232,37 @@ export interface BusinessSettings {
   paymentTermsDays: number;
   /** Light or dark: follow the iPhone (default), or always one. */
   appearance?: Appearance;
-  /** The one-off explainer on the Tax card has been dismissed. */
+  /** The one-off explainer on the Tax card has been dismissed (before 1.6; see tipsSeen). */
   taxTipSeen?: boolean;
+  /** One-off tips already closed. */
+  tipsSeen?: TipKey[];
+  /** Which reminders the tradie wants. Unset = all on. */
+  reminders?: Partial<ReminderPrefs>;
 }
 
 export type Appearance = 'automatic' | 'light' | 'dark';
+
+/** One-off tips, each shown once: on Home, the first job opened, and Money. */
+export type TipKey = 'home' | 'job' | 'money';
+
+export interface ReminderPrefs {
+  /** A quote with no reply after a few days. */
+  quoteNoReply: boolean;
+  /** An invoice past its due date. */
+  invoiceOverdue: boolean;
+  /** The evening before a booked job. */
+  jobTomorrow: boolean;
+  /** Insurance or a licence running out. */
+  renewals: boolean;
+}
+
+export const DEFAULT_REMINDERS: ReminderPrefs = { quoteNoReply: true, invoiceOverdue: true, jobTomorrow: true, renewals: true };
+
+/** The tradie's reminder choices, with anything they haven't set left on. */
+export const reminderPrefs = (settings: Pick<BusinessSettings, 'reminders'>): ReminderPrefs => ({
+  ...DEFAULT_REMINDERS,
+  ...settings.reminders,
+});
 
 export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
 
@@ -303,6 +340,22 @@ interface TradeStore {
   updateJob: (id: string, updates: Partial<Job>) => void;
   deleteJob: (id: string) => void;
   getJob: (id: string) => Job | undefined;
+
+  // The job's checklist. Each step can be done in any order and undone.
+  /** Quote shared with the customer (or undone). */
+  markQuoteSent: (jobId: string, sent: boolean) => void;
+  /** Takes the booking or offered times off the job; the customer's yes stays. */
+  unbook: (jobId: string) => void;
+  markDone: (jobId: string, done: boolean) => void;
+  /**
+   * Paid (or undone). With no invoice, a paid record is made so the money counts in Money and
+   * tax; undoing removes that record again.
+   */
+  markPaid: (jobId: string, paid: boolean) => void;
+  /** Didn't go ahead (or reopened). */
+  setLost: (jobId: string, lost: boolean) => void;
+  /** The customer was reminded about the quote. */
+  recordQuoteReminder: (jobId: string) => void;
 
   // Parts actions
   addPart: (jobId: string, part: Omit<Part, 'id'>) => void;
@@ -413,6 +466,60 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       getJob: (id) => get().jobs.find((job) => job.id === id),
+
+      markQuoteSent: (jobId, sent) =>
+        set((state) => withSyncedStatus(state, jobId, { quoteSentAt: sent ? new Date().toISOString() : undefined })),
+
+      unbook: (jobId) =>
+        set((state) =>
+          withSyncedStatus(state, jobId, { scheduledDate: undefined, scheduledTime: undefined, offeredSlots: undefined, offeredAt: undefined }),
+        ),
+
+      markDone: (jobId, done) =>
+        set((state) => withSyncedStatus(state, jobId, { completedAt: done ? new Date().toISOString() : undefined })),
+
+      markPaid: (jobId, paid) =>
+        set((state) => {
+          const job = state.jobs.find((j) => j.id === jobId);
+          if (!job) return {};
+          const now = new Date().toISOString();
+          const invoice = state.invoices.find((inv) => inv.jobId === jobId);
+          let invoices = state.invoices;
+          if (paid && invoice) {
+            invoices = invoices.map((inv) => (inv.id === invoice.id ? { ...inv, status: 'paid', paidAt: now } : inv));
+          } else if (paid && job.quote) {
+            invoices = [
+              ...invoices,
+              {
+                id: generateId(),
+                number: invoices.reduce((max, inv) => Math.max(max, inv.number ?? 0), 0) + 1,
+                jobId,
+                customerId: job.customerId,
+                quote: job.quote,
+                status: 'paid',
+                paidAt: now,
+                recordedOnly: true,
+                createdAt: now,
+              },
+            ];
+          } else if (!paid && invoice?.recordedOnly) {
+            invoices = invoices.filter((inv) => inv.id !== invoice.id);
+          } else if (!paid && invoice) {
+            invoices = invoices.map((inv) =>
+              inv.id === invoice.id ? { ...inv, status: inv.sentAt ? 'sent' : 'pending', paidAt: undefined } : inv,
+            );
+          }
+          return withSyncedStatus({ ...state, invoices }, jobId, {});
+        }),
+
+      setLost: (jobId, lost) =>
+        set((state) => withSyncedStatus(state, jobId, { lostAt: lost ? new Date().toISOString() : undefined })),
+
+      recordQuoteReminder: (jobId) =>
+        set((state) => {
+          const job = state.jobs.find((j) => j.id === jobId);
+          return job ? withSyncedStatus(state, jobId, { quoteRemindedAt: [...(job.quoteRemindedAt ?? []), new Date().toISOString()] }) : {};
+        }),
 
       // Parts actions
       addPart: (jobId, partData) => {
@@ -764,101 +871,33 @@ export const useTradeStore = create<TradeStore>()(
     }),
     {
       name: 'tradie-storage',
-      version: 8,
+      version: STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
-      migrate: (persisted: any, version: number) => {
-        if (version === 0) {
-          // Migrate old plumbing-specific JobType names to generic slot names
-          const typeMap: Record<string, string> = {
-            blocked_drain: 'service_1',
-            leaking_tap: 'service_2',
-            burst_pipe: 'service_3',
-            toilet_repair: 'service_4',
-            boiler_service: 'service_5',
-            radiator_issue: 'service_6',
-            water_heater: 'service_7',
-            general_plumbing: 'service_8',
-          };
-          const migrateType = (t: string) => typeMap[t] ?? t;
-
-          if (persisted.jobs) {
-            persisted.jobs = persisted.jobs.map((j: any) => ({
-              ...j,
-              type: migrateType(j.type),
-            }));
-          }
-          if (persisted.pricingPresets) {
-            persisted.pricingPresets = persisted.pricingPresets.map((p: any) => ({
-              ...p,
-              type: migrateType(p.type),
-            }));
-          }
-        }
-        if (version < 3) {
-          // Ensure expenses array exists
-          if (!persisted.expenses) {
-            persisted.expenses = [];
-          }
-          // Ensure new tax settings exist
-          if (persisted.settings) {
-            if (persisted.settings.vatRegistered === undefined) persisted.settings.vatRegistered = false;
-            if (persisted.settings.vatScheme === undefined) persisted.settings.vatScheme = 'standard';
-            if (persisted.settings.vatFlatRatePercent === undefined) persisted.settings.vatFlatRatePercent = 14.5;
-            if (persisted.settings.vatNumber === undefined) persisted.settings.vatNumber = '';
-            if (persisted.settings.personalAllowance === undefined) persisted.settings.personalAllowance = 12570;
-            if (persisted.settings.onlyIncomeSource === undefined) persisted.settings.onlyIncomeSource = true;
-            if (persisted.settings.otherAnnualIncome === undefined) persisted.settings.otherAnnualIncome = 0;
-            if (persisted.settings.cisRegistered === undefined) persisted.settings.cisRegistered = false;
-          }
-        }
-        if (version < 5) {
-          // Add configurable CIS deduction rate
-          if (persisted.settings && persisted.settings.cisRate === undefined) {
-            persisted.settings.cisRate = 20;
-          }
-        }
-        if (version < 6) {
-          // Anyone with saved data from an earlier version has already set up the app
-          persisted.hasCompletedOnboarding = true;
-        }
-        if (version < 8) {
-          if (!Array.isArray(persisted.renewals)) persisted.renewals = [];
-        }
-        if (version < 7) {
-          // 'TRADIE' was a placeholder business name, never the tradie's own
-          if (persisted.settings) {
-            if (persisted.settings.businessName === 'TRADIE') persisted.settings.businessName = '';
-            if (persisted.settings.paymentDetails === undefined) persisted.settings.paymentDetails = '';
-            if (persisted.settings.paymentTermsDays === undefined) persisted.settings.paymentTermsDays = 14;
-          }
-          // Number existing invoices in the order they were made
-          if (Array.isArray(persisted.invoices)) {
-            const order = [...persisted.invoices].sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)));
-            const numbers = new Map(order.map((inv: any, i: number) => [inv.id, i + 1]));
-            persisted.invoices = persisted.invoices.map((inv: any) => ({ ...inv, number: numbers.get(inv.id) }));
-          }
-        }
-        if (version < 2) {
-          // Clear sample data for clean new-user experience
-          const sampleIds = ['cust1', 'cust2', 'cust3', 'job1', 'job2', 'job3', 'job4', 'inv1', 'todo1', 'todo2'];
-          if (persisted.customers) {
-            persisted.customers = persisted.customers.filter((c: any) => !sampleIds.includes(c.id));
-          }
-          if (persisted.jobs) {
-            persisted.jobs = persisted.jobs.filter((j: any) => !sampleIds.includes(j.id));
-          }
-          if (persisted.invoices) {
-            persisted.invoices = persisted.invoices.filter((i: any) => !sampleIds.includes(i.id));
-          }
-          if (persisted.todos) {
-            persisted.todos = persisted.todos.filter((t: any) => !sampleIds.includes(t.id));
-          }
-        }
-        return persisted;
-      },
+      migrate: migrateStore,
     }
   )
 );
+
+/**
+ * Applies changes to one job and keeps its old single status in step with what has happened,
+ * while screens move over to jobPosition (lib/jobSteps.ts).
+ */
+function withSyncedStatus(
+  state: Pick<TradeStore, 'jobs' | 'invoices'>,
+  jobId: string,
+  changes: Partial<Job>,
+): Pick<TradeStore, 'jobs' | 'invoices'> {
+  const invoice = state.invoices.find((inv) => inv.jobId === jobId);
+  return {
+    invoices: state.invoices,
+    jobs: state.jobs.map((j) => {
+      if (j.id !== jobId) return j;
+      const next = { ...j, ...changes };
+      return { ...next, status: legacyStatus(jobFacts(next, invoice), next.status) };
+    }),
+  };
+}
+
 
 export const useJobs = () => useTradeStore(useShallow((s) => s.jobs));
 export const useCustomers = () => useTradeStore(useShallow((s) => s.customers));

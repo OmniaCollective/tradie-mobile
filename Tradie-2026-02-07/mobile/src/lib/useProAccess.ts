@@ -48,6 +48,8 @@ export function useProAccess(): ProAccess {
   const invoicesThisMonth = useTradeStore((s) => {
     const now = new Date();
     return s.invoices.filter((i) => {
+      // Cash recorded with "Mark paid" isn't an invoice sent, so it doesn't use a free one.
+      if (i.recordedOnly) return false;
       const d = new Date(i.createdAt);
       return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     }).length;
