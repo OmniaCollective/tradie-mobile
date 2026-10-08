@@ -16,6 +16,7 @@ import {
   Eye,
   ChevronRight,
   ChevronDown,
+  Search,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -484,9 +485,21 @@ export default function MoneyScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, paddingHorizontal: 16 }}
       >
-        <Text className="text-fg text-[28px] font-bold tracking-tight mb-4" accessibilityRole="header">
-          Money
-        </Text>
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-fg text-[28px] font-bold tracking-tight" accessibilityRole="header">
+            Money
+          </Text>
+          {invoices.length > 0 && (
+            <Pressable
+              onPress={() => router.push('/search')}
+              className="w-11 h-11 rounded-full bg-surface items-center justify-center active:opacity-70"
+              accessibilityRole="button"
+              accessibilityLabel="Search customers, jobs and invoices"
+            >
+              <Search size={20} color={t.fg} strokeWidth={2} />
+            </Pressable>
+          )}
+        </View>
 
         <Tip id="money" text="What you’re owed, what’s come in, and what to put aside for tax." className="mb-4" />
 

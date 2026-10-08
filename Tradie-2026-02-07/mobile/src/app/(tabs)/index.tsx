@@ -7,7 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronRight, ChevronDown, ShieldAlert, Circle, CircleCheck } from 'lucide-react-native';
+import { Plus, ChevronRight, ChevronDown, ShieldAlert, Circle, CircleCheck, Search } from 'lucide-react-native';
 import {
   useJobs,
   useInvoices,
@@ -174,9 +174,21 @@ export default function HomeScreen() {
     >
       <View className="mb-6">
         <Text className="text-secondary text-sm">{today}</Text>
-        <Text className="text-fg text-[28px] font-bold tracking-tight" numberOfLines={1} accessibilityRole="header">
-          {greeting(settings.ownerName ?? '')}
-        </Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="flex-1 text-fg text-[28px] font-bold tracking-tight mr-3" numberOfLines={1} accessibilityRole="header">
+            {greeting(settings.ownerName ?? '')}
+          </Text>
+          {hasJobs && (
+            <Pressable
+              onPress={() => router.push('/search')}
+              className="w-11 h-11 rounded-full bg-surface items-center justify-center active:opacity-70"
+              accessibilityRole="button"
+              accessibilityLabel="Search customers, jobs and invoices"
+            >
+              <Search size={20} color={t.fg} strokeWidth={2} />
+            </Pressable>
+          )}
+        </View>
         {hasJobs && <PrimaryButton icon={Plus} label="New job" onPress={() => router.push('/add-job')} className="mt-4" />}
       </View>
 

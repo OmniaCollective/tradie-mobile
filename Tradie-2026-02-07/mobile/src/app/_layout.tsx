@@ -19,7 +19,6 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-
 function RootLayoutNav() {
   const router = useRouter();
   useAuthSync();
@@ -52,70 +51,72 @@ function RootLayoutNav() {
   return (
     // themeVars feeds the token classes (bg-bg, text-fg, …) for the current mode.
     <View style={[{ flex: 1, backgroundColor: p.bg }, themeVars[mode]]}>
-    <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-    <ThemeProvider value={navigationTheme}>
-      <Stack>
-        <Stack.Screen
-          name="onboarding"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="job/[id]"
-          options={({ navigation }) => ({
-            // A job opens on top of where you were, and the X puts you back there.
-            presentation: 'modal',
-            headerShown: true,
-            headerTitle: 'Job',
-            headerLeft: () => null,
-            headerRight: () => (
-              <CloseButton plain onPress={() => (navigation.canGoBack() ? navigation.goBack() : router.replace('/(tabs)'))} />
-            ),
-            headerStyle: { backgroundColor: p.bg },
-            headerTintColor: p.fg,
-            headerShadowVisible: false,
-          })}
-        />
-        <Stack.Screen
-          name="add-job"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="add-expense"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="suggest-times"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="preview"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="paywall"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-      </Stack>
-      <ToastHost />
-    </ThemeProvider>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+      <ThemeProvider value={navigationTheme}>
+        <Stack>
+          <Stack.Screen
+            name="onboarding"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="job/[id]"
+            options={({ navigation }) => ({
+              // A job opens on top of where you were, and the X puts you back there.
+              presentation: 'modal',
+              headerShown: true,
+              headerTitle: 'Job',
+              headerLeft: () => null,
+              headerRight: () => (
+                <CloseButton plain onPress={() => (navigation.canGoBack() ? navigation.goBack() : router.replace('/(tabs)'))} />
+              ),
+              headerStyle: { backgroundColor: p.bg },
+              headerTintColor: p.fg,
+              headerShadowVisible: false,
+            })}
+          />
+          <Stack.Screen
+            name="add-job"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="add-expense"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="suggest-times"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="preview"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="paywall"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="search" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="customer/[id]" options={{ presentation: 'modal', headerShown: false }} />
+        </Stack>
+        <ToastHost />
+      </ThemeProvider>
     </View>
   );
 }

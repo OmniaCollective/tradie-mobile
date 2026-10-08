@@ -501,7 +501,14 @@ export default function JobDetailScreen() {
         <Group className="mb-6">
           <View className="px-4 pt-4 pb-3 flex-row items-start justify-between">
             <View className="flex-1 mr-3">
-              <Text className="text-fg text-[17px] font-semibold">{customer.name}</Text>
+              <Pressable
+                onPress={() => router.push(`/customer/${customer.id}`)}
+                className="self-start min-h-[28px] justify-center"
+                accessibilityRole="button"
+                accessibilityHint="Opens everything for this customer"
+              >
+                <Text className="text-fg text-[17px] font-semibold">{customer.name}</Text>
+              </Pressable>
               {!!(customer.address || customer.postcode) && (
                 <Text className="text-secondary text-[15px] mt-0.5">
                   {[customer.address, customer.postcode].filter(Boolean).join(', ')}

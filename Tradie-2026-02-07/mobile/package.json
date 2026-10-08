@@ -12,7 +12,8 @@
     "test:scheduling": "npx tsx scripts/scheduling.test.mts",
     "test:ustax": "npx tsx scripts/usTax.test.mts",
     "test:uktax": "npx tsx scripts/ukTax.test.mts",
-    "test:jobs": "npx tsx scripts/jobSteps.test.mts"
+    "test:jobs": "npx tsx scripts/jobSteps.test.mts",
+    "test:search": "npx tsx scripts/search.test.mts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",

@@ -59,7 +59,10 @@ export default function AddJobScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
-  const params = useLocalSearchParams<{ date?: string; mode?: 'voice' | 'type' }>();
+  const params = useLocalSearchParams<{ date?: string; mode?: 'voice' | 'type'; customerId?: string }>();
+  const startCustomer = useTradeStore((s) =>
+    params.customerId ? s.customers.find((c) => c.id === params.customerId) : undefined,
+  );
   const customers = useCustomers();
   const pricingPresets = usePricingPresets();
   const settings = useTradeStore((s) => s.settings);
@@ -79,12 +82,12 @@ export default function AddJobScreen() {
   const [transcription, setTranscription] = useState('');
   const [voiceLimit, setVoiceLimit] = useState(false);
 
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerAddress, setCustomerAddress] = useState('');
-  const [customerPostcode, setCustomerPostcode] = useState('');
-  const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(null);
+  const [customerName, setCustomerName] = useState(startCustomer?.name ?? '');
+  const [customerEmail, setCustomerEmail] = useState(startCustomer?.email ?? '');
+  const [customerPhone, setCustomerPhone] = useState(startCustomer?.phone ?? '');
+  const [customerAddress, setCustomerAddress] = useState(startCustomer?.address ?? '');
+  const [customerPostcode, setCustomerPostcode] = useState(startCustomer?.postcode ?? '');
+  const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(startCustomer ?? null);
   const [jobType, setJobType] = useState<JobType | null>(null);
   const [urgency, setUrgency] = useState<Urgency>('standard');
   const [description, setDescription] = useState('');
