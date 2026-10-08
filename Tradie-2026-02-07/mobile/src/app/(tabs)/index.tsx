@@ -97,12 +97,23 @@ export default function HomeScreen() {
   const dueRenewals = renewals.filter((r) => daysUntil(r.expires) <= 30).sort((x, y) => x.expires.localeCompare(y.expires));
   const setupSteps = [
     {
+      page: 'business',
       label: 'Business details',
       hint: 'Name, phone and address',
       done: !!(settings.businessName.trim() || settings.ownerName.trim()) && !!(settings.phone.trim() || settings.email.trim()),
     },
-    { label: 'How customers pay you', hint: 'Bank or payment details for invoices', done: !!settings.paymentDetails.trim() },
-    { label: 'Insurance and licences', hint: 'Optional · reminders before they expire', done: renewals.length > 0 },
+    {
+      page: 'pay',
+      label: 'How customers pay you',
+      hint: 'Bank or payment details for invoices',
+      done: !!settings.paymentDetails.trim(),
+    },
+    {
+      page: 'insurance',
+      label: 'Insurance and licences',
+      hint: 'Optional · reminders before they expire',
+      done: renewals.length > 0,
+    },
   ];
   const setupLeft = setupSteps.some((s) => !s.done);
   const hasJobs = jobs.length > 0;
@@ -222,7 +233,7 @@ export default function HomeScreen() {
                   <View key={r.id}>
                     {i > 0 && <RowDivider />}
                     <Pressable
-                      onPress={() => router.push('/(tabs)/settings')}
+                      onPress={() => router.push('/account/insurance')}
                       className="flex-row items-center px-4 py-3 active:opacity-70"
                       accessibilityRole="button"
                     >
@@ -288,7 +299,7 @@ export default function HomeScreen() {
               <View key={step.label}>
                 {i > 0 && <RowDivider />}
                 <Pressable
-                  onPress={() => router.push('/(tabs)/settings')}
+                  onPress={() => router.push(`/account/${step.page}`)}
                   className="flex-row items-center px-4 min-h-[56px] py-2 active:opacity-70"
                   accessibilityRole="button"
                   accessibilityState={{ checked: step.done }}

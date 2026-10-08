@@ -43,7 +43,7 @@ function RootLayoutNav() {
       const data = response.notification.request.content.data;
       if (typeof data?.jobId === 'string') router.push(`/job/${data.jobId}`);
       else if (data?.type === 'daily_reminder') router.push('/(tabs)/calendar');
-      else if (data?.type === 'renewal') router.push('/(tabs)/settings');
+      else if (data?.type === 'renewal') router.push('/account/insurance');
     });
     return () => subscription.remove();
   }, [router]);
@@ -114,6 +114,7 @@ function RootLayoutNav() {
           />
           <Stack.Screen name="search" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="customer/[id]" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="account/[page]" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
         <ToastHost />
       </ThemeProvider>
