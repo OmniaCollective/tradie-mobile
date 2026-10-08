@@ -47,15 +47,19 @@ interface ButtonProps {
 /** The one cyan action on a screen. Navy text on the logo cyan in both modes. */
 export function PrimaryButton({ label, onPress, icon: Icon, compact, loading, disabled, className }: ButtonProps) {
   const t = useTheme();
+  // Not ready yet: a plain grey button, not a faded cyan one (which looked broken).
+  const off = disabled && !loading;
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       className={cn(
-        'bg-accent rounded-xl flex-row items-center justify-center active:opacity-80',
+        'rounded-xl flex-row items-center justify-center active:opacity-80',
+        off ? 'bg-surface' : 'bg-accent',
         compact ? 'h-10 px-3.5' : 'h-[52px] px-5',
-        (disabled || loading) && 'opacity-50',
+        loading && 'opacity-70',
         className,
       )}
     >
@@ -63,8 +67,8 @@ export function PrimaryButton({ label, onPress, icon: Icon, compact, loading, di
         <ActivityIndicator color={t.onAccent} />
       ) : (
         <>
-          {Icon && <Icon size={20} color={t.onAccent} strokeWidth={2} />}
-          <Text className={cn('text-on-accent font-semibold', compact ? 'text-[15px]' : 'text-[17px]', Icon && 'ml-1.5')}>
+          {Icon && <Icon size={20} color={off ? t.secondary : t.onAccent} strokeWidth={2} />}
+          <Text className={cn(off ? 'text-secondary' : 'text-on-accent', 'font-semibold', compact ? 'text-[15px]' : 'text-[17px]', Icon && 'ml-1.5')}>
             {label}
           </Text>
         </>
@@ -434,6 +438,43 @@ export function NumberFieldRow({
  * Bottom sheet. Modals render outside the app's root view, so the sheet sets
  * the theme variables itself; tapping the dimmed backdrop closes it.
  */
+/**
+ * A text field with its label above and any example as a hint below, so an empty field
+ * never looks filled in.
+ */
+export function LabeledField({
+  label,
+  optional,
+  hint,
+  className,
+  ...input
+}: { label: string; optional?: boolean; hint?: string; className?: string } & React.ComponentProps<typeof TextInput>) {
+  const t = useTheme();
+  const ref = React.useRef<TextInput>(null);
+  return (
+    <View className={className}>
+      {/* Tapping the label puts you in the box, as on a good web form */}
+      <Pressable
+        onPress={() => ref.current?.focus()}
+        className="flex-row justify-between mx-0.5 mb-1.5"
+        accessible={false}
+        importantForAccessibility="no"
+      >
+        <Text className="text-secondary text-[13px]">{label}</Text>
+        {optional && <Text className="text-secondary text-[13px]">optional</Text>}
+      </Pressable>
+      <TextInput
+        ref={ref}
+        className="bg-surface rounded-xl px-4 min-h-[48px] text-fg text-base"
+        placeholderTextColor={t.secondary}
+        accessibilityLabel={label}
+        {...input}
+      />
+      {hint ? <Text className="text-secondary text-[13px] mx-0.5 mt-1.5">{hint}</Text> : null}
+    </View>
+  );
+}
+
 /** The X that closes anything opened on top: screens, sheets, pop-ups. 44pt to tap. */
 export function CloseButton({ onPress, label = 'Close', plain }: { onPress: () => void; label?: string; plain?: boolean }) {
   const t = useTheme();

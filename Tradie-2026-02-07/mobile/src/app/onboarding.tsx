@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Linking, Image } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Mic,
-  CalendarCheck,
-  Banknote,
   FileText,
+  ListChecks,
+  Banknote,
   PoundSterling,
   DollarSign,
+  ShieldCheck,
   Wrench,
   Zap,
   Leaf,
@@ -24,15 +24,15 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { useTradeStore, useRegion, useSettings } from '@/lib/store';
+import { useTradeStore, useRegion } from '@/lib/store';
 import { type Trade, getTradeConfig } from '@/lib/trades';
-import { COUNTRY_OPTIONS, type Country } from '@/lib/region';
-import { useAccount, useAuthStore } from '@/lib/auth';
+import { useAuthStore } from '@/lib/auth';
+import { restorePurchases } from '@/lib/revenuecatClient';
+import { useRefreshPro } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
-import { VOICE_ENABLED } from '@/lib/features';
-import { Group, RowDivider, PrimaryButton, FieldRow, NumberFieldRow, SectionHeader, Segmented } from '@/components/ui';
-import { AppleSignInButton } from '@/components/AppleSignInButton';
-import { currencySymbol } from '@/lib/money';
+import { cn } from '@/lib/cn';
+import { Group, RowDivider, PrimaryButton, LabeledField } from '@/components/ui';
+import { toast } from '@/components/Toast';
 
 const TOP_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'plumber', icon: Wrench },
@@ -49,37 +49,37 @@ const MORE_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'dog_walker', icon: Dog },
 ];
 
-// Led by the biggest worries for solo traders: getting paid, then time, then admin and tax.
-const benefits = (country: Country): { icon: LucideIcon; title: string; body: string }[] => [
-  { icon: Banknote, title: 'Get paid on time', body: 'Invoices with due dates, and one tap to chase late payers' },
-  {
-    icon: CalendarCheck,
-    title: 'Book jobs that fit your day',
-    body: country === 'US' ? 'Around your schedule and drive' : 'Around your diary and drive',
-  },
-  ...(VOICE_ENABLED ? [{ icon: Mic, title: 'Add a job by voice', body: 'Say it once, the details fill themselves in' }] : []),
-  { icon: FileText, title: 'Quote and invoice in a tap', body: 'Professional PDFs from your own prices' },
-  {
-    icon: country === 'US' ? DollarSign : PoundSterling,
-    title: 'Your tax, worked out',
-    body: 'What to set aside, live',
-  },
+// In the order a job goes, then the reassurance (agreed copy, release/ux-journey-review.md).
+const benefits = (isUS: boolean): { icon: LucideIcon; title: string; body: string }[] => [
+  { icon: FileText, title: 'Quote in minutes', body: 'From your own prices, sent as a PDF' },
+  { icon: ListChecks, title: 'Know where every job is', body: 'Quoted, booked, invoiced or paid' },
+  { icon: Banknote, title: 'Get paid on time', body: 'Due dates, reminders and one tap to chase' },
+  { icon: isUS ? DollarSign : PoundSterling, title: 'Your tax, worked out', body: 'What to set aside, as you go (Pro)' },
+  { icon: ShieldCheck, title: 'Never miss a renewal', body: isUS ? 'Insurance and licenses with reminders' : 'Insurance and licences with reminders' },
 ];
+
+/** Two short steps after Welcome; the bars show where you are. */
+function StepBars({ step }: { step: 1 | 2 }) {
+  return (
+    <View className="flex-row gap-1.5" accessibilityLabel={`Step ${step} of 2`}>
+      <View className="w-6 h-1 rounded-full bg-accent" />
+      <View className={cn('w-6 h-1 rounded-full', step === 2 ? 'bg-accent' : 'bg-divider')} />
+    </View>
+  );
+}
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const t = useTheme();
-  const account = useAccount();
+  const refreshPro = useRefreshPro();
   const setTrade = useTradeStore((s) => s.setTrade);
   const updateSettings = useTradeStore((s) => s.updateSettings);
   const completeOnboarding = useTradeStore((s) => s.completeOnboarding);
   const setCountry = useTradeStore((s) => s.setCountry);
-  // Starts as the phone's region; the tradie can change it on the details step.
-  const { country, postcodeLabel } = useRegion();
+  // Starts as the phone's region; "Change" switches it.
+  const { country } = useRegion();
   const isUS = country === 'US';
-  // Rates start as the trade's defaults and are edited in place, like in Account.
-  const { hourlyRate, minimumCharge } = useSettings();
 
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [trade, setTradeChoice] = useState<Trade | null>(null);
@@ -87,30 +87,48 @@ export default function OnboardingScreen() {
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [phone, setPhone] = useState('');
-  const [postcode, setPostcode] = useState('');
+  const [restoring, setRestoring] = useState(false);
 
-  const goToTrade = () => {
-    // Apple shares the name on first sign-in; use it so they don't type it again.
-    if (!name && useAuthStore.getState().account?.name) setName(useAuthStore.getState().account!.name!);
+  const getStarted = () => {
+    // Sign in is offered later, when it helps (buying Pro, drive times).
+    useAuthStore.getState().skipSignIn();
     setStep(1);
   };
 
+  const restore = async () => {
+    setRestoring(true);
+    const result = await restorePurchases();
+    setRestoring(false);
+    if (!result.ok) {
+      toast('Couldn’t check. Try again with a connection.');
+      return;
+    }
+    await refreshPro();
+    if (result.data.entitlements.active.pro) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast('Pro restored');
+    } else {
+      toast('No Tradie Pro on this Apple ID');
+    }
+    getStarted();
+  };
+
   const finish = (withDetails: boolean) => {
-    const updates: Parameters<typeof updateSettings>[0] = { ownerName: name.trim() || account?.name || '' };
     if (withDetails) {
+      const updates: Parameters<typeof updateSettings>[0] = {};
+      if (name.trim()) updates.ownerName = name.trim();
       if (businessName.trim()) updates.businessName = businessName.trim();
       if (phone.trim()) updates.phone = phone.trim();
-      if (postcode.trim()) updates.postcode = postcode.trim().toUpperCase();
+      updateSettings(updates);
     }
-    updateSettings(updates);
     setCountry(country); // saves the choice, so a later change of phone region doesn't move them
     completeOnboarding();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace('/(tabs)');
   };
 
-  const back = (
-    <View className="flex-row items-center justify-between mb-6">
+  const topBar = (current: 1 | 2) => (
+    <View className="flex-row items-center justify-between mb-5">
       <Pressable
         onPress={() => setStep((s) => (s === 2 ? 1 : 0))}
         className="w-11 h-11 -ml-2.5 items-center justify-center"
@@ -119,32 +137,34 @@ export default function OnboardingScreen() {
       >
         <ChevronLeft size={24} color={t.fg} strokeWidth={2} />
       </Pressable>
-      <Text className="text-secondary text-sm">Step {step + 1} of 3</Text>
+      <StepBars step={current} />
+      <View className="w-11" />
     </View>
   );
 
-  // ── 1. Welcome ────────────────────────────────────────────────────────────
+  // ── Welcome ───────────────────────────────────────────────────────────────
   if (step === 0) {
     return (
-      <View className="flex-1 bg-bg px-6" style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }}>
-        {/* Scrolls on small iPhones; the sign-in buttons stay put */}
+      <View className="flex-1 bg-bg px-6" style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 16 }}>
+        {/* Scrolls on small iPhones and with larger text; the button stays put */}
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-          {/* App icon as the logo, with the wordmark in the text colour (black on light, white on dark) */}
           <Image
             source={require('@/assets/app-icon-tile.png')}
             style={{ width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
             accessibilityIgnoresInvertColors
             accessible={false}
           />
-          <Text className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4">TRADIE</Text>
-          <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight">Quotes, jobs and invoices. Sorted.</Text>
-          <Text className="text-secondary text-[17px] leading-6 mt-4">
-            Built for solo traders.{'\n'}Know what to set aside for tax as you go.
+          <Text className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4" accessibilityRole="header">
+            TRADIE
           </Text>
+          <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight">
+            {isUS ? 'Quotes, jobs and invoices. Handled.' : 'Quotes, jobs and invoices. Sorted.'}
+          </Text>
+          <Text className="text-secondary text-[17px] leading-6 mt-3">Built for solo traders.</Text>
 
-          <View className="mt-8 gap-4">
-            {benefits(country).map(({ icon: Icon, title, body }) => (
-              <View key={title} className="flex-row">
+          <View className="mt-7 gap-4">
+            {benefits(isUS).map(({ icon: Icon, title, body }) => (
+              <View key={title} className="flex-row" accessible accessibilityLabel={`${title}. ${body}`}>
                 <Icon size={24} color={t.link} strokeWidth={2} />
                 <View className="ml-3.5 flex-1">
                   <Text className="text-fg text-base font-semibold">{title}</Text>
@@ -155,46 +175,34 @@ export default function OnboardingScreen() {
           </View>
         </ScrollView>
 
-        <View>
-          <AppleSignInButton onSignedIn={goToTrade} />
-          <Pressable
-            onPress={() => {
-              useAuthStore.getState().skipSignIn();
-              goToTrade();
-            }}
-            className="min-h-[48px] items-center justify-center mt-2"
-            accessibilityRole="button"
-          >
-            <Text className="text-fg text-base font-semibold">Not now</Text>
+        <PrimaryButton label="Get started" onPress={getStarted} />
+        <View className="flex-row justify-center items-center mt-1">
+          <Text className="text-secondary text-sm">Have Pro already? </Text>
+          <Pressable onPress={restore} disabled={restoring} className="min-h-[44px] justify-center" accessibilityRole="button">
+            <Text className="text-link text-sm font-semibold">{restoring ? 'Checking…' : 'Restore'}</Text>
           </Pressable>
-          <Text className="text-secondary text-xs text-center leading-5 mt-1">
-            Signing in keeps Pro on a new phone and turns on drive times. Your jobs stay on your phone.{' '}
-            <Text
-              className="text-link"
-              onPress={() => Linking.openURL('https://omniacollective.github.io/tradie-legal/privacy.html')}
-            >
-              Privacy
-            </Text>
-          </Text>
         </View>
       </View>
     );
   }
 
-  // ── 2. Trade ──────────────────────────────────────────────────────────────
+  // ── Trade ─────────────────────────────────────────────────────────────────
   if (step === 1) {
     const list = showMore ? [...TOP_TRADES, ...MORE_TRADES] : TOP_TRADES;
     return (
       <View className="flex-1 bg-bg">
         <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 140 }}>
-          {back}
-          <Text className="text-fg text-[28px] font-bold tracking-tight mx-1">What’s your trade?</Text>
+          {topBar(1)}
+          <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
+            What’s your trade?
+          </Text>
           <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">
-            We’ll set up your job types and starting prices. You can change them any time.
+            We’ll set up your job types and prices. You can change them any time.
           </Text>
           <Group>
             {list.map(({ key, icon: Icon }, i) => {
               const selected = trade === key;
+              const cfg = getTradeConfig(key, country);
               return (
                 <View key={key}>
                   {i > 0 && <RowDivider />}
@@ -203,16 +211,15 @@ export default function OnboardingScreen() {
                       Haptics.selectionAsync();
                       setTradeChoice(key);
                     }}
-                    className="flex-row items-center px-4 min-h-[56px] active:opacity-70"
+                    className="flex-row items-center px-4 min-h-[58px] active:opacity-70"
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`${cfg.label}. ${cfg.description}`}
                   >
                     <Icon size={20} color={selected ? t.link : t.secondary} strokeWidth={2} />
                     <View className="flex-1 ml-3.5 py-2">
-                      <Text className={selected ? 'text-fg text-base font-semibold' : 'text-fg text-base'}>
-                        {getTradeConfig(key, country).label}
-                      </Text>
-                      <Text className="text-secondary text-[13px]">{getTradeConfig(key, country).description}</Text>
+                      <Text className={selected ? 'text-fg text-base font-semibold' : 'text-fg text-base'}>{cfg.label}</Text>
+                      <Text className="text-secondary text-[13px]">{cfg.description}</Text>
                     </View>
                     {selected && <Check size={20} color={t.link} strokeWidth={2.25} />}
                   </Pressable>
@@ -245,7 +252,7 @@ export default function OnboardingScreen() {
         </ScrollView>
         <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
           <PrimaryButton
-            label="Continue"
+            label={trade ? 'Continue' : 'Pick your trade'}
             disabled={!trade}
             onPress={() => {
               if (!trade) return;
@@ -258,7 +265,7 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ── 3. Details ────────────────────────────────────────────────────────────
+  // ── About your business ───────────────────────────────────────────────────
   return (
     <View className="flex-1 bg-bg">
       <ScrollView
@@ -266,88 +273,55 @@ export default function OnboardingScreen() {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 180 }}
       >
-        {back}
-        <Text className="text-fg text-[28px] font-bold tracking-tight mx-1">Your details</Text>
-        <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">These go on your quotes and invoices.</Text>
-        <Group>
-          <View className="flex-row items-center px-4 min-h-[52px] py-2">
-            <Text className="flex-1 text-fg text-base">Country</Text>
-            <Segmented options={COUNTRY_OPTIONS} value={country} onChange={setCountry} className="w-32 bg-bg" />
-          </View>
-          <RowDivider />
-          <FieldRow
+        {topBar(2)}
+        <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
+          About your business
+        </Text>
+        <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">This goes on your quotes and invoices.</Text>
+        <View className="gap-4">
+          <LabeledField
             label="Your name"
             value={name}
             onChangeText={setName}
-            placeholder="First and last"
+            placeholder="e.g. Dave Smith"
             autoCapitalize="words"
-            width="w-44"
+            textContentType="name"
           />
-          <RowDivider />
-          <FieldRow
+          <LabeledField
             label="Business name"
+            optional
             value={businessName}
             onChangeText={setBusinessName}
             placeholder={isUS ? 'As on your truck' : 'As on your van'}
             autoCapitalize="words"
-            width="w-44"
+            textContentType="organizationName"
           />
-          <RowDivider />
-          <FieldRow
-            label="Phone"
+          <LabeledField
+            label="Mobile"
             value={phone}
             onChangeText={setPhone}
-            placeholder={isUS ? '(555) 555-0100' : '07700 900000'}
+            placeholder="So customers can reach you"
             keyboardType="phone-pad"
-            width="w-40"
+            textContentType="telephoneNumber"
           />
-          <RowDivider />
-          <FieldRow
-            label={isUS ? 'Base ZIP code' : 'Base postcode'}
-            hint="Where your day starts"
-            value={postcode}
-            onChangeText={(v) => setPostcode(v.toUpperCase())}
-            placeholder={isUS ? '94103' : 'SE1 7TP'}
-            autoCapitalize="characters"
-            keyboardType={isUS ? 'number-pad' : 'default'}
-            width="w-28"
-          />
-        </Group>
-        <Text className="text-secondary text-[13px] mx-1 mt-2">
-          Your {postcodeLabel} lets Tradie suggest times that keep your driving down.
-        </Text>
-
-        <View className="mt-8">
-          <SectionHeader title="Your rates" />
         </View>
-        <Group>
-          <NumberFieldRow
-            label="Hourly rate"
-            prefix={currencySymbol()}
-            value={hourlyRate}
-            onChangeNumber={(n) => updateSettings({ hourlyRate: n })}
-            width="w-20"
-          />
-          <RowDivider />
-          <NumberFieldRow
-            label="Minimum charge"
-            prefix={currencySymbol()}
-            value={minimumCharge}
-            onChangeNumber={(n) => updateSettings({ minimumCharge: n })}
-            width="w-20"
-          />
-        </Group>
-        <Text className="text-secondary text-[13px] mx-1 mt-2">
-          Starting rates for your trade. Set prices for each job type in Account.
-        </Text>
+        <View className="flex-row items-center flex-wrap mx-1 mt-4">
+          <Text className="text-secondary text-sm">
+            Working in {isUS ? 'the US' : 'the UK'} · prices in {isUS ? 'dollars' : 'pounds'}{' '}
+          </Text>
+          <Pressable
+            onPress={() => setCountry(isUS ? 'GB' : 'US')}
+            className="min-h-[44px] justify-center"
+            accessibilityRole="button"
+            accessibilityLabel={`Change country. Now ${isUS ? 'the US' : 'the UK'}`}
+          >
+            <Text className="text-link text-sm font-semibold">Change</Text>
+          </Pressable>
+        </View>
       </ScrollView>
       <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
-        <PrimaryButton label="Let’s go" onPress={() => finish(true)} />
-        <Pressable
-          onPress={() => finish(false)}
-          className="min-h-[48px] items-center justify-center mt-1"
-          accessibilityRole="button"
-        >
+        <PrimaryButton label="Start using Tradie" onPress={() => finish(true)} />
+        <Pressable onPress={() => finish(false)} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
           <Text className="text-secondary text-base font-semibold">Skip for now</Text>
         </Pressable>
       </View>

@@ -46,6 +46,7 @@ Everything here was agreed with Paul in the clickable test (https://claude.ai/ar
 - Opens and closes freely (X). Nothing changes by opening it.
 - **Checklist:** Quote → Booked → Job done → Invoice → Paid, then **Didn't go ahead**. Any step, any order; done steps show tick, date and Undo; the next one highlighted, never forced. Each action saves and keeps you on the job.
 - Quote and invoice: preview, Edit, Send, then "Did you send it?".
+- Suggest times asks for **where your day starts** (base postcode) the first time it's missing; setup no longer asks for it.
 - Booking: Suggest 3 times or pick a time; offered times can be changed or cancelled; tap the one the customer picked.
 - **Paid on the day (cash):** the payment is recorded as a numbered invoice marked paid (counts for tax and exports, not a free invoice); the job offers **Send receipt**, a PDF stamped PAID.
 - Price (labour + parts), Parts and materials, Notes (first line shows under the title), Photos (add as many as you like).
