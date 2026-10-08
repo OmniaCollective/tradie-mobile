@@ -14,6 +14,7 @@ import { useTradeStore } from '@/lib/store';
 import { addNotificationResponseListener } from '@/lib/notifications';
 import { ToastHost } from '@/components/Toast';
 import { CloseButton } from '@/components/ui';
+import { startAnalytics } from '@/lib/analytics';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -24,6 +25,7 @@ function RootLayoutNav() {
   const router = useRouter();
   useAuthSync();
   useNudgeSync();
+  useEffect(() => startAnalytics(), []);
   const mode = useColorMode();
   const p = palettes[mode];
   const navigationTheme = useMemo(() => {

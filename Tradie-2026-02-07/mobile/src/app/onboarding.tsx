@@ -33,6 +33,7 @@ import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, PrimaryButton, LabeledField } from '@/components/ui';
 import { toast } from '@/components/Toast';
+import { track } from '@/lib/analytics';
 
 const TOP_TRADES: { key: Trade; icon: LucideIcon }[] = [
   { key: 'plumber', icon: Wrench },
@@ -127,6 +128,7 @@ export default function OnboardingScreen() {
     }
     setCountry(country); // saves the choice, so a later change of phone region doesn't move them
     completeOnboarding();
+    track('setup_finished');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace('/(tabs)');
   };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { PrimaryButton } from '@/components/ui';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { track } from '@/lib/analytics';
 
 type Plan = 'yearly' | 'monthly';
 
@@ -45,6 +46,8 @@ async function loadPackages(): Promise<{ monthly: PurchasesPackage | null; yearl
 }
 
 export default function PaywallScreen() {
+  // Counted once per opening.
+  useEffect(() => track('paywall_opened'), []);
   const router = useRouter();
   // Opened from a link or notification there may be nothing to go back to; then go Home.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
@@ -117,6 +120,7 @@ export default function PaywallScreen() {
       // Refresh Pro everywhere straight away, not after the 5-minute cache.
       await refreshPro();
       if (result.data.entitlements.active.pro) {
+        track('pro_started');
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModal({ title: 'Welcome to Tradie Pro', message: 'Everything is unlocked.', variant: 'success', done: true });
       } else {

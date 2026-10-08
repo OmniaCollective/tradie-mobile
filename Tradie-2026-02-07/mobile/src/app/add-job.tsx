@@ -49,6 +49,7 @@ import {
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { toast } from '@/components/Toast';
+import { track } from '@/lib/analytics';
 
 type Mode = 'voice' | 'form';
 type RecordingState = 'idle' | 'recording' | 'processing';
@@ -281,6 +282,7 @@ export default function AddJobScreen() {
       const { jobs, customers: all } = useTradeStore.getState();
       const job = jobs[jobs.length - 1];
       const customer = all.find((c) => c.id === customerId);
+      track('job_saved');
       if (hasDate && job && customer) {
         await scheduleJob(job, customer, when);
         toast('Job saved and booked');

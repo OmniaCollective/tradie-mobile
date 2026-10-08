@@ -60,6 +60,7 @@ import { cn } from '@/lib/cn';
 import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, ProgressBar, Sheet, LinkRow } from '@/components/ui';
 import { toast } from '@/components/Toast';
 import { Tip } from '@/components/Tip';
+import { track } from '@/lib/analytics';
 
 type ExportType = 'invoices' | 'expenses' | 'tax_summary';
 
@@ -282,6 +283,7 @@ export default function MoneyScreen() {
       cisDeductionAmount: cisDeducted ? cisDeductionAmount : undefined,
     });
     toast('Marked as paid');
+    track('marked_paid');
     setCisModal(null);
   };
 

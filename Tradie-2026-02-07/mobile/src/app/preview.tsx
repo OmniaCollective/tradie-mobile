@@ -21,6 +21,7 @@ import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow, ModalHeader } 
 import { toast } from '@/components/Toast';
 import { formatMoney, currencySymbol } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
+import { track } from '@/lib/analytics';
 
 type Kind = 'invoice' | 'quote';
 
@@ -248,6 +249,7 @@ export default function PreviewScreen() {
         cancelText="Not yet"
         onConfirm={() => {
           toast(`${kind === 'invoice' ? 'Invoice' : 'Quote'} marked as sent`);
+          track(kind === 'invoice' ? 'invoice_sent' : 'quote_sent');
           if (kind === 'invoice' && invoice) updateInvoice(invoice.id, { status: 'sent', sentAt: new Date().toISOString() });
           if (kind === 'quote')
             updateJob(job.id, {

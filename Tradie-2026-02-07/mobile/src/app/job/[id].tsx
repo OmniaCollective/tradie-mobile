@@ -72,6 +72,7 @@ import {
   LabeledField,
 } from '@/components/ui';
 import { toast } from '@/components/Toast';
+import { track } from '@/lib/analytics';
 
 const makePhotoFileName = () => `photo_${Date.now()}.jpg`;
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -295,6 +296,7 @@ export default function JobDetailScreen() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     store().markPaid(job.id, true);
     toast('Marked as paid');
+    track('marked_paid');
   };
 
   const nudge = async () => {

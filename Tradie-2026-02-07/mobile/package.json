@@ -17,6 +17,7 @@
     "test:nudges": "npx tsx scripts/nudges.test.mts"
   },
   "dependencies": {
+    "@aptabase/react-native": "0.6.0",
     "@expo/metro-runtime": "~57.0.16",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
