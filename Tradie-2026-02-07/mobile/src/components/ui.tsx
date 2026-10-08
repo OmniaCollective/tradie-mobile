@@ -310,8 +310,16 @@ export function ToggleRow({
   disabled?: boolean;
 }) {
   const t = useTheme();
+  // The whole row flips the switch, as in iPhone Settings; VoiceOver reads it as one switch.
   return (
-    <View className="flex-row items-center px-4 min-h-[52px] py-2">
+    <Pressable
+      onPress={() => !disabled && onValueChange(!value)}
+      disabled={disabled}
+      className="flex-row items-center px-4 min-h-[52px] py-2 active:opacity-80"
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled: !!disabled }}
+      accessibilityLabel={hint ? `${label}. ${hint}` : label}
+    >
       <View className="flex-1 mr-3">
         <Text className="text-fg text-base">{label}</Text>
         {!!hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
@@ -321,9 +329,10 @@ export function ToggleRow({
         onValueChange={onValueChange}
         disabled={disabled}
         trackColor={{ false: t.divider, true: t.accent }}
-        accessibilityLabel={label}
+        accessible={false}
+        importantForAccessibility="no"
       />
-    </View>
+    </Pressable>
   );
 }
 
