@@ -14,7 +14,8 @@
     "test:uktax": "npx tsx scripts/ukTax.test.mts",
     "test:jobs": "npx tsx scripts/jobSteps.test.mts",
     "test:search": "npx tsx scripts/search.test.mts",
-    "test:nudges": "npx tsx scripts/nudges.test.mts"
+    "test:nudges": "npx tsx scripts/nudges.test.mts",
+    "test:xlsx": "npx tsx scripts/xlsx.test.mts"
   },
   "dependencies": {
     "@aptabase/react-native": "0.6.0",
@@ -48,6 +49,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "fflate": "0.8.2",
     "lucide-react-native": "^1.7.0",
     "nativewind": "~4.2.7",
     "react": "19.2.3",

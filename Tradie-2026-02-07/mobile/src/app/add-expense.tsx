@@ -4,9 +4,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Check, Camera, ImageIcon, Calendar, Tag, Briefcase } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTradeStore, useJobs, useRegion, type ExpenseCategory, EXPENSE_CATEGORY_LABELS, jobName } from '@/lib/store';
+import { useTradeStore, useJobs, useRegion, taxYearKey, type ExpenseCategory, EXPENSE_CATEGORY_LABELS, jobName } from '@/lib/store';
 import { mileageRate } from '@/lib/data/usTax2026';
 import { getJobTypeLabel } from '@/lib/store';
 import { formatDateObjLong, toDateKey, parseDate } from '@/lib/dates';
@@ -16,6 +15,7 @@ import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 import { Group, RowDivider, LinkRow, FieldRow, Sheet, ModalHeader, ModalFooter, PrimaryButton } from '@/components/ui';
 import { toast } from '@/components/Toast';
+import { saveReceipt, receiptFileUri, deleteReceipt } from '@/lib/receipts';
 
 const CATEGORIES: ExpenseCategory[] = [
   'materials',
@@ -33,11 +33,6 @@ const CATEGORIES: ExpenseCategory[] = [
 // HMRC approved mileage rates for cars and vans
 const MILEAGE_RATE_FIRST_10K = 0.45;
 const MILEAGE_RATE_AFTER_10K = 0.25;
-
-function taxYearStart(now = new Date()): Date {
-  const afterApril6 = now.getMonth() > 3 || (now.getMonth() === 3 && now.getDate() >= 6);
-  return new Date(afterApril6 ? now.getFullYear() : now.getFullYear() - 1, 3, 6);
-}
 
 /**
  * The big number box sized to the real width of what's typed (measured by an
@@ -66,14 +61,6 @@ function BigNumberInput({ value, placeholder, className, ...props }: React.Compo
   );
 }
 
-async function saveReceipt(uri: string): Promise<string> {
-  const destDir = `${FileSystem.documentDirectory}receipts/`;
-  await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
-  const destUri = `${destDir}receipt_${Date.now()}.jpg`;
-  await FileSystem.copyAsync({ from: uri, to: destUri });
-  return destUri;
-}
-
 export default function AddExpenseScreen() {
   const router = useRouter();
   // Opened from a link or notification there may be nothing to go back to; then go Home.
@@ -95,7 +82,10 @@ export default function AddExpenseScreen() {
   const jobs = useJobs();
   const { isPro, isLoading } = useProAccess();
 
-  const [amount, setAmount] = useState(fullAmount !== undefined && !editing?.miles ? String(fullAmount) : '');
+  // £38.50, not £38.5; whole amounts stay as typed (£40).
+  const [amount, setAmount] = useState(
+    fullAmount !== undefined && !editing?.miles ? (Number.isInteger(fullAmount) ? String(fullAmount) : fullAmount.toFixed(2)) : '',
+  );
   const [description, setDescription] = useState(editing?.description ?? '');
   const [category, setCategory] = useState<ExpenseCategory | null>(editing?.category ?? null);
   const [date, setDate] = useState(() => (editing ? parseDate(editing.date) : new Date()));
@@ -122,9 +112,12 @@ export default function AddExpenseScreen() {
     if (!isMileage || total <= 0) return 0;
     // US: the IRS standard rate for the date driven. UK: HMRC's 45p, then 25p after 10,000 miles a tax year.
     if (isUS) return total * mileageRate(date);
-    const start = taxYearStart();
+    // Other mileage in the same tax year as this trip (not this expense itself, when editing).
+    const year = taxYearKey('GB', date);
     const usedThisYear = expenses
-      .filter((e) => e.category === 'vehicle_mileage' && e.miles && parseDate(e.date) >= start)
+      .filter(
+        (e) => e.id !== editing?.id && e.category === 'vehicle_mileage' && e.miles && taxYearKey('GB', parseDate(e.date)) === year,
+      )
       .reduce((sum, e) => sum + (e.miles || 0), 0);
     const at45 = Math.min(total, Math.max(0, 10000 - usedThisYear));
     return at45 * MILEAGE_RATE_FIRST_10K + (total - at45) * MILEAGE_RATE_AFTER_10K;
@@ -157,7 +150,15 @@ export default function AddExpenseScreen() {
     const result = fromCamera
       ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
       : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-    if (!result.canceled && result.assets[0]) setReceiptUri(await saveReceipt(result.assets[0].uri));
+    if (!result.canceled && result.assets[0]) {
+      discardUnsavedReceipt();
+      setReceiptUri(await saveReceipt(result.assets[0].uri));
+    }
+  };
+
+  // A photo taken here but never saved to the expense is deleted (the saved one is the store's to manage).
+  const discardUnsavedReceipt = () => {
+    if (receiptUri && receiptUri !== editing?.receiptUri) void deleteReceipt(receiptUri);
   };
 
   const handleSave = async () => {
@@ -189,7 +190,13 @@ export default function AddExpenseScreen() {
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <ModalHeader title={editing ? 'Edit expense' : 'New expense'} onClose={() => goBack()} />
+      <ModalHeader
+        title={editing ? 'Edit expense' : 'New expense'}
+        onClose={() => {
+          discardUnsavedReceipt();
+          goBack();
+        }}
+      />
 
       <ScrollView
         className="flex-1"
@@ -265,7 +272,7 @@ export default function AddExpenseScreen() {
               />
             </>
           )}
-          {settings.vatRegistered && category && !isMileage && category !== 'phone_internet' && (
+          {!isUS && settings.vatRegistered && category && !isMileage && category !== 'phone_internet' && (
             <>
               <RowDivider />
               <FieldRow
@@ -321,9 +328,12 @@ export default function AddExpenseScreen() {
         <Group>
           {receiptUri ? (
             <View className="p-4">
-              <Image source={{ uri: receiptUri }} style={{ width: '100%', height: 220, borderRadius: 12 }} resizeMode="cover" />
+              <Image source={{ uri: receiptFileUri(receiptUri) }} style={{ width: '100%', height: 220, borderRadius: 12 }} resizeMode="cover" />
               <Pressable
-                onPress={() => setReceiptUri(null)}
+                onPress={() => {
+                  discardUnsavedReceipt();
+                  setReceiptUri(null);
+                }}
                 className="min-h-[44px] items-center justify-center mt-1"
                 accessibilityRole="button"
               >

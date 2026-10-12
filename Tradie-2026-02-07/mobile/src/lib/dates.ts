@@ -40,6 +40,14 @@ export function formatDateObjLong(date: Date): string {
   });
 }
 
+/** "Mon 3 Nov" in the current year, "3 Nov 2025" otherwise: short, and never ambiguous in a list spanning years. */
+export function formatDateInList(dateStr: string, now: Date = new Date()): string {
+  const date = parseDate(dateStr);
+  if (isNaN(date.getTime())) return '—';
+  if (date.getFullYear() === now.getFullYear()) return formatDateObj(date);
+  return date.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /** Format an ISO date string to "Monday 1 January" (long form, no year) */
 export function formatDateFull(dateStr?: string): string {
   if (!dateStr) return 'Not scheduled';

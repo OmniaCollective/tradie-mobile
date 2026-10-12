@@ -15,339 +15,17 @@ import {
   invoiceDueDate,
   jobName,
 } from './store';
-import { getTaxYearBounds } from './taxEstimator';
 import { parseDate, toDateKey } from './dates';
-import type { USTaxEstimate } from './usTaxEstimator';
 import { formatMoney } from './money';
 
 // Footer on shared PDFs — every invoice/quote a customer sees links back to the app
 const APP_STORE_URL = 'https://apps.apple.com/app/id6758908408';
-const POWERED_BY_HTML = `Powered by <a href="${APP_STORE_URL}">Tradie</a> · the free job &amp; invoice app for trades`;
-
-// ── Date range presets ──────────────────────────────────────────────
-
-export type DatePreset = 'this_month' | 'this_quarter' | 'tax_year' | 'all';
-
-export interface DateRange {
-  from: string; // ISO date
-  to: string;   // ISO date
-}
-
-export const getDateRange = (preset: DatePreset): DateRange | null => {
-  if (preset === 'all') return null;
-
-  const now = new Date();
-
-  if (preset === 'this_month') {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1);
-    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return {
-      from: toDateKey(from),
-      to: toDateKey(to),
-    };
-  }
-
-  if (preset === 'this_quarter') {
-    const quarter = Math.floor(now.getMonth() / 3);
-    const from = new Date(now.getFullYear(), quarter * 3, 1);
-    const to = new Date(now.getFullYear(), quarter * 3 + 3, 0);
-    return {
-      from: toDateKey(from),
-      to: toDateKey(to),
-    };
-  }
-
-  if (preset === 'tax_year') {
-    // UK tax year runs 6 April – 5 April; the US tax year is the calendar year.
-    const { start, end } =
-      getRegion().country === 'US'
-        ? { start: new Date(now.getFullYear(), 0, 1), end: new Date(now.getFullYear(), 11, 31) }
-        : getTaxYearBounds(now);
-    return {
-      from: toDateKey(start),
-      to: toDateKey(end),
-    };
-  }
-
-  return null;
-};
-
-export const getPresetLabel = (preset: DatePreset): string => {
-  switch (preset) {
-    case 'this_month': return 'This month';
-    case 'this_quarter': return 'This quarter';
-    case 'tax_year': return getRegion().country === 'US' ? `Tax year ${new Date().getFullYear()}` : 'This tax year';
-    case 'all': return 'All time';
-  }
-};
-
-// ── CSV Export ───────────────────────────────────────────────────────
-
-interface CsvContext {
-  invoices: Invoice[];
-  getJob: (id: string) => Job | undefined;
-  getCustomer: (id: string) => Customer | undefined;
-  settings: BusinessSettings;
-}
-
-/** Quoted CSV cell. A leading = + - @ is defused so a name can't run as a spreadsheet formula. */
-const escCsv = (val: string) => {
-  const safe = /^[=+\-@\t\r]/.test(val) ? `'${val}` : val;
-  return `"${safe.replace(/"/g, '""')}"`;
-};
-
-/** The calendar day in the tradie's own timezone (not UTC, which shifts evening times in BST). */
-const dayKey = (date: string) => toDateKey(parseDate(date));
-
-/** Who the file is for, at the top of every export. */
-const csvHeaderLines = (settings: BusinessSettings, title: string): string[] => {
-  const vat = settings.vatRegistered && getRegion().country === 'GB' ? settings.vatNumber.trim() : '';
-  return [
-    escCsv(title),
-    escCsv(businessDisplayName(settings)),
-    ...(settings.ownerName.trim() && settings.ownerName.trim() !== businessDisplayName(settings) ? [escCsv(settings.ownerName.trim())] : []),
-    ...(settings.address.trim() || settings.postcode.trim()
-      ? [escCsv([settings.address.trim().replace(/\n/g, ', '), settings.postcode.trim()].filter(Boolean).join(', '))]
-      : []),
-    ...(vat ? [escCsv(`VAT no. ${vat}`)] : []),
-    escCsv(`Prepared ${toDateKey()} with Tradie`),
-    '',
-  ];
-};
-
-const rangeLabel = (range: DateRange | null) => (range ? `${range.from} to ${range.to}` : 'All dates');
-
-export const exportCsv = async (
-  ctx: CsvContext,
-  dateRange: DateRange | null,
-): Promise<void> => {
-  let filtered = ctx.invoices;
-
-  if (dateRange) {
-    filtered = filtered.filter((inv) => {
-      const d = dayKey(inv.createdAt);
-      return d >= dateRange.from && d <= dateRange.to;
-    });
-  }
-
-  const header = [
-    'Invoice #', 'Date', 'Customer', 'Address', 'Job Type',
-    'Labour', 'Materials', 'Travel', 'Emergency', 'VAT', 'Total',
-    'CIS Deducted', 'Status', 'Paid Date',
-  ].join(',');
-
-  const rows = filtered.map((inv) => {
-    const job = ctx.getJob(inv.jobId);
-    const customer = ctx.getCustomer(inv.customerId);
-    const jobLabel = job
-      ? jobName(job, ctx.settings.trade)
-      : '';
-
-    return [
-      escCsv(invoiceNumberLabel(inv)),
-      escCsv(dayKey(inv.createdAt)),
-      escCsv(customer?.name ?? ''),
-      escCsv(customer ? `${customer.address}, ${customer.postcode}` : ''),
-      escCsv(jobLabel),
-      inv.quote.labour.toFixed(2),
-      inv.quote.materials.toFixed(2),
-      inv.quote.travel.toFixed(2),
-      inv.quote.emergencySurcharge.toFixed(2),
-      inv.quote.vat.toFixed(2),
-      inv.quote.total.toFixed(2),
-      (inv.cisDeducted ? inv.cisDeductionAmount || 0 : 0).toFixed(2),
-      escCsv(inv.status),
-      escCsv(inv.paidAt ? dayKey(inv.paidAt) : ''),
-    ].join(',');
-  });
-
-  const csv = [...csvHeaderLines(ctx.settings, `Invoices · ${rangeLabel(dateRange)}`), header, ...rows].join('\n');
-  const path = `${FileSystem.cacheDirectory}tradie-invoices.csv`;
-  await FileSystem.writeAsStringAsync(path, csv, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  await Sharing.shareAsync(path, { mimeType: 'text/csv' });
-};
-
-// ── Expenses CSV Export ──────────────────────────────────────────────
-
-interface ExpenseCsvContext {
-  expenses: Expense[];
-  settings: BusinessSettings;
-  dateRange: DateRange | null;
-}
-
-export const exportExpensesCsv = async (ctx: ExpenseCsvContext): Promise<void> => {
-  let filtered = ctx.expenses;
-
-  if (ctx.dateRange) {
-    filtered = filtered.filter((exp) => {
-      const d = dayKey(exp.date);
-      return d >= ctx.dateRange!.from && d <= ctx.dateRange!.to;
-    });
-  }
-
-  const header = [
-    'Date', 'Category', 'Description', 'Amount', 'Miles', 'Business Use %', 'Receipt',
-  ].join(',');
-
-  const rows = filtered
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((exp) => [
-      escCsv(dayKey(exp.date)),
-      escCsv(EXPENSE_CATEGORY_LABELS[exp.category]),
-      escCsv(exp.description),
-      exp.amount.toFixed(2),
-      exp.miles?.toString() ?? '',
-      exp.businessUsePercent?.toString() ?? '',
-      exp.receiptUri ? 'Yes' : 'No',
-    ].join(','));
-
-  const totalRow = `,,Total,${filtered.reduce((s, e) => s + e.amount, 0).toFixed(2)},,,`;
-  const csv = [...csvHeaderLines(ctx.settings, `Expenses · ${rangeLabel(ctx.dateRange)}`), header, ...rows, '', totalRow].join('\n');
-  const path = `${FileSystem.cacheDirectory}tradie-expenses.csv`;
-  await FileSystem.writeAsStringAsync(path, csv, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  await Sharing.shareAsync(path, { mimeType: 'text/csv' });
-};
-
-// ── Full Tax Summary CSV ────────────────────────────────────────────
-
-interface TaxSummaryCsvContext {
-  invoices: Invoice[];
-  expenses: Expense[];
-  getJob: (id: string) => Job | undefined;
-  getCustomer: (id: string) => Customer | undefined;
-  settings: BusinessSettings;
-  /** Set for US users; the summary then uses US federal figures. */
-  usTax?: USTaxEstimate | null;
-  taxEstimate: {
-    grossIncome: number;
-    totalExpenses: number;
-    taxableProfit: number;
-    incomeTax: number;
-    class4NI: number;
-    totalTax: number;
-    cisDeductions: number;
-    taxOwed: number;
-  };
-  dateRange: DateRange | null;
-}
-
-export const exportTaxSummaryCsv = async (ctx: TaxSummaryCsvContext): Promise<void> => {
-  const { taxEstimate: t } = ctx;
-
-  // Summary section — plain numbers (no thousands commas) so the CSV columns stay intact.
-  const n = (x: number) => x.toFixed(2);
-  const currency = getRegion().country === 'US' ? 'USD' : 'GBP';
-  const us = ctx.usTax;
-  const summary = us
-    ? [
-        `Tax Summary (${currency}) — federal estimate for tax year ${us.taxYear}; state tax not included`,
-        `Income and expenses listed below: ${rangeLabel(ctx.dateRange)}`,
-        '',
-        `Gross Income,${n(us.grossIncome)}`,
-        `Business Expenses,${n(us.businessExpenses)}`,
-        `Net Profit,${n(us.netProfit)}`,
-        '',
-        `Self-Employment Tax,${n(us.selfEmploymentTax)}`,
-        `Federal Income Tax,${n(us.incomeTax)}`,
-        `Standard Deduction,${n(us.standardDeduction)}`,
-        `Qualified Business Income Deduction,${n(us.qbiDeduction)}`,
-        `Total Estimated Tax,${n(us.totalTax)}`,
-        '',
-        '',
-      ]
-    : [
-        `Tax Summary (${currency}) — estimate for the current tax year (6 April to 5 April)`,
-        `Income and expenses listed below: ${rangeLabel(ctx.dateRange)}`,
-        '',
-        `Gross Income,${n(t.grossIncome)}`,
-        `Total Expenses,${n(t.totalExpenses)}`,
-        `Taxable Profit,${n(t.taxableProfit)}`,
-        '',
-        `Income Tax,${n(t.incomeTax)}`,
-        `Class 4 NI,${n(t.class4NI)}`,
-        `Total Tax,${n(t.totalTax)}`,
-        `CIS Deductions,${n(t.cisDeductions)}`,
-        `Tax Owed,${n(t.taxOwed)}`,
-        '',
-        '',
-      ];
-
-  // Income section
-  let filteredInvoices = ctx.invoices.filter((inv) => inv.status === 'paid');
-  if (ctx.dateRange) {
-    filteredInvoices = filteredInvoices.filter((inv) => {
-      const d = dayKey(inv.paidAt || inv.createdAt);
-      return d >= ctx.dateRange!.from && d <= ctx.dateRange!.to;
-    });
-  }
-
-  const incomeHeader = 'INCOME';
-  const incomeColumns = 'Date,Customer,Job Type,Labour,Materials,Travel,Emergency,VAT,Total,CIS Deducted';
-  const incomeRows = filteredInvoices.map((inv) => {
-    const job = ctx.getJob(inv.jobId);
-    const customer = ctx.getCustomer(inv.customerId);
-    return [
-      escCsv(dayKey(inv.paidAt || inv.createdAt)),
-      escCsv(customer?.name ?? ''),
-      escCsv(job ? jobName(job, ctx.settings.trade) : ''),
-      inv.quote.labour.toFixed(2),
-      inv.quote.materials.toFixed(2),
-      inv.quote.travel.toFixed(2),
-      inv.quote.emergencySurcharge.toFixed(2),
-      inv.quote.vat.toFixed(2),
-      inv.quote.total.toFixed(2),
-      (inv.cisDeductionAmount || 0).toFixed(2),
-    ].join(',');
-  });
-
-  // Expenses section
-  let filteredExpenses = ctx.expenses;
-  if (ctx.dateRange) {
-    filteredExpenses = filteredExpenses.filter((exp) => {
-      const d = dayKey(exp.date);
-      return d >= ctx.dateRange!.from && d <= ctx.dateRange!.to;
-    });
-  }
-
-  const expenseHeader = 'EXPENSES';
-  const expenseColumns = 'Date,Category,Description,Amount';
-  const expenseRows = filteredExpenses
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((exp) => [
-      escCsv(dayKey(exp.date)),
-      escCsv(EXPENSE_CATEGORY_LABELS[exp.category]),
-      escCsv(exp.description),
-      exp.amount.toFixed(2),
-    ].join(','));
-
-  const csv = [
-    ...csvHeaderLines(ctx.settings, 'Tax summary'),
-    ...summary,
-    incomeHeader,
-    incomeColumns,
-    ...incomeRows,
-    '',
-    '',
-    expenseHeader,
-    expenseColumns,
-    ...expenseRows,
-  ].join('\n');
-
-  const path = `${FileSystem.cacheDirectory}tradie-tax-summary.csv`;
-  await FileSystem.writeAsStringAsync(path, csv, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  await Sharing.shareAsync(path, { mimeType: 'text/csv' });
-};
+export const POWERED_BY_HTML = `Powered by <a href="${APP_STORE_URL}">Tradie</a> · the free job &amp; invoice app for trades`;
 
 // ── PDF documents (quote and invoice) ───────────────────────────────
 
 /** Everything typed by the tradie or a customer is escaped, so "Smith & Sons" or "<" can't break the page. */
-const esc = (text: string | number | undefined | null) =>
+export const esc = (text: string | number | undefined | null) =>
   String(text ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -355,7 +33,7 @@ const esc = (text: string | number | undefined | null) =>
     .replace(/"/g, '&quot;');
 
 /** Multi-line text (addresses, payment details) keeps its line breaks. */
-const escLines = (text: string | undefined) => esc(text?.trim()).replace(/\n/g, '<br>');
+export const escLines = (text: string | undefined) => esc(text?.trim()).replace(/\n/g, '<br>');
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(getRegion().locale, {
@@ -364,7 +42,7 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
-const PDF_STYLE = `
+export const PDF_STYLE = `
   body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#0B1220; }
   .header { display:flex; justify-content:space-between; gap:24px; margin-bottom:32px; }
   .title { font-size:28px; font-weight:800; color:#0E7C86; }
@@ -436,7 +114,7 @@ ${body}
 </html>`;
 
 /** Renders the page to a PDF file, named e.g. "INV-0012.pdf" so it reads well as an attachment. */
-const makePdf = async (html: string, fileName?: string): Promise<string> => {
+export const makePdf = async (html: string, fileName?: string): Promise<string> => {
   const { uri } = await Print.printToFileAsync({ html });
   if (!fileName || !FileSystem.cacheDirectory) return uri;
   const named = `${FileSystem.cacheDirectory}${fileName.replace(/[^\w-]+/g, '-')}.pdf`;

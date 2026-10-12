@@ -27,6 +27,7 @@ import {
   useRegion,
   invoiceNumberLabel,
   daysOverdue,
+  daysUntilDue,
   useTaxSetAside,
   useJobs,
   taxYearKey,
@@ -39,18 +40,11 @@ import {
 } from '@/lib/store';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { TaxExplainer } from '@/components/TaxExplainer';
-import {
-  exportCsv,
-  exportExpensesCsv,
-  exportTaxSummaryCsv,
-  exportInvoicePdf,
-  getDateRange,
-  getPresetLabel,
-  type DatePreset,
-} from '@/lib/invoiceExport';
+import { exportInvoicePdf } from '@/lib/invoiceExport';
+import { shareAccountantPack, packCounts, type PackYear } from '@/lib/accountantPack';
 import { calculateTaxEstimate, calculateRolling12MonthTurnover } from '@/lib/taxEstimator';
 import { calculateUSTax } from '@/lib/usTaxEstimator';
-import { formatDate, parseDate } from '@/lib/dates';
+import { formatDate, formatDateInList, parseDate, toDateKey } from '@/lib/dates';
 import { formatAmount, formatPounds, currencySymbol } from '@/lib/money';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { chaseInvoice } from '@/lib/chase';
@@ -62,9 +56,6 @@ import { toast } from '@/components/Toast';
 import { Tip } from '@/components/Tip';
 import { track } from '@/lib/analytics';
 
-type ExportType = 'invoices' | 'expenses' | 'tax_summary';
-
-const DATE_PRESETS: DatePreset[] = ['this_month', 'this_quarter', 'tax_year', 'all'];
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
 const money = formatAmount;
@@ -108,7 +99,6 @@ export default function MoneyScreen() {
     variant?: 'default' | 'success' | 'error' | 'warning';
   } | null>(null);
   const [showExport, setShowExport] = useState(false);
-  const [exportType, setExportType] = useState<ExportType>('invoices');
   const [exporting, setExporting] = useState(false);
   const [cisModal, setCisModal] = useState<{
     invoiceId: string;
@@ -131,8 +121,9 @@ export default function MoneyScreen() {
   const country = useRegion().country;
   const thisYearKey = taxYearKey(country, now);
   const yearKey = taxYear === 'this' ? thisYearKey : String(Number(thisYearKey) - 1);
-  const monthKey = (iso: string) => iso.slice(0, 7);
-  const thisMonthKey = monthKey(now.toISOString());
+  // The month in the tradie's own time (not UTC, which puts a payment just after midnight in BST in the month before).
+  const monthKey = (iso: string) => toDateKey(parseDate(iso)).slice(0, 7);
+  const thisMonthKey = toDateKey(now).slice(0, 7);
 
   const money_ = useMemo(() => {
     // Owed: sent and not paid, overdue first.
@@ -166,11 +157,15 @@ export default function MoneyScreen() {
     overdue: money_.owed.filter((i) => daysOverdue(i, settings) > 0).length,
     paidThisMonth: money_.paidThisMonth.reduce((s, i) => s + received(i), 0),
     notInvoiced: money_.notInvoiced.reduce((s, j) => s + (money_.invoiceFor.get(j.id)?.quote.total ?? j.quote?.total ?? 0), 0),
-    expenses: expenses.reduce((s, e) => s + e.amount, 0),
+    // This tax year's, to match the tax card.
+    expenses: expenses.filter((e) => taxYearKey(country, parseDate(e.date)) === thisYearKey).reduce((s, e) => s + e.amount, 0),
   };
 
   const sortedExpenses = useMemo(() => [...expenses].sort((a, b) => b.date.localeCompare(a.date)), [expenses]);
-  const tax = useMemo(() => calculateTaxEstimate(invoices, expenses, settings), [invoices, expenses, settings]);
+  const tax = useMemo(
+    () => calculateTaxEstimate(invoices, expenses, settings, { alreadySetAside: taxSetAsideTotal }),
+    [invoices, expenses, settings, taxSetAsideTotal],
+  );
   const turnover = useMemo(() => calculateRolling12MonthTurnover(invoices), [invoices]);
   const region = useRegion();
   const isUS = region.country === 'US';
@@ -216,10 +211,11 @@ export default function MoneyScreen() {
           ['Income Tax', wholePounds(tax.incomeTax)],
           ['Class 4 NI', wholePounds(tax.class4NI)],
           ...(tax.cisDeductions > 0 ? [['CIS already deducted', `−${wholePounds(tax.cisDeductions)}`]] : []),
+          ...(tax.cisRefund > 0 ? [['CIS refund due from HMRC', wholePounds(tax.cisRefund)]] : []),
           ...(tax.vatScheme !== 'none' && tax.vatCollected > 0 ? [['VAT owed to HMRC', wholePounds(tax.vatOwedToHMRC)]] : []),
         ] as [string, string][],
         zeroNote: 'Your profit is under your Personal Allowance so far, so there’s no tax to put away yet.',
-        footnote: `${tax.monthsRemaining} months left in this tax year. An estimate, not tax advice.`,
+        footnote: `${tax.monthsRemaining} ${tax.monthsRemaining === 1 ? 'month' : 'months'} left in this tax year. An estimate, not tax advice.`,
       };
   const vatShare = turnover / VAT_THRESHOLD;
 
@@ -317,31 +313,24 @@ export default function MoneyScreen() {
     }
   };
 
-  const handleExport = async (preset: DatePreset) => {
+  const handleExport = async (which: PackYear) => {
     setExporting(true);
     setShowExport(false);
     try {
-      const dateRange = getDateRange(preset);
-      if (exportType === 'expenses') {
-        await exportExpensesCsv({ expenses, settings, dateRange });
-      } else if (exportType === 'tax_summary') {
-        await exportTaxSummaryCsv({
-          invoices,
-          expenses,
-          getJob,
-          getCustomer,
-          settings,
-          taxEstimate: tax,
-          usTax,
-          dateRange,
-        });
-      } else {
-        await exportCsv({ invoices, getJob, getCustomer, settings }, dateRange);
-      }
+      await shareAccountantPack({
+        which,
+        invoices,
+        expenses,
+        settings,
+        getJob,
+        getCustomer,
+        alreadySetAside: taxSetAsideTotal,
+      });
+      track('tax_year_exported');
     } catch (error) {
-      if (__DEV__) console.error('CSV export error:', error);
+      if (__DEV__) console.error('Accountant pack failed:', error);
       setModal({
-        title: 'Export failed',
+        title: 'Couldn’t make the export',
         message: 'Please try again.',
         variant: 'error',
       });
@@ -470,12 +459,13 @@ export default function MoneyScreen() {
   const owedLine = (invoice: Invoice) => {
     const job = getJob(invoice.jobId);
     const late = daysOverdue(invoice, settings);
-    const due = Math.max(
-      0,
-      (settings.paymentTermsDays ?? 14) - Math.floor((now.getTime() - new Date(invoice.sentAt!).getTime()) / 86400000),
-    );
+    const due = daysUntilDue(invoice, settings) ?? 0;
     return `${invoiceNumberLabel(invoice)}${job ? ' · ' + jobName(job, settings.trade) : ''} · ${
-      late > 0 ? `${late} ${late === 1 ? 'day' : 'days'} overdue` : `due in ${due} ${due === 1 ? 'day' : 'days'}`
+      late > 0
+        ? `${late} ${late === 1 ? 'day' : 'days'} overdue`
+        : due === 0
+          ? 'due today'
+          : `due in ${due} ${due === 1 ? 'day' : 'days'}`
     }`;
   };
   const empty = invoices.length === 0 && money_.notInvoiced.length === 0;
@@ -792,7 +782,7 @@ export default function MoneyScreen() {
                   <Plus size={20} color={t.link} strokeWidth={2} />
                   <Text className="text-link text-base font-semibold ml-2">Add expense</Text>
                   {expenses.length > 0 && (
-                    <Text className="ml-auto text-secondary text-[15px]">Total {money(totals.expenses)}</Text>
+                    <Text className="ml-auto text-secondary text-[15px]">This tax year {money(totals.expenses)}</Text>
                   )}
                 </Pressable>
                 {sortedExpenses.map((expense) => (
@@ -809,8 +799,8 @@ export default function MoneyScreen() {
                           {expense.description}
                         </Text>
                         <View className="flex-row items-center mt-0.5">
-                          <Text className="text-secondary text-sm" numberOfLines={1}>
-                            {formatDate(expense.date)} · {EXPENSE_CATEGORY_LABELS[expense.category]}
+                          <Text className="text-secondary text-sm shrink" numberOfLines={1}>
+                            {formatDateInList(expense.date)} · {EXPENSE_CATEGORY_LABELS[expense.category]}
                             {expense.miles ? ` · ${expense.miles} miles` : ''}
                           </Text>
                           {!!expense.receiptUri && (
@@ -1018,33 +1008,43 @@ export default function MoneyScreen() {
         </Pressable>
       </Sheet>
 
-      {/* Export */}
+      {/* Export the tax year for the accountant */}
       <Sheet visible={showExport} onClose={() => setShowExport(false)}>
-        <Text className="text-fg text-[17px] font-semibold text-center mb-4">Export a spreadsheet</Text>
-        <Segmented
-          className="mb-4 bg-bg"
-          options={[
-            { key: 'invoices', label: 'Invoices' },
-            { key: 'expenses', label: 'Expenses' },
-            { key: 'tax_summary', label: 'Tax summary' },
-          ]}
-          value={exportType}
-          onChange={setExportType}
-        />
-        <Text className="text-secondary text-[13px] mx-1 mb-2">Period</Text>
+        <Text className="text-fg text-[17px] font-semibold text-center mb-1">Export for your accountant</Text>
+        <Text className="text-secondary text-[15px] text-center mb-4">
+          A summary, a spreadsheet of income and expenses, and your receipt photos, in one zip file.
+        </Text>
         <View className="bg-bg rounded-2xl overflow-hidden">
-          {DATE_PRESETS.map((preset, i) => (
-            <View key={preset}>
-              {i > 0 && <RowDivider />}
-              <Pressable
-                onPress={() => handleExport(preset)}
-                className="px-4 min-h-[52px] justify-center active:opacity-70"
-                accessibilityRole="button"
-              >
-                <Text className="text-fg text-base">{getPresetLabel(preset)}</Text>
-              </Pressable>
-            </View>
-          ))}
+          {(['this', 'last'] as PackYear[]).map((which, i) => {
+            const c = packCounts(invoices, expenses, region.country, which);
+            const nothing = c.invoices === 0 && c.expenses === 0;
+            return (
+              <View key={which}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => handleExport(which)}
+                  disabled={nothing}
+                  className="flex-row items-center px-4 py-3 min-h-[60px] active:opacity-70"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: nothing }}
+                >
+                  <View className="flex-1">
+                    <Text className={cn('text-base', nothing ? 'text-secondary' : 'text-fg')}>
+                      {which === 'this' ? 'This tax year' : 'Last tax year'} · {c.period.label}
+                    </Text>
+                    <Text className="text-secondary text-[13px]">
+                      {nothing
+                        ? 'Nothing recorded'
+                        : `${c.invoices} paid ${c.invoices === 1 ? 'invoice' : 'invoices'} · ${c.expenses} ${
+                            c.expenses === 1 ? 'expense' : 'expenses'
+                          }`}
+                    </Text>
+                  </View>
+                  {!nothing && <ChevronRight size={16} color={t.secondary} strokeWidth={2} />}
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
         <Pressable
           onPress={() => setShowExport(false)}

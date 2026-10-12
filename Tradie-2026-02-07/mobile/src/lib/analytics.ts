@@ -7,7 +7,7 @@
 import Aptabase from '@aptabase/react-native';
 
 export type JourneyEvent =
-  'setup_finished' | 'job_saved' | 'quote_sent' | 'booked' | 'invoice_sent' | 'marked_paid' | 'paywall_opened' | 'pro_started';
+  'setup_finished' | 'job_saved' | 'quote_sent' | 'booked' | 'invoice_sent' | 'marked_paid' | 'paywall_opened' | 'pro_started' | 'tax_year_exported';
 
 const APP_KEY = process.env.EXPO_PUBLIC_APTABASE_APP_KEY;
 let started = false;

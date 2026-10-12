@@ -8,12 +8,17 @@ import { ExternalLink } from 'lucide-react-native';
 import { useRegion } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { Sheet, RowDivider } from '@/components/ui';
+import { getTaxYearBounds } from '@/lib/taxEstimator';
+
+// The current UK tax year, worked out from today.
+const ukYear = getTaxYearBounds();
+const UK_YEAR = `Tax year 6 April ${ukYear.start.getFullYear()} to 5 April ${ukYear.end.getFullYear()}.`;
 
 const CONTENT = {
   GB: {
     title: 'How your tax is worked out',
     points: [
-      'Tax year 6 April 2026 to 5 April 2027.',
+      UK_YEAR,
       'Profit = invoices paid this tax year minus the expenses you’ve logged.',
       'Income Tax: 20% up to £37,700 above your Personal Allowance, 40% up to £125,140, 45% above. The £12,570 allowance shrinks by £1 for every £2 of income over £100,000.',
       'Class 4 National Insurance: 6% on profits between £12,570 and £50,270, 2% above.',

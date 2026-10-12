@@ -46,6 +46,7 @@ export interface TaxEstimate {
   // CIS credit
   cisDeductions: number;
   taxOwed: number; // totalTax minus CIS deductions
+  cisRefund: number; // CIS deducted beyond the tax due: HMRC pays it back
 
   // VAT
   vatCollected: number; // Total VAT charged to customers
@@ -59,14 +60,16 @@ export interface TaxEstimate {
 }
 
 /**
- * Calculate estimated tax for the current UK tax year.
+ * Estimated tax for a UK tax year: the current one, or the year containing `asOf`.
+ * `alreadySetAside` comes off what's still to put away each month.
  */
 export function calculateTaxEstimate(
   invoices: Invoice[],
   expenses: Expense[],
   settings: BusinessSettings,
+  { asOf = new Date(), alreadySetAside = 0 }: { asOf?: Date; alreadySetAside?: number } = {},
 ): TaxEstimate {
-  const { start, end } = getTaxYearBounds();
+  const { start, end } = getTaxYearBounds(asOf);
   // Compare calendar days, so anything on 5 April (the last day) counts, whatever the time.
   const firstDay = toDateKey(start);
   const lastDay = toDateKey(end);
@@ -134,12 +137,13 @@ export function calculateTaxEstimate(
     .reduce((sum, inv) => sum + (inv.cisDeductionAmount || 0), 0);
 
   const taxOwed = Math.max(0, totalTax - cisDeductions);
+  const cisRefund = Math.max(0, cisDeductions - totalTax);
 
   // Monthly set-aside calculation
-  const now = new Date();
-  const monthsElapsed = Math.max(1,
-    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1
-  );
+  // (The year runs 6 April to 5 April, so 1–5 April still counts as the twelfth month.)
+  const monthsElapsed = Math.min(12, Math.max(1,
+    (asOf.getFullYear() - start.getFullYear()) * 12 + (asOf.getMonth() - start.getMonth()) + 1
+  ));
   const monthsInYear = 12;
   const monthsRemaining = Math.max(1, monthsInYear - monthsElapsed + 1);
 
@@ -155,8 +159,8 @@ export function calculateTaxEstimate(
   const projectedCIS = (cisDeductions / monthsElapsed) * monthsInYear;
   const projectedOwed = Math.max(0, projectedTotalTax - projectedCIS);
 
-  // What they should set aside each remaining month (accounting for what they've already saved)
-  const monthlySetAside = Math.max(0, projectedOwed / monthsRemaining);
+  // What they should set aside each remaining month, after what they've already saved
+  const monthlySetAside = Math.max(0, (projectedOwed - alreadySetAside) / monthsRemaining);
 
   return {
     grossIncome: Math.round(grossIncome * 100) / 100,
@@ -169,6 +173,7 @@ export function calculateTaxEstimate(
     totalTax: Math.round(totalTax * 100) / 100,
     cisDeductions: Math.round(cisDeductions * 100) / 100,
     taxOwed: Math.round(taxOwed * 100) / 100,
+    cisRefund: Math.round(cisRefund * 100) / 100,
     vatCollected: Math.round(vatCollected * 100) / 100,
     vatInputTax: Math.round(vatInputTax * 100) / 100,
     vatOwedToHMRC: Math.round(vatOwedToHMRC * 100) / 100,

@@ -8,6 +8,7 @@ import { Trade, getTradeConfig } from './trades';
 import { generateSampleData } from './sampleData';
 import { migrateStore, STORE_VERSION } from './storeMigrations';
 import { jobFacts, legacyStatus } from './jobSteps';
+import { deleteReceipt, deleteAllReceipts } from './receipts';
 
 // Selector hooks for performance — useShallow prevents re-renders when
 // the returned object/array is structurally equal but referentially new.
@@ -658,12 +659,16 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       updateExpense: (id, updates) => {
+        // A replaced or removed receipt photo is deleted from the phone.
+        const before = get().expenses.find((exp) => exp.id === id)?.receiptUri;
+        if (before && 'receiptUri' in updates && updates.receiptUri !== before) void deleteReceipt(before);
         set((state) => ({
           expenses: state.expenses.map((exp) => (exp.id === id ? { ...exp, ...updates } : exp)),
         }));
       },
 
       deleteExpense: (id) => {
+        void deleteReceipt(get().expenses.find((exp) => exp.id === id)?.receiptUri);
         set((state) => ({
           expenses: state.expenses.filter((exp) => exp.id !== id),
         }));
@@ -794,6 +799,7 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       clearAllData: () => {
+        void deleteAllReceipts();
         set({
           jobs: [],
           customers: [],
@@ -928,15 +934,29 @@ export function invoiceDueDate(
   return new Date(new Date(invoice.sentAt).getTime() + (settings.paymentTermsDays ?? 14) * 24 * 60 * 60 * 1000);
 }
 
-/** Whole days past the due date (0 if not overdue, or paid). */
+/**
+ * Calendar days until a sent invoice is due: 0 on the due day, negative once it's late.
+ * Counted in whole days, so the time of day it was sent doesn't matter.
+ */
+export function daysUntilDue(
+  invoice: Pick<Invoice, 'sentAt'>,
+  settings: Pick<BusinessSettings, 'paymentTermsDays'>,
+  now: Date = new Date(),
+): number | null {
+  const due = invoiceDueDate(invoice, settings);
+  if (!due) return null;
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((day(due) - day(now)) / (24 * 60 * 60 * 1000));
+}
+
+/** Whole days past the due date (0 if not overdue, or paid). Late from the day after it's due. */
 export function daysOverdue(
   invoice: Pick<Invoice, 'sentAt' | 'status'>,
   settings: Pick<BusinessSettings, 'paymentTermsDays'>,
   now: Date = new Date(),
 ): number {
-  const due = invoiceDueDate(invoice, settings);
-  if (!due || invoice.status === 'paid') return 0;
-  return Math.max(0, Math.floor((now.getTime() - due.getTime()) / (24 * 60 * 60 * 1000)));
+  if (invoice.status === 'paid') return 0;
+  return Math.max(0, -(daysUntilDue(invoice, settings, now) ?? 0));
 }
 
 /** How long a new quote stays valid. */
