@@ -90,7 +90,6 @@ const safeName = (text: string) =>
   text
     .replace(/&/g, 'and')
     .replace(/[\\/:*?"<>|#%{}^~[\]`]/g, ' ')
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F]/g, '')
     .replace(/\s+/g, ' ')
     .trim();

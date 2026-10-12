@@ -14,7 +14,7 @@ import { useAccount } from '@/lib/auth';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, FieldRow, Sheet, ModalHeader } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, PrimaryButton, FieldRow, Sheet, ModalHeader, ScrollScreen } from '@/components/ui';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 
 const MAX_TIMES = 3;
@@ -131,14 +131,20 @@ export default function SuggestTimesScreen() {
   const area = customer.postcode?.trim().toUpperCase().split(/\s+/)[0];
 
   return (
-    <View className="flex-1 bg-bg">
-      {/* Header */}
-      <ModalHeader title="Suggest times" onClose={() => goBack()} />
-
-      <ScrollView
-        className="flex-1"
+    <>
+      <ScrollScreen
+        header={<ModalHeader title="Suggest times" onClose={() => goBack()} />}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: times.length > 0 ? 16 : insets.bottom + 16 }}
+        footer={
+          times.length > 0 && (
+            <PrimaryButton
+              label={customer.phone ? `Text ${times.length === 1 ? 'this time' : `these ${times.length} times`}` : 'Send times'}
+              onPress={send}
+              loading={sending}
+            />
+          )
+        }
       >
         <View className="mb-6 mx-1">
           <Text className="text-fg text-[22px] font-bold tracking-tight">{customer.name}</Text>
@@ -295,20 +301,7 @@ export default function SuggestTimesScreen() {
             )}
           </View>
         )}
-      </ScrollView>
-
-      {times.length > 0 && (
-        <View
-          className="absolute left-0 right-0 bottom-0 bg-bg border-t border-divider px-4 pt-3"
-          style={{ paddingBottom: insets.bottom + 12 }}
-        >
-          <PrimaryButton
-            label={customer.phone ? `Text ${times.length === 1 ? 'this time' : `these ${times.length} times`}` : 'Send times'}
-            onPress={send}
-            loading={sending}
-          />
-        </View>
-      )}
+      </ScrollScreen>
 
       {/* More times */}
       <Sheet visible={showMore} onClose={() => setShowMore(false)}>
@@ -338,6 +331,6 @@ export default function SuggestTimesScreen() {
         </ScrollView>
       </Sheet>
       {detailsPrompt}
-    </View>
+    </>
   );
 }

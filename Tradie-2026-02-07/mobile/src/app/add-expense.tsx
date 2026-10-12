@@ -7,7 +7,6 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTradeStore, useJobs, useRegion, taxYearKey, type ExpenseCategory, EXPENSE_CATEGORY_LABELS, jobName } from '@/lib/store';
 import { mileageRate } from '@/lib/data/usTax2026';
-import { getJobTypeLabel } from '@/lib/store';
 import { formatDateObjLong, toDateKey, parseDate } from '@/lib/dates';
 import { formatAmount, currencySymbol } from '@/lib/money';
 import { useProAccess } from '@/lib/useProAccess';

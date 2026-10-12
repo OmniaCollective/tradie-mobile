@@ -9,6 +9,7 @@ import { generateSampleData } from './sampleData';
 import { migrateStore, STORE_VERSION } from './storeMigrations';
 import { jobFacts, legacyStatus } from './jobSteps';
 import { deleteReceipt, deleteAllReceipts } from './receipts';
+import type { ReminderPrefs } from './reminders';
 
 // Selector hooks for performance — useShallow prevents re-renders when
 // the returned object/array is structurally equal but referentially new.
@@ -243,8 +244,7 @@ export type Appearance = 'automatic' | 'light' | 'dark';
 /** One-off tips, each shown once: on Home, the first job opened, and Money. */
 export type TipKey = 'home' | 'job' | 'money';
 
-export { DEFAULT_REMINDERS, reminderPrefs, type ReminderPrefs } from './reminders';
-import type { ReminderPrefs } from './reminders';
+export { reminderPrefs, type ReminderPrefs } from './reminders';
 
 export type USFilingStatus = 'single' | 'married_joint' | 'head_of_household';
 

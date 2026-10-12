@@ -2,10 +2,21 @@
  * Shared building blocks for brand system v4 (brand/BRAND-BRIEF.md).
  * Screens compose these so spacing, corners and colours stay identical everywhere.
  */
-import React from 'react';
-import { View, Text, Pressable, ActivityIndicator, TextInput, Switch, Modal, Platform } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
+  Switch,
+  Modal,
+  Platform,
+  ScrollView,
+  type ScrollViewProps,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Lock, ChevronRight, ExternalLink, Check, X, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, ExternalLink, Check, X, type LucideIcon } from 'lucide-react-native';
 import { cn } from '@/lib/cn';
 import { useTheme, themeVars } from '@/lib/theme';
 
@@ -58,7 +69,8 @@ export function PrimaryButton({ label, onPress, icon: Icon, compact, loading, di
       className={cn(
         'rounded-xl flex-row items-center justify-center active:opacity-80',
         off ? 'bg-surface' : 'bg-accent',
-        compact ? 'h-10 px-3.5' : 'h-[52px] px-5',
+        // Minimum heights, so the label never spills out at the largest text sizes
+        compact ? 'min-h-10 px-3.5 py-1.5' : 'min-h-[52px] px-5 py-2.5',
         loading && 'opacity-70',
         className,
       )}
@@ -78,33 +90,6 @@ export function PrimaryButton({ label, onPress, icon: Icon, compact, loading, di
           >
             {label}
           </Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
-
-/** Secondary action: surface fill with a divider border. */
-export function SecondaryButton({ label, onPress, icon: Icon, compact, loading, disabled, className }: ButtonProps) {
-  const t = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || loading}
-      accessibilityRole="button"
-      className={cn(
-        'bg-surface border border-divider rounded-xl flex-row items-center justify-center active:opacity-70',
-        compact ? 'h-10 px-3.5' : 'h-[52px] px-5',
-        (disabled || loading) && 'opacity-50',
-        className,
-      )}
-    >
-      {loading ? (
-        <ActivityIndicator color={t.fg} />
-      ) : (
-        <>
-          {Icon && <Icon size={20} color={t.fg} strokeWidth={2} />}
-          <Text className={cn('text-fg font-semibold', compact ? 'text-[15px]' : 'text-[17px]', Icon && 'ml-1.5')}>{label}</Text>
         </>
       )}
     </Pressable>
@@ -182,33 +167,6 @@ export function ProgressBar({ value, alert }: { value: number; alert?: boolean }
   );
 }
 
-/** What a Pro feature does, shown to free users in place of the feature. */
-export function ProTeaser({
-  title,
-  body,
-  onUnlock,
-  className,
-}: {
-  title: string;
-  body: string;
-  onUnlock: () => void;
-  className?: string;
-}) {
-  const t = useTheme();
-  return (
-    <Group className={cn('p-4', className)}>
-      <View className="flex-row items-center mb-1">
-        <Lock size={16} color={t.secondary} strokeWidth={2} />
-        <Text className="text-fg text-[17px] font-semibold ml-2">{title}</Text>
-      </View>
-      <Text className="text-secondary text-[15px] leading-5">{body}</Text>
-      <Pressable onPress={onUnlock} className="self-start min-h-[44px] justify-center" accessibilityRole="button">
-        <Text className="text-link text-[15px] font-semibold">Unlock with Pro</Text>
-      </Pressable>
-    </Group>
-  );
-}
-
 /** Settings row with an editable value on the right, e.g. "Hourly rate  £ 60". */
 export function FieldRow({
   label,
@@ -257,40 +215,6 @@ export function FieldRow({
         />
         {!!suffix && <Text className="text-secondary text-base ml-1">{suffix}</Text>}
       </View>
-    </View>
-  );
-}
-
-/** Multi-line text in a settings group: label above, text below (addresses, bank details). */
-export function TextAreaRow({
-  label,
-  hint,
-  value,
-  onChangeText,
-  placeholder,
-}: {
-  label: string;
-  hint?: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder?: string;
-}) {
-  const t = useTheme();
-  return (
-    <View className="px-4 pt-3 pb-2">
-      <Text className="text-fg text-base">{label}</Text>
-      {!!hint && <Text className="text-secondary text-[13px]">{hint}</Text>}
-      <TextInput
-        className="text-fg text-base py-2 min-h-[64px]"
-        style={{ textAlignVertical: 'top' }}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={t.secondary}
-        multiline
-        scrollEnabled={false}
-        accessibilityLabel={label}
-      />
     </View>
   );
 }
@@ -361,54 +285,6 @@ export function LinkRow({
       {!!value && <Text className="text-secondary text-base mr-2">{value}</Text>}
       {!destructive && <Trailing size={16} color={t.secondary} strokeWidth={2} />}
     </Pressable>
-  );
-}
-
-/** A Group whose body opens and closes from its title row. */
-export function Disclosure({
-  title,
-  summary,
-  open,
-  onToggle,
-  children,
-  className,
-}: {
-  title: string;
-  summary?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const t = useTheme();
-  return (
-    <Group className={className}>
-      <Pressable
-        onPress={onToggle}
-        className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-      >
-        <Text className="flex-1 text-fg text-base font-semibold">{title}</Text>
-        {!open && summary && (
-          <Text className="text-secondary text-sm mr-2" numberOfLines={1}>
-            {summary}
-          </Text>
-        )}
-        <ChevronRight
-          size={16}
-          color={t.secondary}
-          strokeWidth={2}
-          style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}
-        />
-      </Pressable>
-      {open && (
-        <>
-          <RowDivider />
-          {children}
-        </>
-      )}
-    </Group>
   );
 }
 
@@ -540,6 +416,48 @@ export function ModalFooter({ children }: { children: React.ReactNode }) {
   return (
     <View className="bg-bg px-4 pt-3 border-t border-divider" style={{ paddingBottom: insets.bottom + 12 }}>
       {children}
+    </View>
+  );
+}
+
+/**
+ * A screen whose content scrolls above a fixed footer (the main button). The footer sits
+ * below the content, never on top of it, so nothing is hidden behind it at any text size.
+ * A hairline shows above the footer only while there's more to scroll to.
+ */
+export function ScrollScreen({
+  children,
+  header,
+  footer,
+  footerClassName,
+  ...scrollProps
+}: ScrollViewProps & { header?: React.ReactNode; footer?: React.ReactNode; footerClassName?: string }) {
+  const insets = useSafeAreaInsets();
+  const [box, setBox] = useState(0);
+  const [content, setContent] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const more = content - offset - box > 1;
+  return (
+    <View className="flex-1 bg-bg">
+      {header}
+      <ScrollView
+        className="flex-1"
+        scrollEventThrottle={32}
+        {...scrollProps}
+        onLayout={(e) => setBox(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_, h) => setContent(h)}
+        onScroll={(e) => setOffset(e.nativeEvent.contentOffset.y)}
+      >
+        {children}
+      </ScrollView>
+      {footer ? (
+        <View
+          className={cn('bg-bg px-4 pt-3 border-t', more ? 'border-divider' : 'border-transparent', footerClassName)}
+          style={{ paddingBottom: insets.bottom + 12 }}
+        >
+          {footer}
+        </View>
+      ) : null}
     </View>
   );
 }

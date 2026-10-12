@@ -47,16 +47,24 @@ async function checkMaps(): Promise<Check> {
   }
 }
 
+// Anyone can call this, so the upstream checks (which use real quotas) run at most every
+// 5 minutes per server instance; in between, the last answer is returned.
+const CACHE_MS = 5 * 60_000;
+let cached: { at: number; ok: boolean; checks: Record<string, Check> } | null = null;
+
 /** GET → which keys work. Reports problems without revealing any secret. */
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
-  const [groq, revenuecat, apple, maps] = await Promise.all([
-    checkGroq().catch((e) => ({ ok: false, detail: String(e) })),
-    checkRevenueCat().catch((e) => ({ ok: false, detail: String(e) })),
-    checkApple(),
-    checkMaps(),
-  ]);
-  const session: Check = process.env.SESSION_SECRET ? { ok: true } : { ok: false, detail: 'SESSION_SECRET not set' };
-  const checks = { groq, revenuecat, apple, session, maps };
-  const ok = Object.values(checks).every((c) => c.ok);
-  return res.status(ok ? 200 : 503).json({ ok, checks });
+  if (!cached || Date.now() - cached.at > CACHE_MS) {
+    const [groq, revenuecat, apple, maps] = await Promise.all([
+      checkGroq().catch((e) => ({ ok: false, detail: String(e) })),
+      checkRevenueCat().catch((e) => ({ ok: false, detail: String(e) })),
+      checkApple(),
+      checkMaps(),
+    ]);
+    const session: Check = process.env.SESSION_SECRET ? { ok: true } : { ok: false, detail: 'SESSION_SECRET not set' };
+    const checks = { groq, revenuecat, apple, session, maps };
+    cached = { at: Date.now(), ok: Object.values(checks).every((c) => c.ok), checks };
+  }
+  res.setHeader('Cache-Control', 'public, s-maxage=300');
+  return res.status(cached.ok ? 200 : 503).json({ ok: cached.ok, checks: cached.checks });
 }

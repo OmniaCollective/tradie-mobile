@@ -151,17 +151,31 @@ export default function MoneyScreen() {
     return { owed, notInvoiced, invoiceFor, months, paidThisMonth };
   }, [invoices, jobs, settings, country, yearKey, thisMonthKey]);
 
+  // Expenses one tax year at a time, like Paid, so the list doesn't grow forever.
+  const [expenseYear, setExpenseYear] = useState<'this' | 'last'>('this');
+  const lastYearKey = String(Number(thisYearKey) - 1);
+  const hasLastYearExpenses = expenses.some((e) => taxYearKey(country, parseDate(e.date)) === lastYearKey);
+  const shownExpenses = useMemo(
+    () =>
+      expenses
+        .filter(
+          (e) =>
+            taxYearKey(country, parseDate(e.date)) ===
+            (expenseYear === 'this' || !hasLastYearExpenses ? thisYearKey : lastYearKey),
+        )
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [expenses, country, expenseYear, hasLastYearExpenses, thisYearKey, lastYearKey],
+  );
+
   const totals = {
     // What actually reaches the bank: CIS is held back by the contractor and paid to HMRC.
     owed: money_.owed.reduce((s, i) => s + received(i), 0),
     overdue: money_.owed.filter((i) => daysOverdue(i, settings) > 0).length,
     paidThisMonth: money_.paidThisMonth.reduce((s, i) => s + received(i), 0),
     notInvoiced: money_.notInvoiced.reduce((s, j) => s + (money_.invoiceFor.get(j.id)?.quote.total ?? j.quote?.total ?? 0), 0),
-    // This tax year's, to match the tax card.
-    expenses: expenses.filter((e) => taxYearKey(country, parseDate(e.date)) === thisYearKey).reduce((s, e) => s + e.amount, 0),
+    expenses: shownExpenses.reduce((s, e) => s + e.amount, 0),
   };
 
-  const sortedExpenses = useMemo(() => [...expenses].sort((a, b) => b.date.localeCompare(a.date)), [expenses]);
   const tax = useMemo(
     () => calculateTaxEstimate(invoices, expenses, settings, { alreadySetAside: taxSetAsideTotal }),
     [invoices, expenses, settings, taxSetAsideTotal],
@@ -759,7 +773,22 @@ export default function MoneyScreen() {
 
         {/* Expenses */}
         <View>
-          <SectionHeader title="Expenses" />
+          <View className="flex-row items-center justify-between mx-1 mb-2 min-h-[32px]">
+            <Text className="text-fg text-[17px] font-semibold" accessibilityRole="header">
+              Expenses
+            </Text>
+            {isPro && hasLastYearExpenses && (
+              <Segmented
+                className="w-56"
+                options={[
+                  { key: 'this', label: 'This tax year' },
+                  { key: 'last', label: 'Last tax year' },
+                ]}
+                value={expenseYear}
+                onChange={setExpenseYear}
+              />
+            )}
+          </View>
           {!isPro ? (
             <Pressable onPress={openPaywall} accessibilityRole="button" accessibilityLabel="Expenses and receipts, with Pro">
               <Group className="flex-row items-center px-4 min-h-[60px]">
@@ -781,11 +810,11 @@ export default function MoneyScreen() {
                 >
                   <Plus size={20} color={t.link} strokeWidth={2} />
                   <Text className="text-link text-base font-semibold ml-2">Add expense</Text>
-                  {expenses.length > 0 && (
-                    <Text className="ml-auto text-secondary text-[15px]">This tax year {money(totals.expenses)}</Text>
+                  {shownExpenses.length > 0 && (
+                    <Text className="ml-auto text-secondary text-[15px]">Total {money(totals.expenses)}</Text>
                   )}
                 </Pressable>
-                {sortedExpenses.map((expense) => (
+                {shownExpenses.map((expense) => (
                   <View key={expense.id}>
                     <RowDivider />
                     <View className="flex-row items-center pl-4 py-2.5">

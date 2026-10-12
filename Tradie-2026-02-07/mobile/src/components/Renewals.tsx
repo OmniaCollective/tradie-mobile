@@ -56,8 +56,8 @@ export function RenewalsSection() {
   const save = async () => {
     if (!draft || !draft.name.trim()) return;
     const fields = { name: draft.name.trim(), reference: draft.reference.trim() || undefined, expires: toDateKey(draft.expires) };
-    const id = draft.id ?? addRenewal(fields);
     if (draft.id) updateRenewal(draft.id, fields);
+    else addRenewal(fields);
     setDraft(null);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     toast('Saved. Reminders set');

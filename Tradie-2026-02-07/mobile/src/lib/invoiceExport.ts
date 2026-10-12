@@ -6,16 +6,12 @@ import {
   Job,
   Customer,
   BusinessSettings,
-  Expense,
-  EXPENSE_CATEGORY_LABELS,
   getRegion,
-  getJobTypeLabel,
   businessDisplayName,
   invoiceNumberLabel,
   invoiceDueDate,
   jobName,
 } from './store';
-import { parseDate, toDateKey } from './dates';
 import { formatMoney } from './money';
 
 // Footer on shared PDFs — every invoice/quote a customer sees links back to the app
@@ -133,11 +129,6 @@ interface QuotePdfContext {
   customer: Customer;
   settings: BusinessSettings;
 }
-
-/** Shares the quote PDF through the share sheet. */
-export const exportQuotePdf = async (ctx: QuotePdfContext): Promise<void> => {
-  await sharePdfFile(await createQuotePdf(ctx));
-};
 
 /** Builds the quote PDF and returns its file (for the preview screen or sharing). */
 export const createQuotePdf = async ({ job, customer, settings }: QuotePdfContext): Promise<string> => {

@@ -27,7 +27,6 @@ const xml = (text: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     // Characters XML 1.0 can't hold (a pasted control character would corrupt the file).
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 
 const colName = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : colName(Math.floor(i / 26) - 1) + colName(i % 26));

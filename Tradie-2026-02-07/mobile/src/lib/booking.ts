@@ -10,7 +10,6 @@ import {
   type Customer,
   type OfferedSlot,
   getRegion,
-  getJobTypeLabel,
   jobName,
 } from './store';
 import { scheduleJobReminder } from './notifications';

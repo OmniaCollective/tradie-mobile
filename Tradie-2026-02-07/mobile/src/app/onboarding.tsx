@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image } from 'react-native';
+import { View, Text, Pressable, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FileText,
@@ -30,7 +30,7 @@ import { restorePurchases } from '@/lib/revenuecatClient';
 import { useRefreshPro } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, PrimaryButton, LabeledField } from '@/components/ui';
+import { Group, RowDivider, PrimaryButton, LabeledField, ScrollScreen } from '@/components/ui';
 import { toast } from '@/components/Toast';
 import { track } from '@/lib/analytics';
 
@@ -148,44 +148,58 @@ export default function OnboardingScreen() {
   // ── Welcome ───────────────────────────────────────────────────────────────
   if (step === 0) {
     return (
-      <View className="flex-1 bg-bg px-6" style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 16 }}>
-        {/* Scrolls on small iPhones and with larger text; the button stays put */}
-        <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-          <Image
-            source={require('@/assets/app-icon-tile.png')}
-            style={{ width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
-            accessibilityIgnoresInvertColors
-            accessible={false}
-          />
-          <Text className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4" accessibilityRole="header">
-            TRADIE
-          </Text>
-          <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight">
-            {isUS ? 'Quotes, jobs and invoices. Handled.' : 'Quotes, jobs and invoices. Sorted.'}
-          </Text>
-          <Text className="text-secondary text-[17px] leading-6 mt-3">Built for solo traders.</Text>
+      <ScrollScreen
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: insets.top + 32, paddingHorizontal: 24, paddingBottom: 16 }}
+        footerClassName="px-6"
+        footer={
+          <>
+            <PrimaryButton label="Get started" onPress={getStarted} />
+            <View className="flex-row justify-center items-center flex-wrap mt-1">
+              <Text className="text-secondary text-sm">Have Pro already? </Text>
+              <Pressable
+                onPress={restore}
+                disabled={restoring}
+                className="min-h-[44px] justify-center"
+                accessibilityRole="button"
+              >
+                <Text className="text-link text-sm font-semibold">{restoring ? 'Checking…' : 'Restore'}</Text>
+              </Pressable>
+            </View>
+          </>
+        }
+      >
+        <Image
+          source={require('@/assets/app-icon-tile.png')}
+          style={{ width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
+          accessibilityIgnoresInvertColors
+          accessible={false}
+        />
+        <Text
+          className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4"
+          accessibilityRole="header"
+          maxFontSizeMultiplier={1.3}
+        >
+          TRADIE
+        </Text>
+        {/* The big headline grows less than body text, so more of the list fits at large text sizes */}
+        <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight" maxFontSizeMultiplier={1.3}>
+          {isUS ? 'Quotes, jobs and invoices. Handled.' : 'Quotes, jobs and invoices. Sorted.'}
+        </Text>
+        <Text className="text-secondary text-[17px] leading-6 mt-3">Built for solo traders.</Text>
 
-          <View className="mt-7 gap-4">
-            {benefits(isUS).map(({ icon: Icon, title, body }) => (
-              <View key={title} className="flex-row" accessible accessibilityLabel={`${title}. ${body}`}>
-                <Icon size={24} color={t.link} strokeWidth={2} />
-                <View className="ml-3.5 flex-1">
-                  <Text className="text-fg text-base font-semibold">{title}</Text>
-                  <Text className="text-secondary text-[15px]">{body}</Text>
-                </View>
+        <View className="mt-7 gap-4">
+          {benefits(isUS).map(({ icon: Icon, title, body }) => (
+            <View key={title} className="flex-row" accessible accessibilityLabel={`${title}. ${body}`}>
+              <Icon size={24} color={t.link} strokeWidth={2} />
+              <View className="ml-3.5 flex-1">
+                <Text className="text-fg text-base font-semibold">{title}</Text>
+                <Text className="text-secondary text-[15px]">{body}</Text>
               </View>
-            ))}
-          </View>
-        </ScrollView>
-
-        <PrimaryButton label="Get started" onPress={getStarted} />
-        <View className="flex-row justify-center items-center mt-1">
-          <Text className="text-secondary text-sm">Have Pro already? </Text>
-          <Pressable onPress={restore} disabled={restoring} className="min-h-[44px] justify-center" accessibilityRole="button">
-            <Text className="text-link text-sm font-semibold">{restoring ? 'Checking…' : 'Restore'}</Text>
-          </Pressable>
+            </View>
+          ))}
         </View>
-      </View>
+      </ScrollScreen>
     );
   }
 
@@ -193,67 +207,9 @@ export default function OnboardingScreen() {
   if (step === 1) {
     const list = showMore ? [...TOP_TRADES, ...MORE_TRADES] : TOP_TRADES;
     return (
-      <View className="flex-1 bg-bg">
-        <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 140 }}>
-          {topBar(1)}
-          <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
-            What’s your trade?
-          </Text>
-          <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">
-            We’ll set up your job types and prices. You can change them any time.
-          </Text>
-          <Group>
-            {list.map(({ key, icon: Icon }, i) => {
-              const selected = trade === key;
-              const cfg = getTradeConfig(key, country);
-              return (
-                <View key={key}>
-                  {i > 0 && <RowDivider />}
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setTradeChoice(key);
-                    }}
-                    className="flex-row items-center px-4 min-h-[58px] active:opacity-70"
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`${cfg.label}. ${cfg.description}`}
-                  >
-                    <Icon size={20} color={selected ? t.link : t.secondary} strokeWidth={2} />
-                    <View className="flex-1 ml-3.5 py-2">
-                      <Text className={selected ? 'text-fg text-base font-semibold' : 'text-fg text-base'}>{cfg.label}</Text>
-                      <Text className="text-secondary text-[13px]">{cfg.description}</Text>
-                    </View>
-                    {selected && <Check size={20} color={t.link} strokeWidth={2.25} />}
-                  </Pressable>
-                </View>
-              );
-            })}
-            <RowDivider />
-            {showMore ? (
-              <Pressable
-                onPress={() => setTradeChoice('custom')}
-                className="flex-row items-center px-4 min-h-[56px] active:opacity-70"
-                accessibilityRole="radio"
-                accessibilityState={{ checked: trade === 'custom' }}
-              >
-                <Plus size={20} color={t.link} strokeWidth={2} />
-                <Text className="flex-1 text-link text-base font-semibold ml-3.5">Something else</Text>
-                {trade === 'custom' && <Check size={20} color={t.link} strokeWidth={2.25} />}
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => setShowMore(true)}
-                className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
-                accessibilityRole="button"
-              >
-                <ChevronDown size={20} color={t.link} strokeWidth={2} />
-                <Text className="text-link text-base font-semibold ml-3.5">More trades</Text>
-              </Pressable>
-            )}
-          </Group>
-        </ScrollView>
-        <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+      <ScrollScreen
+        contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
+        footer={
           <PrimaryButton
             label={trade ? 'Continue' : 'Pick your trade'}
             disabled={!trade}
@@ -263,75 +219,133 @@ export default function OnboardingScreen() {
               setStep(2);
             }}
           />
-        </View>
-      </View>
+        }
+      >
+        {topBar(1)}
+        <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
+          What’s your trade?
+        </Text>
+        <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">
+          We’ll set up your job types and prices. You can change them any time.
+        </Text>
+        <Group>
+          {list.map(({ key, icon: Icon }, i) => {
+            const selected = trade === key;
+            const cfg = getTradeConfig(key, country);
+            return (
+              <View key={key}>
+                {i > 0 && <RowDivider />}
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTradeChoice(key);
+                  }}
+                  className="flex-row items-center px-4 min-h-[58px] active:opacity-70"
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  accessibilityLabel={`${cfg.label}. ${cfg.description}`}
+                >
+                  <Icon size={20} color={selected ? t.link : t.secondary} strokeWidth={2} />
+                  <View className="flex-1 ml-3.5 py-2">
+                    <Text className={selected ? 'text-fg text-base font-semibold' : 'text-fg text-base'}>{cfg.label}</Text>
+                    <Text className="text-secondary text-[13px]">{cfg.description}</Text>
+                  </View>
+                  {selected && <Check size={20} color={t.link} strokeWidth={2.25} />}
+                </Pressable>
+              </View>
+            );
+          })}
+          <RowDivider />
+          {showMore ? (
+            <Pressable
+              onPress={() => setTradeChoice('custom')}
+              className="flex-row items-center px-4 min-h-[56px] active:opacity-70"
+              accessibilityRole="radio"
+              accessibilityState={{ checked: trade === 'custom' }}
+            >
+              <Plus size={20} color={t.link} strokeWidth={2} />
+              <Text className="flex-1 text-link text-base font-semibold ml-3.5">Something else</Text>
+              {trade === 'custom' && <Check size={20} color={t.link} strokeWidth={2.25} />}
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setShowMore(true)}
+              className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+              accessibilityRole="button"
+            >
+              <ChevronDown size={20} color={t.link} strokeWidth={2} />
+              <Text className="text-link text-base font-semibold ml-3.5">More trades</Text>
+            </Pressable>
+          )}
+        </Group>
+      </ScrollScreen>
     );
   }
 
   // ── About your business ───────────────────────────────────────────────────
   return (
-    <View className="flex-1 bg-bg">
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 180 }}
-      >
-        {topBar(2)}
-        <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
-          About your business
-        </Text>
-        <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">This goes on your quotes and invoices.</Text>
-        <View className="gap-4">
-          <LabeledField
-            label="Your name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Dave Smith"
-            autoCapitalize="words"
-            textContentType="name"
-          />
-          <LabeledField
-            label="Business name"
-            optional
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder={isUS ? 'As on your truck' : 'As on your van'}
-            autoCapitalize="words"
-            textContentType="organizationName"
-          />
-          <LabeledField
-            label="Mobile"
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="So customers can reach you"
-            keyboardType="phone-pad"
-            textContentType="telephoneNumber"
-          />
-        </View>
-        <View className="flex-row items-center flex-wrap mx-1 mt-4">
-          <Text className="text-secondary text-sm">
-            Working in {isUS ? 'the US' : 'the UK'} · prices in {isUS ? 'dollars' : 'pounds'}{' '}
-          </Text>
+    <ScrollScreen
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
+      footer={
+        <>
+          <PrimaryButton label="Start using Tradie" onPress={() => finish(true)} />
           <Pressable
-            onPress={() => setCountry(isUS ? 'GB' : 'US')}
-            className="min-h-[44px] justify-center"
+            onPress={() => finish(false)}
+            className="min-h-[48px] items-center justify-center mt-1"
             accessibilityRole="button"
-            accessibilityLabel={`Change country. Now ${isUS ? 'the US' : 'the UK'}`}
           >
-            <Text className="text-link text-sm font-semibold">Change</Text>
+            <Text className="text-secondary text-base font-semibold">Skip for now</Text>
           </Pressable>
-        </View>
-      </ScrollView>
-      <View className="absolute left-0 right-0 bottom-0 bg-bg px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
-        <PrimaryButton label="Start using Tradie" onPress={() => finish(true)} />
+        </>
+      }
+    >
+      {topBar(2)}
+      <Text className="text-fg text-[28px] font-bold tracking-tight mx-1" accessibilityRole="header">
+        About your business
+      </Text>
+      <Text className="text-secondary text-base leading-6 mt-1.5 mb-6 mx-1">This goes on your quotes and invoices.</Text>
+      <View className="gap-4">
+        <LabeledField
+          label="Your name"
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Dave Smith"
+          autoCapitalize="words"
+          textContentType="name"
+        />
+        <LabeledField
+          label="Business name"
+          optional
+          value={businessName}
+          onChangeText={setBusinessName}
+          placeholder={isUS ? 'As on your truck' : 'As on your van'}
+          autoCapitalize="words"
+          textContentType="organizationName"
+        />
+        <LabeledField
+          label="Mobile"
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="So customers can reach you"
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+        />
+      </View>
+      <View className="flex-row items-center flex-wrap mx-1 mt-4">
+        <Text className="text-secondary text-sm">
+          Working in {isUS ? 'the US' : 'the UK'} · prices in {isUS ? 'dollars' : 'pounds'}{' '}
+        </Text>
         <Pressable
-          onPress={() => finish(false)}
-          className="min-h-[48px] items-center justify-center mt-1"
+          onPress={() => setCountry(isUS ? 'GB' : 'US')}
+          className="min-h-[44px] justify-center"
           accessibilityRole="button"
+          accessibilityLabel={`Change country. Now ${isUS ? 'the US' : 'the UK'}`}
         >
-          <Text className="text-secondary text-base font-semibold">Skip for now</Text>
+          <Text className="text-link text-sm font-semibold">Change</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollScreen>
   );
 }

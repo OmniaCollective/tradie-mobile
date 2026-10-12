@@ -81,16 +81,6 @@ export async function cancelAllReminders(): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
 }
 
-/** Whether the 6pm "message tomorrow's customers" nudge is on. */
-export async function isDailyReminderOn(): Promise<boolean> {
-  try {
-    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    return scheduled.some((n) => n.identifier === DAILY_REMINDER_ID);
-  } catch {
-    return false; // not available (web preview)
-  }
-}
-
 /** Turns the 6pm nudge on or off. Returns the resulting state (off if permission was refused). */
 export async function setDailyReminder(on: boolean): Promise<boolean> {
   await Notifications.cancelScheduledNotificationAsync(DAILY_REMINDER_ID).catch(() => {});

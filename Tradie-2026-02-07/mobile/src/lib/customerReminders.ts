@@ -2,26 +2,18 @@
  * Customer Reminders Service
  *
  * Sends automated SMS reminders to customers before their scheduled jobs.
- * Also handles quote expiry follow-ups.
  */
 
 import * as SMS from 'expo-sms';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Job, Customer } from './store';
 import { formatTime, formatDateFull } from './dates';
-import { formatMoney } from './money';
 
 const SENT_REMINDERS_KEY = 'tradie-sent-reminders';
-const QUOTE_FOLLOWUPS_KEY = 'tradie-quote-followups';
 
 interface SentReminder {
   jobId: string;
   type: 'day_before' | 'morning_of';
-  sentAt: string;
-}
-
-interface QuoteFollowup {
-  jobId: string;
   sentAt: string;
 }
 
@@ -45,26 +37,6 @@ async function saveSentReminders(reminders: SentReminder[]): Promise<void> {
 }
 
 /**
- * Get quote followups from storage
- */
-async function getQuoteFollowups(): Promise<QuoteFollowup[]> {
-  try {
-    const data = await AsyncStorage.getItem(QUOTE_FOLLOWUPS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Save quote followups to storage
- */
-async function saveQuoteFollowups(followups: QuoteFollowup[]): Promise<void> {
-  await AsyncStorage.setItem(QUOTE_FOLLOWUPS_KEY, JSON.stringify(followups));
-}
-
-
-/**
  * Send SMS reminder to customer (opens SMS app with pre-filled message)
  */
 export async function sendCustomerReminder(
@@ -72,7 +44,7 @@ export async function sendCustomerReminder(
   job: Job,
   jobTypeLabel: string,
   businessName: string,
-  reminderType: 'day_before' | 'morning_of'
+  reminderType: 'day_before' | 'morning_of',
 ): Promise<boolean> {
   const isAvailable = await SMS.isAvailableAsync();
   if (!isAvailable) {
@@ -82,9 +54,7 @@ export async function sendCustomerReminder(
 
   // Check if reminder was already sent
   const sentReminders = await getSentReminders();
-  const alreadySent = sentReminders.some(
-    (r) => r.jobId === job.id && r.type === reminderType
-  );
+  const alreadySent = sentReminders.some((r) => r.jobId === job.id && r.type === reminderType);
 
   if (alreadySent) {
     if (__DEV__) console.log('[Reminders] Reminder already sent for job:', job.id);
@@ -107,10 +77,7 @@ export async function sendCustomerReminder(
 
     if (result === 'sent' || result === 'unknown') {
       // Mark as sent
-      const updatedReminders = [
-        ...sentReminders,
-        { jobId: job.id, type: reminderType, sentAt: new Date().toISOString() },
-      ];
+      const updatedReminders = [...sentReminders, { jobId: job.id, type: reminderType, sentAt: new Date().toISOString() }];
       await saveSentReminders(updatedReminders);
       if (__DEV__) console.log('[Reminders] Sent', reminderType, 'reminder for job:', job.id);
       return true;
@@ -121,67 +88,4 @@ export async function sendCustomerReminder(
     if (__DEV__) console.error('[Reminders] Error sending SMS:', error);
     return false;
   }
-}
-
-/**
- * Send quote expiry follow-up to customer
- */
-export async function sendQuoteFollowup(
-  customer: Customer,
-  job: Job,
-  jobTypeLabel: string,
-  businessName: string
-): Promise<boolean> {
-  const isAvailable = await SMS.isAvailableAsync();
-  if (!isAvailable) {
-    if (__DEV__) console.log('[Reminders] SMS not available');
-    return false;
-  }
-
-  // Check if followup was already sent
-  const followups = await getQuoteFollowups();
-  const alreadySent = followups.some((f) => f.jobId === job.id);
-
-  if (alreadySent) {
-    if (__DEV__) console.log('[Reminders] Quote followup already sent for job:', job.id);
-    return false;
-  }
-
-  const quoteTotal = job.quote?.total.toFixed(2) || '0.00';
-
-  const message = `Hi ${customer.name},\n\nJust following up on your ${jobTypeLabel.toLowerCase()} quote for ${formatMoney(Number(quoteTotal))}.\n\nYour quote is expiring soon. Would you like to go ahead and book?\n\nReply YES to confirm, or let us know if you have any questions.\n\n${businessName}`;
-
-  try {
-    const { result } = await SMS.sendSMSAsync([customer.phone], message);
-
-    if (result === 'sent' || result === 'unknown') {
-      // Mark as sent
-      const updatedFollowups = [
-        ...followups,
-        { jobId: job.id, sentAt: new Date().toISOString() },
-      ];
-      await saveQuoteFollowups(updatedFollowups);
-      if (__DEV__) console.log('[Reminders] Sent quote followup for job:', job.id);
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    if (__DEV__) console.error('[Reminders] Error sending quote followup:', error);
-    return false;
-  }
-}
-
-/**
- * Check if a quote is expiring soon (within 24 hours)
- */
-export function isQuoteExpiringSoon(job: Job): boolean {
-  if (!job.quote?.validUntil) return false;
-
-  const expiryDate = new Date(job.quote.validUntil);
-  const now = new Date();
-  const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-  // Nudge in the last 3 days of the quote.
-  return hoursUntilExpiry > 0 && hoursUntilExpiry <= 72;
 }
