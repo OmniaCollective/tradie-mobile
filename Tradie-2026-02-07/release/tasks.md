@@ -88,6 +88,20 @@ These show what free users want and what leads to upgrades.
 Once line items exist, split income into labour and materials in the accountant pack
 (`src/lib/accountantPack.ts`).
 
-### Later (out of scope for now)
-- UK construction VAT reverse charge.
-- US sales tax.
+### UK construction VAT reverse charge
+- **Who it's for:** VAT-registered tradies invoicing another VAT-registered builder under
+  CIS.
+- **How it works:** a switch on the invoice. The VAT amount is shown but not charged, and
+  the invoice carries HMRC's wording, e.g. "Reverse charge: customer to account to HMRC
+  for the VAT".
+- **What it affects:**
+  - The VAT tracker and accountant pack don't count this VAT as charged.
+  - The CIS deduction is unchanged.
+- **Fits with:** the per-line VAT rates in `line-items-plan.md`.
+
+### US sales tax (simple)
+- **Setting:** one sales tax % the tradie sets, in Account → Prices, for US tradies only.
+- **Applied to:** materials only, or everything, chosen by the tradie, because states
+  differ on taxing labour.
+- **On the PDF:** shown as its own line.
+- **Out of scope:** looking up the correct rate for each US location automatically.
