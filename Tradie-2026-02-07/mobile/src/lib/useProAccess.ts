@@ -48,9 +48,11 @@ export function useProAccess(): ProAccess {
   const invoicesThisMonth = useTradeStore((s) => {
     const now = new Date();
     return s.invoices.filter((i) => {
-      // Free invoices are counted when sent: previewing one, or cash recorded with "Mark paid", uses none.
-      if (i.recordedOnly || !i.sentAt) return false;
-      const d = new Date(i.sentAt);
+      // A free invoice counts the first time its PDF leaves the app (sharedAt; sentAt on invoices from
+      // before 1.7). Previewing one, or cash recorded with "Mark paid", uses none.
+      const at = i.sharedAt ?? i.sentAt;
+      if (i.recordedOnly || !at) return false;
+      const d = new Date(at);
       return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     }).length;
   });

@@ -7,7 +7,25 @@
 import { init, trackEvent } from '@aptabase/react-native';
 
 export type JourneyEvent =
-  'setup_finished' | 'job_saved' | 'quote_sent' | 'booked' | 'invoice_sent' | 'marked_paid' | 'paywall_opened' | 'pro_started' | 'tax_year_exported';
+  | 'setup_finished'
+  | 'job_saved'
+  | 'quote_sent'
+  | 'booked'
+  | 'invoice_sent'
+  | 'marked_paid'
+  | 'paywall_opened'
+  | 'pro_started'
+  | 'tax_year_exported'
+  // 1.7: which price tools get used, and which Pro locks free users tap
+  | 'line_item_added'
+  | 'discount_added'
+  | 'price_list_item_saved'
+  | 'price_list_item_used'
+  | 'parts_added_to_price'
+  | 'logo_added'
+  | 'pro_locked_tap_price_list'
+  | 'pro_locked_tap_parts'
+  | 'pro_locked_tap_profit';
 
 const APP_KEY = process.env.EXPO_PUBLIC_APTABASE_APP_KEY;
 let started = false;

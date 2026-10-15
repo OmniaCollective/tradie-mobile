@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import {
   Invoice,
+  Quote,
   Job,
   Customer,
   BusinessSettings,
@@ -13,6 +14,8 @@ import {
   jobName,
 } from './store';
 import { formatMoney } from './money';
+import { lineAmount, discountAmount, roundPence, type LineItem } from './pricing';
+import { logoDataUri } from './logo';
 
 // Footer on shared PDFs — every invoice/quote a customer sees links back to the app
 const APP_STORE_URL = 'https://apps.apple.com/app/id6758908408';
@@ -38,28 +41,44 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
+/** All text black (decided for 1.7); only rules and card backgrounds are grey. */
 export const PDF_STYLE = `
-  body { margin:0; padding:32px; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#0B1220; }
-  .header { display:flex; justify-content:space-between; gap:24px; margin-bottom:32px; }
-  .title { font-size:28px; font-weight:800; color:#0E7C86; }
-  .label { font-size:12px; color:#5B6676; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
-  .value { font-size:14px; color:#0B1220; line-height:1.5; }
-  .muted { color:#5B6676; }
-  .card { background:#F3F5F7; border:1px solid #E4E7EB; border-radius:12px; padding:20px; margin-bottom:20px; }
+  body { margin:0; padding:0; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#000000; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; }
+  .brand { display:flex; align-items:center; gap:16px; }
+  .logo { max-height:64px; max-width:180px; object-fit:contain; }
+  .title { font-size:26px; font-weight:800; color:#000000; }
+  .label { font-size:11px; color:#000000; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; font-weight:600; }
+  .value { font-size:13px; color:#000000; line-height:1.5; }
+  .muted { color:#000000; }
+  .card { background:#F3F5F7; border:1px solid #D9DDE2; border-radius:12px; padding:18px; margin-bottom:18px; break-inside:avoid; page-break-inside:avoid; }
   table { width:100%; border-collapse:collapse; }
-  .line td { padding:8px 0; border-bottom:1px solid #E4E7EB; }
-  .total-row td { padding:12px 0 0; font-weight:700; font-size:18px; border-top:2px solid #0E7C86; }
-  .total-amount { color:#0E7C86; text-align:right; }
-  .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; background:#0E7C861A; color:#0E7C86; }
-  .powered { margin-top:32px; text-align:center; color:#5B6676; font-size:10px; }
-  .powered a { color:#0E7C86; text-decoration:none; }
+  thead { display:table-header-group; }
+  tr { break-inside:avoid; page-break-inside:avoid; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:600; text-align:left; padding:0 0 8px; border-bottom:1px solid #000000; }
+  .line td { padding:8px 0; border-bottom:1px solid #D9DDE2; font-size:13px; vertical-align:top; }
+  .num { text-align:right; white-space:nowrap; padding-left:12px !important; }
+  .total-row td { padding:12px 0 0; font-weight:700; font-size:18px; border-top:2px solid #000000; }
+  .total-amount { color:#000000; text-align:right; }
+  .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid #000000; color:#000000; }
+  .note { font-size:12px; line-height:1.5; margin-top:12px; }
+  .powered { margin-top:28px; text-align:center; color:#000000; font-size:10px; }
+  .powered a { color:#000000; text-decoration:underline; }
 `;
+
+/** Paper for the tradie's country (A4 in the UK, Letter in the US), in points, with margins on every page. */
+export const pageOptions = () => ({
+  ...(getRegion().country === 'US' ? { width: 612, height: 792 } : { width: 595, height: 842 }),
+  margins: { left: 36, right: 36, top: 36, bottom: 36 },
+});
 
 /** The tradie's details, from their Account profile. */
 const fromBlock = (settings: BusinessSettings) => {
   const name = businessDisplayName(settings);
   const owner = settings.ownerName.trim();
   const vat = settings.vatRegistered && getRegion().country === 'GB' && settings.vatNumber.trim();
+  const company = settings.companyNumber?.trim();
+  const website = settings.website?.trim();
   return `
     <div class="label">From</div>
     ${name ? `<div class="value"><strong>${esc(name)}</strong></div>` : ''}
@@ -68,7 +87,9 @@ const fromBlock = (settings: BusinessSettings) => {
     ${settings.postcode.trim() ? `<div class="value">${esc(settings.postcode)}</div>` : ''}
     ${settings.phone.trim() ? `<div class="value">${esc(settings.phone)}</div>` : ''}
     ${settings.email.trim() ? `<div class="value">${esc(settings.email)}</div>` : ''}
-    ${vat ? `<div class="value muted">VAT no. ${esc(vat)}</div>` : ''}`;
+    ${website ? `<div class="value">${esc(website)}</div>` : ''}
+    ${vat ? `<div class="value">VAT no. ${esc(vat)}</div>` : ''}
+    ${company ? `<div class="value">Company no. ${esc(company)}</div>` : ''}`;
 };
 
 const toBlock = (customer: Customer) => `
@@ -79,26 +100,76 @@ const toBlock = (customer: Customer) => `
     ${customer.phone?.trim() ? `<div class="value">${esc(customer.phone)}</div>` : ''}
     ${customer.email?.trim() ? `<div class="value">${esc(customer.email)}</div>` : ''}`;
 
-/** Line items and total for a quote or invoice. */
-const pricesBlock = (q: Job['quote'] & object, settings: BusinessSettings, jobLabel: string, description?: string) => {
-  const line = (label: string, amount: number) =>
-    amount > 0
-      ? `<tr class="line"><td class="muted">${label}</td><td style="text-align:right">${formatMoney(amount)}</td></tr>`
-      : '';
+const qtyText = (l: LineItem) => `${Number.isInteger(l.quantity) ? l.quantity : l.quantity.toFixed(2).replace(/0$/, '')}${l.unit ? ` ${esc(l.unit)}` : ''}`;
+
+/** HMRC's wording for the domestic reverse charge. */
+export const REVERSE_CHARGE_NOTE = 'Reverse charge: customer to account to HMRC for the VAT.';
+
+/** The items and totals for a quote or invoice. */
+const pricesBlock = (q: Quote, jobLabel: string, description?: string) => {
+  const showPrices = q.showItemPrices !== false;
+  const items = q.lines.filter((l) => l.kind !== 'discount');
+  const discounts = q.lines.filter((l) => l.kind === 'discount');
+  const row = (cells: string[]) => `<tr class="line">${cells.join('')}</tr>`;
+  const body = items
+    .map((l) =>
+      row(
+        showPrices
+          ? [
+              `<td>${esc(l.description)}</td>`,
+              `<td class="num">${qtyText(l)}</td>`,
+              `<td class="num">${formatMoney(l.unitPrice)}</td>`,
+              `<td class="num">${formatMoney(lineAmount(l))}</td>`,
+            ]
+          : [`<td>${esc(l.description)}</td>`, `<td class="num">${qtyText(l)}</td>`],
+      ),
+    )
+    .join('');
+  const head = showPrices
+    ? '<tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr>'
+    : '<tr><th>Description</th><th class="num">Qty</th></tr>';
+  const sum = (label: string, amount: string, cls = 'line') => `<tr class="${cls}"><td>${label}</td><td class="num">${amount}</td></tr>`;
+  const reverse = !!q.reverseCharge && q.reverseChargeVat > 0;
+  // Each discount with what it took off, in order (as priceLines works them out).
+  const gross = roundPence(q.subtotal + q.discount);
+  let left = gross;
+  const discountRows = discounts.map((d) => {
+    const off = discountAmount(d, left);
+    left = roundPence(left - off);
+    return sum(`${esc(d.description)}${d.percent ? ` (${esc(d.percent)}%)` : ''}`, `−${formatMoney(off)}`);
+  });
+  const totals = [
+    discounts.length || q.vatBands.length || q.salesTax > 0 ? sum('Subtotal', formatMoney(gross)) : '',
+    ...discountRows,
+    ...q.vatBands.map((b) =>
+      sum(
+        `VAT ${esc(b.rate)}%${q.vatBands.length > 1 ? ` on ${formatMoney(b.net)}` : ''}${reverse ? ' (reverse charge, not charged)' : ''}`,
+        reverse ? `(${formatMoney(b.vat)})` : formatMoney(b.vat),
+      ),
+    ),
+    q.salesTax > 0 ? sum('Sales tax', formatMoney(q.salesTax)) : '',
+    `<tr class="total-row"><td>Total</td><td class="total-amount">${formatMoney(q.total)}</td></tr>`,
+  ]
+    .filter(Boolean)
+    .join('');
   return `
-  <div class="card">
-    <div class="label" style="margin-bottom:12px">Job: ${esc(jobLabel)}</div>
-    ${description?.trim() ? `<div class="value muted" style="margin-bottom:12px">${escLines(description)}</div>` : ''}
-    <table>
-      ${line('Labour', q.labour)}
-      ${line('Materials', q.materials)}
-      ${line('Travel', q.travel)}
-      ${line('Emergency surcharge', q.emergencySurcharge)}
-      ${q.vat > 0 ? line(`VAT (${esc(settings.vatRate)}%)`, q.vat) : ''}
-      <tr class="total-row"><td>Total</td><td class="total-amount">${formatMoney(q.total)}</td></tr>
-    </table>
+  <div class="card" style="break-inside:auto;page-break-inside:auto">
+    <div class="label" style="margin-bottom:8px">Job: ${esc(jobLabel)}</div>
+    ${description?.trim() ? `<div class="value" style="margin-bottom:14px">${escLines(description)}</div>` : ''}
+    <table><thead>${head}</thead><tbody>${body}</tbody></table>
+    <table style="margin-top:8px;break-inside:avoid;page-break-inside:avoid">${totals}</table>
+    ${reverse ? `<div class="note"><strong>${REVERSE_CHARGE_NOTE}</strong></div>` : ''}
   </div>`;
 };
+
+const headerBlock = (logo: string | undefined, name: string, fallback: string, right: string) => `
+  <div class="header">
+    <div class="brand">
+      ${logo ? `<img class="logo" src="${logo}" alt="">` : ''}
+      ${name || !logo ? `<div class="title">${esc(name) || fallback}</div>` : ''}
+    </div>
+    <div style="text-align:right">${right}</div>
+  </div>`;
 
 const pdfPage = (body: string) => `<!DOCTYPE html>
 <html>
@@ -111,7 +182,7 @@ ${body}
 
 /** Renders the page to a PDF file, named e.g. "INV-0012.pdf" so it reads well as an attachment. */
 export const makePdf = async (html: string, fileName?: string): Promise<string> => {
-  const { uri } = await Print.printToFileAsync({ html });
+  const { uri } = await Print.printToFileAsync({ html, ...pageOptions() });
   if (!fileName || !FileSystem.cacheDirectory) return uri;
   const named = `${FileSystem.cacheDirectory}${fileName.replace(/[^\w-]+/g, '-')}.pdf`;
   await FileSystem.deleteAsync(named, { idempotent: true });
@@ -134,24 +205,25 @@ interface QuotePdfContext {
 export const createQuotePdf = async ({ job, customer, settings }: QuotePdfContext): Promise<string> => {
   const q = job.quote!;
   const name = businessDisplayName(settings);
+  const logo = await logoDataUri(settings.logoFile);
+  const footer = settings.quoteFooter?.trim();
   return makePdf(
     pdfPage(`
-  <div class="header">
-    <div>
-      <div class="title">${esc(name) || 'Quote'}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="label">Quote</div>
+  ${headerBlock(
+    logo,
+    name,
+    'Quote',
+    `<div class="label">Quote</div>
       <div class="value">${formatDate(q.createdAt)}</div>
-      ${q.validUntil ? `<div class="value muted" style="font-size:12px">Valid until ${formatDate(q.validUntil)}</div>` : ''}
-    </div>
-  </div>
-  <div style="display:flex;gap:20px">
+      ${q.validUntil ? `<div class="value" style="font-size:12px">Valid until ${formatDate(q.validUntil)}</div>` : ''}`,
+  )}
+  <div style="display:flex;gap:18px">
     <div class="card" style="flex:1">${fromBlock(settings)}</div>
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
-  ${pricesBlock(q, settings, jobName(job, settings.trade), job.description)}
-  <div style="text-align:center;margin-top:8px"><span class="badge">Quote · reply to accept</span></div>`),
+  ${pricesBlock(q, jobName(job, settings.trade), job.description)}
+  <div style="text-align:center;margin-top:8px"><span class="badge">Quote · reply to accept</span></div>
+  ${footer ? `<div class="value" style="margin-top:20px">${escLines(footer)}</div>` : ''}`),
     `Quote-${customer.name}`,
   );
 };
@@ -172,36 +244,36 @@ export const exportInvoicePdf = async (ctx: PdfContext): Promise<void> => {
 export const createInvoicePdf = async ({ invoice, job, customer, settings }: PdfContext): Promise<string> => {
   const q = invoice.quote;
   const name = businessDisplayName(settings);
+  const logo = await logoDataUri(settings.logoFile);
   const issued = invoice.sentAt ?? invoice.createdAt;
   const due = (invoiceDueDate({ sentAt: issued }, settings) ?? new Date(issued)).toISOString();
   const cis = invoice.cisDeducted && invoice.cisDeductionAmount ? invoice.cisDeductionAmount : 0;
+  const footer = settings.invoiceFooter?.trim() || 'Thank you for your business.';
   return makePdf(
     pdfPage(`
-  <div class="header">
-    <div>
-      <div class="title">${esc(name) || 'Invoice'}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="label">Invoice</div>
+  ${headerBlock(
+    logo,
+    name,
+    'Invoice',
+    `<div class="label">Invoice</div>
       <div class="value"><strong>${invoiceNumberLabel(invoice)}</strong></div>
       <div class="value">Issued ${formatDate(issued)}</div>
-      ${invoice.paidAt ? '' : `<div class="value">Due ${formatDate(due)}</div>`}
-    </div>
-  </div>
-  <div style="display:flex;gap:20px">
+      ${invoice.paidAt ? '' : `<div class="value">Due ${formatDate(due)}</div>`}`,
+  )}
+  <div style="display:flex;gap:18px">
     <div class="card" style="flex:1">${fromBlock(settings)}</div>
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
-  ${pricesBlock(q, settings, jobName(job, settings.trade), job.description)}
-  ${cis ? `<div class="card"><table><tr class="line"><td class="muted">Less CIS deduction</td><td style="text-align:right">−${formatMoney(cis)}</td></tr><tr class="total-row"><td>To pay</td><td class="total-amount">${formatMoney(q.total - cis)}</td></tr></table></div>` : ''}
+  ${pricesBlock(q, jobName(job, settings.trade), job.description)}
+  ${cis ? `<div class="card"><table><tr class="line"><td>Less CIS deduction</td><td class="num">−${formatMoney(cis)}</td></tr><tr class="total-row"><td>To pay</td><td class="total-amount">${formatMoney(q.total - cis)}</td></tr></table></div>` : ''}
   ${
     invoice.paidAt
       ? `<div style="text-align:center;margin-top:8px"><span class="badge">Paid ${formatDate(invoice.paidAt)}</span></div>`
       : settings.paymentDetails.trim()
-        ? `<div class="card"><div class="label">How to pay</div><div class="value">${escLines(settings.paymentDetails)}</div><div class="value muted" style="margin-top:8px">Please use ${invoiceNumberLabel(invoice)} as the reference.</div></div>`
+        ? `<div class="card"><div class="label">How to pay</div><div class="value">${escLines(settings.paymentDetails)}</div><div class="value" style="margin-top:8px">Please use ${invoiceNumberLabel(invoice)} as the reference.</div></div>`
         : ''
   }
-  <div class="value muted" style="text-align:center;margin-top:16px">Thank you for your business.</div>`),
+  <div class="value" style="text-align:center;margin-top:16px">${escLines(footer)}</div>`),
     invoiceNumberLabel(invoice),
   );
 };

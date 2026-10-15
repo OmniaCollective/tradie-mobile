@@ -73,7 +73,9 @@ export async function chaseInvoice(invoice: Invoice, job: Job, customer: Custome
   }
   if (sent) {
     const fresh = useTradeStore.getState().invoices.find((i) => i.id === invoice.id);
-    useTradeStore.getState().updateInvoice(invoice.id, { chasedAt: [...(fresh?.chasedAt ?? []), new Date().toISOString()] });
+    const now = new Date().toISOString();
+    // A chase carries the invoice PDF, so it counts as shared (free plan) if it somehow wasn't yet.
+    useTradeStore.getState().updateInvoice(invoice.id, { chasedAt: [...(fresh?.chasedAt ?? []), now], sharedAt: fresh?.sharedAt ?? now });
   }
   return sent;
 }

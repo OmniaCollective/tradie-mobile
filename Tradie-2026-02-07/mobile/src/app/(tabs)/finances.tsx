@@ -57,6 +57,7 @@ import { Tip } from '@/components/Tip';
 import { track } from '@/lib/analytics';
 import { cisDeduction } from '@/lib/cis';
 import { netOfTax } from '@/lib/pricing';
+import { useInvoiceShareGate } from '@/components/useInvoiceShareGate';
 
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
@@ -88,6 +89,7 @@ export default function MoneyScreen() {
   const settings = useSettings();
   const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
   const { isPro, invoicesLeft } = useProAccess();
+  const { canShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
   const getCustomer = useTradeStore((s) => s.getCustomer);
   const getJob = useTradeStore((s) => s.getJob);
   const updateInvoice = useTradeStore((s) => s.updateInvoice);
@@ -247,7 +249,11 @@ export default function MoneyScreen() {
       });
       return;
     }
-    // Missing business details are asked for first, then the invoice goes out as a PDF.
+    // Free plan first (so nobody fills in details for nothing), then any missing business details.
+    if (!canShare(invoice)) {
+      void shareInvoice(invoice, async () => {});
+      return;
+    }
     requireDetails('invoice', (current) => sendInvoicePdf(invoice, customer, current));
   };
 
@@ -255,7 +261,7 @@ export default function MoneyScreen() {
     try {
       const job = getJob(invoice.jobId);
       if (!job) throw new Error('Job not found');
-      await exportInvoicePdf({ invoice, job, customer, settings: current });
+      if (!(await shareInvoice(invoice, () => exportInvoicePdf({ invoice, job, customer, settings: current })))) return;
       // iOS doesn't say whether it was actually sent, so ask before starting the due date.
       setConfirmSent({ invoiceId: invoice.id, customerName: customer.name });
     } catch (error) {
@@ -318,7 +324,7 @@ export default function MoneyScreen() {
 
   const shareInvoicePdf = async (invoice: Invoice, job: Job, customer: Customer, current: BusinessSettings) => {
     try {
-      await exportInvoicePdf({ invoice, job, customer, settings: current });
+      await shareInvoice(invoice, () => exportInvoicePdf({ invoice, job, customer, settings: current }));
     } catch (error) {
       if (__DEV__) console.error('PDF export error:', error);
       setModal({
@@ -1098,6 +1104,7 @@ export default function MoneyScreen() {
         />
       )}
       {detailsPrompt}
+      {limitPrompt}
     </>
   );
 }

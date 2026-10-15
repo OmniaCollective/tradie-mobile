@@ -5,13 +5,13 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FileText, Mic } from 'lucide-react-native';
+import { FileText, Mic, ListPlus, Package, TrendingUp } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { FREE_LIMITS } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { PrimaryButton, Sheet } from '@/components/ui';
 
-export type LimitedFeature = 'invoices' | 'voice';
+export type LimitedFeature = 'invoices' | 'voice' | 'priceList' | 'parts' | 'profit';
 
 const CONTENT: Record<LimitedFeature, { icon: typeof FileText; title: string; body: string }> = {
   invoices: {
@@ -23,6 +23,21 @@ const CONTENT: Record<LimitedFeature, { icon: typeof FileText; title: string; bo
     icon: Mic,
     title: `You’ve used your ${FREE_LIMITS.voiceJobs} free voice jobs`,
     body: 'Pro gives you unlimited voice jobs, plus unlimited invoices and the tax tracker. You can still type jobs in for free.',
+  },
+  priceList: {
+    icon: ListPlus,
+    title: 'Save your prices with Pro',
+    body: 'Keep the items you use most, like a call-out fee or a valve, and add them to any quote in a tap.',
+  },
+  parts: {
+    icon: Package,
+    title: 'Add parts to the price with Pro',
+    body: 'Pro brings the parts you’ve logged into the price in one go, with your markup added. You can still type items in for free.',
+  },
+  profit: {
+    icon: TrendingUp,
+    title: 'See your full profit with Pro',
+    body: 'Pro lets you log fuel, tools and other costs against a job, so the profit shown is what you really made.',
   },
 };
 

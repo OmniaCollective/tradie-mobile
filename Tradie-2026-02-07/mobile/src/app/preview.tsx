@@ -4,22 +4,19 @@
  * /preview?kind=invoice&id=<invoiceId> or /preview?kind=quote&id=<jobId>.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Haptics from 'expo-haptics';
-import { useTradeStore, useSettings, invoiceNumberLabel, priceQuote, type BusinessSettings } from '@/lib/store';
+import { useTradeStore, useSettings, invoiceNumberLabel, type BusinessSettings } from '@/lib/store';
 import { createInvoicePdf, createQuotePdf, sharePdfFile } from '@/lib/invoiceExport';
 import { useBusinessDetailsPrompt } from '@/components/BusinessDetailsPrompt';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { UpgradePrompt } from '@/components/UpgradePrompt';
-import { useProAccess } from '@/lib/useProAccess';
-import { Group, RowDivider, PrimaryButton, Sheet, NumberFieldRow, ModalHeader } from '@/components/ui';
+import { useInvoiceShareGate } from '@/components/useInvoiceShareGate';
+import { PrimaryButton, ModalHeader } from '@/components/ui';
 import { toast } from '@/components/Toast';
-import { formatMoney, currencySymbol } from '@/lib/money';
 import { useTheme } from '@/lib/theme';
 import { track } from '@/lib/analytics';
 
@@ -37,15 +34,11 @@ export default function PreviewScreen() {
   const customer = useTradeStore((s) => (job ? s.customers.find((c) => c.id === job.customerId) : undefined));
   const hasInvoice = useTradeStore((s) => (job ? s.invoices.some((i) => i.jobId === job.id) : false));
   const updateInvoice = useTradeStore((s) => s.updateInvoice);
-  const updateInvoicePrices = useTradeStore((s) => s.updateInvoicePrices);
-  const updateQuote = useTradeStore((s) => s.updateQuote);
   const updateJob = useTradeStore((s) => s.updateJob);
   const { requireDetails, prompt } = useBusinessDetailsPrompt();
-  const [edit, setEdit] = useState<{ labour: number; materials: number; travel: number; description: string } | null>(null);
   const [askSent, setAskSent] = useState(false);
   const [sending, setSending] = useState(false);
-  const [limitPrompt, setLimitPrompt] = useState(false);
-  const { canCreateInvoice } = useProAccess();
+  const { canShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
 
   const quote = kind === 'invoice' ? invoice?.quote : job?.quote;
   // Paid invoices are final; a quote stops changing once it's on an invoice.
@@ -84,40 +77,29 @@ export default function PreviewScreen() {
         : 'Send quote';
 
   const send = () => {
-    // Free plan: the 3-a-month limit applies to invoices sent, so check before a first send.
-    if (kind === 'invoice' && invoice?.status === 'pending' && !invoice.sentAt && !canCreateInvoice) {
-      setLimitPrompt(true);
+    // Free plan: checked before the business details are asked for, so nobody fills them in for nothing.
+    if (kind === 'invoice' && invoice && !canShare(invoice)) {
+      void shareInvoice(invoice, async () => {});
       return;
     }
-    sendNow();
-  };
-
-  const sendNow = () =>
     requireDetails(kind, async (current: BusinessSettings) => {
       setSending(true);
       try {
-        const uri =
-          kind === 'invoice'
-            ? await createInvoicePdf({ invoice: invoice!, job, customer, settings: current })
-            : await createQuotePdf({ job, customer, settings: current });
-        await sharePdfFile(uri);
+        if (kind === 'invoice' && invoice) {
+          const uri = await createInvoicePdf({ invoice, job, customer, settings: current });
+          if (!(await shareInvoice(invoice, () => sharePdfFile(uri)))) return;
+        } else {
+          await sharePdfFile(await createQuotePdf({ job, customer, settings: current }));
+        }
         // Only ask when this send would change something (first send of an invoice or quote).
         if ((kind === 'invoice' && invoice?.status === 'pending') || (kind === 'quote' && !job.quoteSentAt)) setAskSent(true);
       } finally {
         setSending(false);
       }
     });
-
-  const saveEdit = async () => {
-    if (!edit) return;
-    const prices = { labour: edit.labour, materials: edit.materials, travel: edit.travel };
-    if (kind === 'invoice' && invoice) updateInvoicePrices(invoice.id, prices);
-    else updateQuote(job.id, prices);
-    updateJob(job.id, { description: edit.description.trim() });
-    setEdit(null);
-    toast(kind === 'invoice' ? 'Invoice updated' : 'Quote updated');
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
+
+  const edit = () => router.push(kind === 'invoice' && invoice ? `/price?kind=invoice&id=${invoice.id}` : `/price?kind=quote&id=${job.id}`);
 
   return (
     <View className="flex-1 bg-bg">
@@ -128,14 +110,7 @@ export default function PreviewScreen() {
         left={
           editable ? (
             <Pressable
-              onPress={() =>
-                setEdit({
-                  labour: quote.labour,
-                  materials: quote.materials,
-                  travel: quote.travel,
-                  description: job.description ?? '',
-                })
-              }
+              onPress={edit}
               hitSlop={10}
               className="min-h-[44px] justify-center"
               accessibilityRole="button"
@@ -178,69 +153,6 @@ export default function PreviewScreen() {
         <PrimaryButton label={sendLabel} onPress={send} loading={sending} />
       </View>
 
-      {/* Edit the amounts and description */}
-      {edit && (
-        <Sheet visible onClose={() => setEdit(null)}>
-          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 620 }}>
-            <Text className="text-fg text-[20px] font-semibold mb-4">Edit {kind}</Text>
-            <Group className="bg-bg mb-4">
-              <NumberFieldRow
-                label="Labour"
-                prefix={currencySymbol()}
-                value={edit.labour}
-                onChangeNumber={(n) => setEdit({ ...edit, labour: n })}
-                width="w-24"
-              />
-              <RowDivider />
-              <NumberFieldRow
-                label="Materials"
-                prefix={currencySymbol()}
-                value={edit.materials}
-                onChangeNumber={(n) => setEdit({ ...edit, materials: n })}
-                width="w-24"
-              />
-              <RowDivider />
-              <NumberFieldRow
-                label="Travel"
-                prefix={currencySymbol()}
-                value={edit.travel}
-                onChangeNumber={(n) => setEdit({ ...edit, travel: n })}
-                width="w-24"
-              />
-            </Group>
-            <Text className="text-secondary text-[13px] mx-1 mb-1.5">Description of the work</Text>
-            <Group className="bg-bg mb-3">
-              <TextInput
-                className="text-fg text-base px-4 py-3 min-h-[72px]"
-                style={{ textAlignVertical: 'top' }}
-                value={edit.description}
-                onChangeText={(v) => setEdit({ ...edit, description: v })}
-                placeholder="Optional"
-                placeholderTextColor={t.secondary}
-                multiline
-                accessibilityLabel="Description of the work"
-              />
-            </Group>
-            <Text className="text-fg text-base font-semibold mx-1 mb-1">
-              Total {formatMoney(priceQuote(settings, edit, quote.emergencySurcharge).total)}
-            </Text>
-            {kind === 'invoice' && invoice?.status === 'sent' && (
-              <Text className="text-secondary text-[13px] mx-1 mb-1">
-                You’ve already sent this invoice. After saving, use Send again so the customer has the corrected one.
-              </Text>
-            )}
-            <PrimaryButton label="Save" onPress={saveEdit} className="mt-3" />
-            <Pressable
-              onPress={() => setEdit(null)}
-              className="min-h-[48px] items-center justify-center mt-1"
-              accessibilityRole="button"
-            >
-              <Text className="text-secondary text-base font-semibold">Cancel</Text>
-            </Pressable>
-          </ScrollView>
-        </Sheet>
-      )}
-
       <ConfirmModal
         visible={askSent}
         title="Did you send it?"
@@ -260,7 +172,7 @@ export default function PreviewScreen() {
         onCancel={() => {}}
         onDismiss={() => setAskSent(false)}
       />
-      <UpgradePrompt visible={limitPrompt} onClose={() => setLimitPrompt(false)} feature="invoices" />
+      {limitPrompt}
       {prompt}
     </View>
   );

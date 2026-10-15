@@ -31,7 +31,7 @@ import { calculateUSTax } from './usTaxEstimator';
 import { US_TAX_YEAR } from './data/usTax2026';
 import { toDateKey, parseDate } from './dates';
 import { buildXlsx, type Sheet, type Cell } from './xlsx';
-import { esc, escLines, PDF_STYLE, POWERED_BY_HTML } from './invoiceExport';
+import { esc, escLines, PDF_STYLE, POWERED_BY_HTML, pageOptions } from './invoiceExport';
 
 export type PackYear = 'this' | 'last';
 
@@ -378,7 +378,7 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
 
   <div class="powered">${POWERED_BY_HTML}</div>
 </body></html>`;
-  const { uri: pdfUri } = await Print.printToFileAsync({ html });
+  const { uri: pdfUri } = await Print.printToFileAsync({ html, ...pageOptions() });
   const pdf = await readBytes(pdfUri);
   void FileSystem.deleteAsync(pdfUri, { idempotent: true });
 

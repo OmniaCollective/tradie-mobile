@@ -26,6 +26,7 @@ import {
   Circle,
   CircleX,
   Clock,
+  Lock,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
@@ -35,8 +36,9 @@ import {
   EXPENSE_CATEGORY_LABELS,
   getRegion,
   businessDisplayName,
-  priceQuote,
   usePricingPresets,
+  labourPrice,
+  withAutoLabour,
   type JobType,
   type Urgency,
   type OfferedSlot,
@@ -55,6 +57,7 @@ import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { Tip } from '@/components/Tip';
 import { formatDateFull, formatTime, toDateKey } from '@/lib/dates';
 import { formatAmount, currencySymbol } from '@/lib/money';
+import { lineAmount, netOfTax } from '@/lib/pricing';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -75,6 +78,8 @@ import { toast } from '@/components/Toast';
 import { track } from '@/lib/analytics';
 
 const makePhotoFileName = () => `photo_${Date.now()}.jpg`;
+/** Price lines shown on the job; the rest are on the Edit price screen and the PDF. */
+const PRICE_LINES_SHOWN = 5;
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -111,7 +116,7 @@ export default function JobDetailScreen() {
   const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
   const store = useTradeStore.getState;
   const updateJob = useTradeStore((s) => s.updateJob);
-  const updateQuote = useTradeStore((s) => s.updateQuote);
+  const setQuoteLines = useTradeStore((s) => s.setQuoteLines);
   const jobExpenses = useJobExpenses(id);
   const pricingPresets = usePricingPresets();
   const { isPro, canCreateInvoice, invoicesLeft } = useProAccess();
@@ -134,13 +139,11 @@ export default function JobDetailScreen() {
     d.setHours(10, 0, 0, 0);
     return d;
   });
-  const [editQuote, setEditQuote] = useState<{ labour: number; materials: number; travel: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmUnbook, setConfirmUnbook] = useState(false);
   const [editJob, setEditJob] = useState<{ type: JobType; customName: string; description: string; urgency: Urgency } | null>(
     null,
   );
-  const calculateQuote = useTradeStore((s) => s.calculateQuote);
   const [editCustomer, setEditCustomer] = useState<{
     name: string;
     phone: string;
@@ -149,6 +152,7 @@ export default function JobDetailScreen() {
     postcode: string;
   } | null>(null);
   const [limitPrompt, setLimitPrompt] = useState(false);
+  const [profitPrompt, setProfitPrompt] = useState(false);
 
   if (!job || !customer) {
     return (
@@ -173,6 +177,12 @@ export default function JobDetailScreen() {
   const expired = offerExpired(job);
   // The price can change until it's on an invoice.
   const quoteEditable = !invoice;
+  const items = job.quote?.lines.filter((l) => l.kind !== 'discount') ?? [];
+  const partsNotOnPrice = parts.filter((x) => !job.quote?.lines.some((l) => l.partId === x.id)).length;
+  const editPrice = () => router.push(`/price?kind=quote&id=${job.id}`);
+  // Labour for a job type at an urgency: the tradie's price for it, never below the minimum charge.
+  const presetLabour = (type: JobType, urgency: Urgency) =>
+    labourPrice(settings, pricingPresets.find((x) => x.type === type)?.basePrice ?? 0, urgency, true);
   const status = whereText(job, invoice, p, first, terms, now);
   const firstNoteLine = job.notes
     ?.split('\n')
@@ -668,36 +678,38 @@ export default function JobDetailScreen() {
             <SectionHeader
               title="Price"
               actionLabel={quoteEditable ? 'Edit' : undefined}
-              onAction={
-                quoteEditable
-                  ? () => setEditQuote({ labour: job.quote!.labour, materials: job.quote!.materials, travel: job.quote!.travel })
-                  : undefined
-              }
+              onAction={quoteEditable ? editPrice : undefined}
             />
             <Group className="px-4 py-3">
-              <Line
-                label={job.urgency === 'standard' ? 'Labour' : `Labour (${job.urgency} rate)`}
-                value={formatAmount(job.quote.labour)}
-              />
-              {job.quote.materials > 0 && <Line label="Materials" value={formatAmount(job.quote.materials)} />}
-              {job.quote.travel > 0 && <Line label="Travel" value={formatAmount(job.quote.travel)} />}
-              {job.quote.emergencySurcharge > 0 && (
-                <Line label="Emergency call-out" value={formatAmount(job.quote.emergencySurcharge)} />
+              {items.slice(0, PRICE_LINES_SHOWN).map((l) => (
+                <Line
+                  key={l.id}
+                  label={l.quantity === 1 ? l.description : `${l.description} × ${l.quantity}`}
+                  value={formatAmount(lineAmount(l))}
+                />
+              ))}
+              {items.length > PRICE_LINES_SHOWN && (
+                <Text className="text-secondary text-[15px] py-1">and {items.length - PRICE_LINES_SHOWN} more</Text>
               )}
+              {job.quote.discount > 0 && <Line label="Discount" value={formatAmount(-job.quote.discount)} />}
               {job.quote.vat > 0 && <Line label="VAT" value={formatAmount(job.quote.vat)} />}
+              {job.quote.reverseChargeVat > 0 && (
+                <Line label="VAT (reverse charge, not charged)" value={formatAmount(job.quote.reverseChargeVat)} />
+              )}
+              {job.quote.salesTax > 0 && <Line label="Sales tax" value={formatAmount(job.quote.salesTax)} />}
               <View className="h-px bg-divider my-2" />
               <Line label="Total" value={formatAmount(job.quote.total)} strong />
             </Group>
-            {quoteEditable && partsTotal > job.quote.materials && (
+            {quoteEditable && partsNotOnPrice > 0 && (
               <Pressable
-                onPress={() => setEditQuote({ labour: job.quote!.labour, materials: partsTotal, travel: job.quote!.travel })}
+                onPress={() => router.push(`/price?kind=quote&id=${job.id}&add=parts`)}
                 className="flex-row items-center mx-1 mt-2 min-h-[44px] active:opacity-70"
                 accessibilityRole="button"
               >
                 <CircleAlert size={16} color={t.secondary} strokeWidth={2} />
                 <Text className="flex-1 text-secondary text-[14px] ml-2">
-                  The price doesn’t include {formatAmount(partsTotal)} of parts.{' '}
-                  <Text className="text-link font-semibold">Add them</Text>
+                  {partsNotOnPrice === 1 ? '1 part isn’t' : `${partsNotOnPrice} parts aren’t`} on the price.{' '}
+                  <Text className="text-link font-semibold">Add {partsNotOnPrice === 1 ? 'it' : 'them'}</Text>
                 </Text>
               </Pressable>
             )}
@@ -710,11 +722,11 @@ export default function JobDetailScreen() {
             <SectionHeader title="Profit" />
             <Group className="px-4 py-3">
               {(() => {
-                const revenue = job.quote.total - job.quote.vat;
+                const revenue = netOfTax(job.quote);
                 const profit = revenue - partsTotal - expensesTotal;
                 return (
                   <>
-                    <Line label="Charged (before VAT)" value={formatAmount(revenue)} />
+                    <Line label={getRegion().country === 'US' ? 'Charged (before tax)' : 'Charged (before VAT)'} value={formatAmount(revenue)} />
                     {partsTotal > 0 && <Line label={`Parts (${parts.length})`} value={formatAmount(-partsTotal)} />}
                     {expensesTotal > 0 && (
                       <Line label={`Expenses (${jobExpenses.length})`} value={formatAmount(-expensesTotal)} />
@@ -725,6 +737,19 @@ export default function JobDetailScreen() {
                       value={formatAmount(profit)}
                       strong
                     />
+                    {!isPro && (
+                      <Pressable
+                        onPress={() => (track('pro_locked_tap_profit'), setProfitPrompt(true))}
+                        className="flex-row items-center mt-2 min-h-[44px] active:opacity-70"
+                        accessibilityRole="button"
+                      >
+                        <Lock size={16} color={t.secondary} strokeWidth={2} />
+                        <Text className="flex-1 text-secondary text-[14px] ml-2">
+                          Add costs like fuel or tools to see your full profit.{' '}
+                          <Text className="text-link font-semibold">Pro</Text>
+                        </Text>
+                      </Pressable>
+                    )}
                   </>
                 );
               })()}
@@ -972,70 +997,6 @@ export default function JobDetailScreen() {
         <PrimaryButton label="Book it" onPress={confirmSchedule} />
       </Sheet>
 
-      {/* Edit price */}
-      {editQuote && job.quote && (
-        <Sheet visible onClose={() => setEditQuote(null)}>
-          <Text className="text-fg text-[20px] font-semibold mb-4">Edit price</Text>
-          <Group className="bg-bg mb-3">
-            <NumberFieldRow
-              label="Labour"
-              prefix={currencySymbol()}
-              value={editQuote.labour}
-              onChangeNumber={(n) => setEditQuote({ ...editQuote, labour: n })}
-              width="w-24"
-            />
-            <RowDivider />
-            <NumberFieldRow
-              label="Materials"
-              prefix={currencySymbol()}
-              value={editQuote.materials}
-              onChangeNumber={(n) => setEditQuote({ ...editQuote, materials: n })}
-              width="w-24"
-            />
-            <RowDivider />
-            <NumberFieldRow
-              label="Travel"
-              prefix={currencySymbol()}
-              value={editQuote.travel}
-              onChangeNumber={(n) => setEditQuote({ ...editQuote, travel: n })}
-              width="w-24"
-            />
-          </Group>
-          {partsTotal > 0 && editQuote.materials !== partsTotal && (
-            <Pressable
-              onPress={() => setEditQuote({ ...editQuote, materials: partsTotal })}
-              className="min-h-[44px] justify-center mb-1"
-              accessibilityRole="button"
-            >
-              <Text className="text-link text-[15px] font-semibold">
-                Use parts total for materials ({formatAmount(partsTotal)})
-              </Text>
-            </Pressable>
-          )}
-          {(() => {
-            const priced = priceQuote(settings, editQuote, job.quote.emergencySurcharge);
-            return (
-              <View className="px-1 mb-5">
-                {priced.emergencySurcharge > 0 && (
-                  <Line label="Emergency call-out" value={formatAmount(priced.emergencySurcharge)} />
-                )}
-                {priced.vat > 0 && <Line label={`VAT (${settings.vatRate}%)`} value={formatAmount(priced.vat)} />}
-                <Line label="Total" value={formatAmount(priced.total)} strong />
-              </View>
-            );
-          })()}
-          <PrimaryButton
-            label="Save price"
-            onPress={async () => {
-              updateQuote(job.id, editQuote);
-              toast('Price updated');
-              setEditQuote(null);
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }}
-          />
-        </Sheet>
-      )}
-
       {/* Edit job: type, name, description, urgency */}
       {editJob && (
         <Sheet visible onClose={() => setEditJob(null)}>
@@ -1099,8 +1060,9 @@ export default function JobDetailScreen() {
               editJob.type !== 'custom' &&
               (editJob.type !== job.type || editJob.urgency !== job.urgency) && (
                 <Text className="text-secondary text-[13px] mx-1 mb-2">
-                  Labour changes to {formatAmount(calculateQuote(editJob.type, editJob.urgency).labour)}. Materials and travel
-                  stay as they are.
+                  {job.quote.lines.some((l) => l.auto)
+                    ? `Labour changes to ${formatAmount(presetLabour(editJob.type, editJob.urgency))}. Everything else stays as it is.`
+                    : `A labour line of ${formatAmount(presetLabour(editJob.type, editJob.urgency))} is added. Everything else stays as it is.`}
                 </Text>
               )}
             <PrimaryButton
@@ -1117,11 +1079,7 @@ export default function JobDetailScreen() {
                 });
                 // A different job type or urgency means a different price, until it's on an invoice.
                 if (priceChanged && job.quote && !invoice) {
-                  updateQuote(job.id, {
-                    labour: calculateQuote(editJob.type, editJob.urgency).labour,
-                    materials: job.quote.materials,
-                    travel: job.quote.travel,
-                  });
+                  setQuoteLines(job.id, withAutoLabour(job.quote.lines, presetLabour(editJob.type, editJob.urgency), editJob.urgency));
                 }
                 setEditJob(null);
                 toast('Job updated');
@@ -1230,6 +1188,7 @@ export default function JobDetailScreen() {
       />
 
       <UpgradePrompt visible={limitPrompt} onClose={() => setLimitPrompt(false)} feature="invoices" />
+      <UpgradePrompt visible={profitPrompt} onClose={() => setProfitPrompt(false)} feature="profit" />
 
       {modal && (
         <ConfirmModal
