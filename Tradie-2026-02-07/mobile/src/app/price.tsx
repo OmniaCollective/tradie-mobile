@@ -323,7 +323,6 @@ export default function PriceScreen() {
         }
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         footer={<PrimaryButton label="Save" onPress={save} disabled={!hasItems} />}
       >
         {/* The lines */}

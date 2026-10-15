@@ -293,7 +293,6 @@ export default function OnboardingScreen() {
   return (
     <ScrollScreen
       keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
       footer={
         <>
