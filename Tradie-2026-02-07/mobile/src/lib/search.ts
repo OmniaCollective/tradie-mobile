@@ -4,6 +4,7 @@
  * React and storage so it can be tested on its own.
  */
 import type { Customer, Invoice, Job } from './store';
+import { chargedQuote } from './pricing';
 
 export interface SearchInput {
   customers: Customer[];
@@ -59,7 +60,7 @@ export function search(query: string, input: SearchInput): SearchResult {
   const invoiceFor = new Map(input.invoices.map((i) => [i.jobId, i]));
 
   const jobs = input.jobs.filter((j) => {
-    const total = invoiceFor.get(j.id)?.quote.total ?? j.quote?.total;
+    const total = chargedQuote(j, invoiceFor.get(j.id))?.total;
     return (
       hitIds.has(j.customerId) ||
       norm(input.nameOf(j)).includes(q) ||

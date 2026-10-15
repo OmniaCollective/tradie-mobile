@@ -28,6 +28,7 @@ import { restorePurchases } from '@/lib/revenuecatClient';
 import { useAccount, signOut, deleteAccount } from '@/lib/auth';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { FormSheet } from '@/components/FormSheet';
 import { RenewalsSection } from '@/components/Renewals';
 import {
   Group,
@@ -43,7 +44,6 @@ import {
   ModalFooter,
   PrimaryButton,
   LabeledField,
-  Sheet,
 } from '@/components/ui';
 import { currencySymbol, formatAmount } from '@/lib/money';
 import { lineKindLabels, LINE_UNITS, type LineKind } from '@/lib/pricing';
@@ -1004,7 +1004,12 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
           {logoUri ? (
             <>
               <View className="items-center justify-center bg-white p-4" style={{ minHeight: 112 }}>
-                <Image source={{ uri: logoUri }} style={{ width: 200, height: 80 }} resizeMode="contain" accessibilityLabel="Your logo" />
+                <Image
+                  source={{ uri: logoUri }}
+                  style={{ width: 200, height: 80 }}
+                  resizeMode="contain"
+                  accessibilityLabel="Your logo"
+                />
               </View>
               <RowDivider />
               <LinkRow icon={ImagePlus} label="Change logo" onPress={pickLogo} />
@@ -1012,7 +1017,11 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
               <LinkRow label="Remove logo" destructive onPress={removeLogo} />
             </>
           ) : (
-            <Pressable onPress={pickLogo} className="flex-row items-center px-4 min-h-[52px] active:opacity-70" accessibilityRole="button">
+            <Pressable
+              onPress={pickLogo}
+              className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+              accessibilityRole="button"
+            >
               <ImagePlus size={20} color={t.link} strokeWidth={2} />
               <Text className="text-link text-base font-semibold ml-2">Add your logo</Text>
             </Pressable>
@@ -1107,6 +1116,9 @@ function PriceListPage() {
   const removePriceItem = useTradeStore((s) => s.removePriceItem);
   const country = useRegion().country;
   const [draft, setDraft] = useState<PriceDraft | null>(null);
+  // The item as it was when opened, so Cancel knows if anything changed.
+  const [draftStart, setDraftStart] = useState<PriceDraft | null>(null);
+  const openDraft = (d: PriceDraft) => (setDraft(d), setDraftStart(d));
   const sorted = [...items].sort((a, b) => a.description.localeCompare(b.description));
 
   if (!isPro) {
@@ -1127,7 +1139,12 @@ function PriceListPage() {
   const price = parseFloat(draft?.unitPrice.replace(',', '.') ?? '');
   const save = () => {
     if (!draft || !draft.description.trim() || !(price >= 0)) return;
-    const item = { kind: draft.kind, description: draft.description.trim(), unit: draft.unit, unitPrice: Math.round(price * 100) / 100 };
+    const item = {
+      kind: draft.kind,
+      description: draft.description.trim(),
+      unit: draft.unit,
+      unitPrice: Math.round(price * 100) / 100,
+    };
     if (draft.id) updatePriceItem(draft.id, item);
     else addPriceItem(item);
     toast(draft.id ? 'Item updated' : 'Item saved');
@@ -1144,14 +1161,20 @@ function PriceListPage() {
               label={item.description}
               value={`${formatAmount(item.unitPrice)}${item.unit ? `/${item.unit}` : ''}`}
               onPress={() =>
-                setDraft({ id: item.id, kind: item.kind, description: item.description, unit: item.unit, unitPrice: String(item.unitPrice) })
+                openDraft({
+                  id: item.id,
+                  kind: item.kind,
+                  description: item.description,
+                  unit: item.unit,
+                  unitPrice: String(item.unitPrice),
+                })
               }
             />
           </View>
         ))}
         {sorted.length > 0 && <RowDivider />}
         <Pressable
-          onPress={() => setDraft({ kind: 'materials', description: '', unitPrice: '' })}
+          onPress={() => openDraft({ kind: 'materials', description: '', unitPrice: '' })}
           className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
           accessibilityRole="button"
         >
@@ -1164,50 +1187,55 @@ function PriceListPage() {
       </Text>
 
       {draft && (
-        <Sheet visible onClose={() => setDraft(null)}>
-          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 600 }}>
-            <Text className="text-fg text-[20px] font-semibold mb-4">{draft.id ? 'Edit item' : 'New item'}</Text>
-            <LabeledField
-              className="mb-4"
-              label="What is it?"
-              value={draft.description}
-              onChangeText={(v) => setDraft({ ...draft, description: v })}
-              placeholder="e.g. Call-out fee"
-              autoFocus={!draft.id}
-            />
-            <Segmented
-              className="mb-4 bg-bg"
-              options={(['labour', 'materials', 'other'] as const).map((k) => ({ key: k, label: lineKindLabels(country)[k] }))}
-              value={draft.kind}
-              onChange={(k) => setDraft({ ...draft, kind: k })}
-            />
-            <LabeledField
-              className="mb-4"
-              label="Price"
-              value={draft.unitPrice}
-              onChangeText={(v) => /^\d*[.,]?\d*$/.test(v) && setDraft({ ...draft, unitPrice: v })}
-              placeholder={currencySymbol()}
-              keyboardType="decimal-pad"
-            />
-            <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">Unit</Text>
-            <Segmented
-              className="mb-5 bg-bg"
-              options={[{ key: 'each', label: 'each' }, ...LINE_UNITS.map((u) => ({ key: u as string, label: u as string }))]}
-              value={draft.unit ?? 'each'}
-              onChange={(u) => setDraft({ ...draft, unit: u === 'each' ? undefined : u })}
-            />
-            <PrimaryButton label={draft.id ? 'Save' : 'Add to price list'} onPress={save} disabled={!draft.description.trim() || !(price >= 0)} />
-            {draft.id && (
+        <FormSheet
+          visible
+          title={draft.id ? 'Edit item' : 'New item'}
+          onCancel={() => setDraft(null)}
+          actionLabel={draft.id ? 'Save' : 'Add'}
+          onAction={save}
+          actionDisabled={!draft.description.trim() || !(price >= 0)}
+          dirty={JSON.stringify(draft) !== JSON.stringify(draftStart)}
+        >
+          <LabeledField
+            className="mb-4"
+            label="What is it?"
+            value={draft.description}
+            onChangeText={(v) => setDraft({ ...draft, description: v })}
+            placeholder="e.g. Call-out fee"
+            autoFocus={!draft.id}
+          />
+          <Segmented
+            className="mb-4"
+            options={(['labour', 'materials', 'other'] as const).map((k) => ({ key: k, label: lineKindLabels(country)[k] }))}
+            value={draft.kind}
+            onChange={(k) => setDraft({ ...draft, kind: k })}
+          />
+          <LabeledField
+            className="mb-4"
+            label="Price"
+            value={draft.unitPrice}
+            onChangeText={(v) => /^\d*[.,]?\d*$/.test(v) && setDraft({ ...draft, unitPrice: v })}
+            placeholder={currencySymbol()}
+            keyboardType="decimal-pad"
+          />
+          <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">Unit</Text>
+          <Segmented
+            options={[{ key: 'each', label: 'each' }, ...LINE_UNITS.map((u) => ({ key: u as string, label: u as string }))]}
+            value={draft.unit ?? 'each'}
+            onChange={(u) => setDraft({ ...draft, unit: u === 'each' ? undefined : u })}
+          />
+          {draft.id && (
+            <Group className="mt-8">
               <Pressable
                 onPress={() => (removePriceItem(draft.id!), setDraft(null), toast('Item removed'))}
-                className="min-h-[48px] items-center justify-center mt-1"
+                className="min-h-[52px] items-center justify-center active:opacity-70"
                 accessibilityRole="button"
               >
                 <Text className="text-alert text-base font-semibold">Remove from price list</Text>
               </Pressable>
-            )}
-          </ScrollView>
-        </Sheet>
+            </Group>
+          )}
+        </FormSheet>
       )}
     </ScrollView>
   );

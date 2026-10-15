@@ -19,6 +19,7 @@ import {
   daysUntil,
   jobName,
 } from '@/lib/store';
+import { chargedQuote } from '@/lib/pricing';
 import { jobPosition, GROUP_ORDER, GROUP_TITLES, type JobGroup } from '@/lib/jobSteps';
 import { renewalStatus } from '@/components/Renewals';
 import { whereText } from '@/lib/jobText';
@@ -132,7 +133,7 @@ export default function HomeScreen() {
   const jobList = (g: JobGroup, items: Row[]) => (
     <Group>
       {items.map((r, i) => {
-        const amount = (r.invoice?.quote ?? r.job.quote)?.total;
+        const amount = chargedQuote(r.job, r.invoice)?.total;
         return (
           <View key={r.job.id}>
             {i > 0 && <RowDivider />}

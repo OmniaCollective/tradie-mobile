@@ -17,6 +17,7 @@ import {
   type Job,
   type Invoice,
 } from '@/lib/store';
+import { chargedQuote } from '@/lib/pricing';
 import { search, recentCustomers } from '@/lib/search';
 import { jobPosition } from '@/lib/jobSteps';
 import { whereText } from '@/lib/jobText';
@@ -137,7 +138,7 @@ export default function SearchScreen() {
             <Group>
               {result.jobs.map((job, i) => {
                 const line = jobLine(job);
-                const total = invoiceFor.get(job.id)?.quote.total ?? job.quote?.total;
+                const total = chargedQuote(job, invoiceFor.get(job.id))?.total;
                 return (
                   <View key={job.id}>
                     {i > 0 && <RowDivider />}

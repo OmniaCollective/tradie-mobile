@@ -7,6 +7,7 @@ import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Phone, MessageCircle, Navigation, Plus, ChevronRight } from 'lucide-react-native';
 import { useTradeStore, useJobs, useInvoices, useSettings, jobName, invoiceNumberLabel } from '@/lib/store';
+import { chargedQuote } from '@/lib/pricing';
 import { jobPosition } from '@/lib/jobSteps';
 import { whereText } from '@/lib/jobText';
 import { formatAmount } from '@/lib/money';
@@ -116,7 +117,7 @@ export default function CustomerScreen() {
             {jobs.map((job, i) => {
               const inv = invoiceFor.get(job.id);
               const p = jobPosition(job, inv, terms);
-              const total = inv?.quote.total ?? job.quote?.total;
+              const total = chargedQuote(job, inv)?.total;
               return (
                 <View key={job.id}>
                   {i > 0 && <RowDivider />}

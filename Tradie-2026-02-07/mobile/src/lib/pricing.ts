@@ -101,7 +101,8 @@ export function priceLines(rules: PricingRules, lines: LineItem[], opts: { rever
 
   // Discounts apply one after another to what's left, and never take the price below zero.
   let discount = 0;
-  for (const d of lines.filter((l) => l.kind === 'discount')) discount = roundPence(discount + discountAmount(d, gross - discount));
+  for (const d of lines.filter((l) => l.kind === 'discount'))
+    discount = roundPence(discount + discountAmount(d, gross - discount));
 
   // Each line's share of the discount, with any rounding pence put on the largest line.
   const shares = amounts.map((a) => (gross > 0 ? roundPence((a / gross) * discount) : 0));
@@ -158,3 +159,9 @@ export const withMarkup = (cost: number, markupPercent: number) => roundPence(co
 /** What lines cost the tradie, where known (parts brought in). */
 export const linesCost = (lines: LineItem[]) =>
   roundPence(lines.reduce((s, l) => s + (l.kind !== 'discount' && l.unitCost !== undefined ? l.unitCost * l.quantity : 0), 0));
+
+/**
+ * What a job is charged: its invoice once there is one (which can be corrected on its own),
+ * otherwise its quote. Use it wherever a job's price, total or profit is shown.
+ */
+export const chargedQuote = <Q>(job: { quote?: Q }, invoice?: { quote: Q }): Q | undefined => invoice?.quote ?? job.quote;

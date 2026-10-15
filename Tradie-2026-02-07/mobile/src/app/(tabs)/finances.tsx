@@ -56,8 +56,9 @@ import { toast } from '@/components/Toast';
 import { Tip } from '@/components/Tip';
 import { track } from '@/lib/analytics';
 import { cisDeduction } from '@/lib/cis';
-import { netOfTax } from '@/lib/pricing';
+import { netOfTax, chargedQuote } from '@/lib/pricing';
 import { useInvoiceShareGate } from '@/components/useInvoiceShareGate';
+import { FormSheet } from '@/components/FormSheet';
 
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
@@ -176,7 +177,7 @@ export default function MoneyScreen() {
     owed: money_.owed.reduce((s, i) => s + received(i), 0),
     overdue: money_.owed.filter((i) => daysOverdue(i, settings) > 0).length,
     paidThisMonth: money_.paidThisMonth.reduce((s, i) => s + received(i), 0),
-    notInvoiced: money_.notInvoiced.reduce((s, j) => s + (money_.invoiceFor.get(j.id)?.quote.total ?? j.quote?.total ?? 0), 0),
+    notInvoiced: money_.notInvoiced.reduce((s, j) => s + (chargedQuote(j, money_.invoiceFor.get(j.id))?.total ?? 0), 0),
     expenses: shownExpenses.reduce((s, e) => s + e.amount, 0),
   };
 
@@ -192,9 +193,7 @@ export default function MoneyScreen() {
     const year = new Date().getFullYear();
     const inYear = (iso?: string) => !!iso && parseDate(iso).getFullYear() === year;
     return calculateUSTax({
-      grossIncome: invoices
-        .filter((i) => i.status === 'paid' && inYear(i.paidAt))
-        .reduce((sum, i) => sum + netOfTax(i.quote), 0),
+      grossIncome: invoices.filter((i) => i.status === 'paid' && inYear(i.paidAt)).reduce((sum, i) => sum + netOfTax(i.quote), 0),
       businessExpenses: expenses.filter((e) => inYear(e.date)).reduce((sum, e) => sum + e.amount, 0),
       filingStatus: settings.usFilingStatus ?? 'single',
       otherIncome: settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome,
@@ -636,7 +635,7 @@ export default function MoneyScreen() {
                           </Text>
                         </View>
                         <Text className="text-fg text-base font-semibold mr-2">
-                          {money(inv?.quote.total ?? job.quote?.total ?? 0)}
+                          {money(chargedQuote(job, inv)?.total ?? 0)}
                         </Text>
                         <ChevronRight size={16} color={t.secondary} strokeWidth={2} />
                       </Pressable>
@@ -1001,9 +1000,14 @@ export default function MoneyScreen() {
         onDismiss={() => setConfirmDeleteInvoice(null)}
       />
 
-      <Sheet visible={!!cisModal} onClose={() => setCisModal(null)}>
-        <Text className="text-fg text-[17px] font-semibold text-center mb-4">Mark as paid</Text>
-        <View className="bg-bg rounded-2xl px-4 mb-4">
+      <FormSheet
+        visible={!!cisModal}
+        title="Mark as paid"
+        onCancel={() => setCisModal(null)}
+        actionLabel="Mark paid"
+        onAction={() => cisModal && confirmMarkPaid(cisModal.invoiceId, cisToggle, parseFloat(cisAmount) || 0)}
+      >
+        <View className="bg-surface rounded-2xl px-4">
           <View className="flex-row items-center justify-between min-h-[52px]">
             <Text className="text-fg text-base">CIS deducted?</Text>
             <Switch value={cisToggle} onValueChange={setCisToggle} trackColor={{ false: t.divider, true: t.accent }} />
@@ -1012,7 +1016,7 @@ export default function MoneyScreen() {
             <View className="border-t border-divider py-3">
               <View className="flex-row items-center justify-between">
                 <Text className="text-secondary text-sm">Deduction</Text>
-                <View className="flex-row items-center bg-surface rounded-xl px-3 h-11">
+                <View className="flex-row items-center bg-bg rounded-xl px-3 h-11">
                   <Text className="text-secondary mr-1">£</Text>
                   <TextInput
                     className="text-fg text-base w-20 text-right"
@@ -1029,18 +1033,7 @@ export default function MoneyScreen() {
             </View>
           )}
         </View>
-        <PrimaryButton
-          label="Confirm payment"
-          onPress={() => cisModal && confirmMarkPaid(cisModal.invoiceId, cisToggle, parseFloat(cisAmount) || 0)}
-        />
-        <Pressable
-          onPress={() => setCisModal(null)}
-          className="min-h-[48px] items-center justify-center mt-1"
-          accessibilityRole="button"
-        >
-          <Text className="text-secondary text-base font-semibold">Cancel</Text>
-        </Pressable>
-      </Sheet>
+      </FormSheet>
 
       {/* Export the tax year for the accountant */}
       <Sheet visible={showExport} onClose={() => setShowExport(false)}>

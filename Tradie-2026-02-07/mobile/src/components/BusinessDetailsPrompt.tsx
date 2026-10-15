@@ -5,11 +5,12 @@
  * never go out with placeholder details.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, TextInput } from 'react-native';
 import { useTradeStore, useRegion, businessDisplayName, type BusinessSettings } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, PrimaryButton, Sheet } from '@/components/ui';
+import { Group, RowDivider } from '@/components/ui';
+import { FormSheet } from '@/components/FormSheet';
 
 export type CustomerDocument = 'quote' | 'invoice' | 'message';
 
@@ -47,23 +48,33 @@ export function useBusinessDetailsPrompt() {
     missing: Field[];
     send: (settings: BusinessSettings) => void | Promise<void>;
   } | null>(null);
+  const [open, setOpen] = useState(false);
+  // Sending opens the share sheet, which iOS can only show once the card has finished closing.
+  const [sendAfterClose, setSendAfterClose] = useState(false);
 
   const requireDetails = (document: CustomerDocument, send: (settings: BusinessSettings) => void | Promise<void>) => {
     const settings = useTradeStore.getState().settings;
     const missing = missingDetails(settings, document, country);
     if (missing.length === 0) return send(settings);
     setPending({ document, missing, send });
+    setSendAfterClose(false);
+    setOpen(true);
   };
 
   const prompt = pending ? (
     <BusinessDetailsSheet
+      visible={open}
       document={pending.document}
       missing={pending.missing}
-      onClose={() => setPending(null)}
+      onClose={() => setOpen(false)}
       onSaved={() => {
+        setSendAfterClose(true);
+        setOpen(false);
+      }}
+      onDismissed={() => {
         const { send } = pending;
         setPending(null);
-        send(useTradeStore.getState().settings);
+        if (sendAfterClose) void send(useTradeStore.getState().settings);
       }}
     />
   ) : null;
@@ -72,15 +83,19 @@ export function useBusinessDetailsPrompt() {
 }
 
 function BusinessDetailsSheet({
+  visible,
   document,
   missing,
   onClose,
   onSaved,
+  onDismissed,
 }: {
+  visible: boolean;
   document: CustomerDocument;
   missing: Field[];
   onClose: () => void;
   onSaved: () => void;
+  onDismissed: () => void;
 }) {
   const settings = useTradeStore((s) => s.settings);
   const updateSettings = useTradeStore((s) => s.updateSettings);
@@ -140,56 +155,91 @@ function BusinessDetailsSheet({
   );
 
   return (
-    <Sheet visible onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 560 }}>
-        <Text className="text-fg text-[20px] font-semibold mb-1">Add your business details</Text>
-        <Text className="text-secondary text-[15px] leading-5 mb-5">
-          {PURPOSE[document]} You only need to do this once.
-        </Text>
+    <FormSheet
+      visible={visible}
+      title="Your business details"
+      onCancel={onClose}
+      actionLabel={document === 'message' ? 'Continue' : 'Send'}
+      onAction={save}
+      actionDisabled={!complete}
+      onDismissed={onDismissed}
+    >
+      <Text className="text-secondary text-[15px] leading-5 mb-5 mx-1">{PURPOSE[document]} You only need to do this once.</Text>
 
-        <Group className="mb-5 bg-bg">
-          {asks('name') && (
-            <>
-              {input({ label: 'Business name', value: businessName, onChangeText: setBusinessName, placeholder: isUS ? 'As on your truck' : 'As on your van', autoCapitalize: 'words' })}
-              <RowDivider />
-              {input({ label: 'Your name', value: ownerName, onChangeText: setOwnerName, placeholder: 'First and last', autoCapitalize: 'words' })}
-            </>
-          )}
-          {asks('contact') && (
-            <>
-              {asks('name') && <RowDivider />}
-              {input({ label: 'Phone', value: phone, onChangeText: setPhone, placeholder: isUS ? '(555) 555-0100' : '07700 900000', keyboardType: 'phone-pad' })}
-              <RowDivider />
-              {input({ label: 'Email', value: email, onChangeText: setEmail, placeholder: 'you@example.com', keyboardType: 'email-address', autoCapitalize: 'none' })}
-            </>
-          )}
-          {asks('address') && (
-            <>
-              {(asks('name') || asks('contact')) && <RowDivider />}
-              {input({ label: 'Business address (needed on VAT invoices)', value: address, onChangeText: setAddress, placeholder: '12 High Street, London', multiline: true })}
-            </>
-          )}
-          {asks('paymentDetails') && (
-            <>
-              {missing.length > 1 && <RowDivider />}
-              {input({
-                label: 'How customers pay you',
-                value: paymentDetails,
-                onChangeText: setPaymentDetails,
-                placeholder: isUS
-                  ? 'Zelle: you@example.com\nChecks payable to Your Business'
-                  : 'Bank: Your Bank\nName: Your Business\nSort code: 00-00-00\nAccount: 12345678',
-                multiline: true,
-              })}
-            </>
-          )}
-        </Group>
+      <Group className="mb-3">
+        {asks('name') && (
+          <>
+            {input({
+              label: 'Business name',
+              value: businessName,
+              onChangeText: setBusinessName,
+              placeholder: isUS ? 'As on your truck' : 'As on your van',
+              autoCapitalize: 'words',
+            })}
+            <RowDivider />
+            {input({
+              label: 'Your name',
+              value: ownerName,
+              onChangeText: setOwnerName,
+              placeholder: 'First and last',
+              autoCapitalize: 'words',
+            })}
+          </>
+        )}
+        {asks('contact') && (
+          <>
+            {asks('name') && <RowDivider />}
+            {input({
+              label: 'Phone',
+              value: phone,
+              onChangeText: setPhone,
+              placeholder: isUS ? '(555) 555-0100' : '07700 900000',
+              keyboardType: 'phone-pad',
+            })}
+            <RowDivider />
+            {input({
+              label: 'Email',
+              value: email,
+              onChangeText: setEmail,
+              placeholder: 'you@example.com',
+              keyboardType: 'email-address',
+              autoCapitalize: 'none',
+            })}
+          </>
+        )}
+        {asks('address') && (
+          <>
+            {(asks('name') || asks('contact')) && <RowDivider />}
+            {input({
+              label: 'Business address (needed on VAT invoices)',
+              value: address,
+              onChangeText: setAddress,
+              placeholder: '12 High Street, London',
+              multiline: true,
+            })}
+          </>
+        )}
+        {asks('paymentDetails') && (
+          <>
+            {missing.length > 1 && <RowDivider />}
+            {input({
+              label: 'How customers pay you',
+              value: paymentDetails,
+              onChangeText: setPaymentDetails,
+              placeholder: isUS
+                ? 'Zelle: you@example.com\nChecks payable to Your Business'
+                : 'Bank: Your Bank\nName: Your Business\nSort code: 00-00-00\nAccount: 12345678',
+              multiline: true,
+            })}
+          </>
+        )}
+      </Group>
 
-        <PrimaryButton label={document === 'message' ? 'Save and continue' : `Save and send ${document}`} onPress={save} disabled={!complete} />
-        <Pressable onPress={onClose} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
-          <Text className="text-secondary text-base font-semibold">Not now</Text>
-        </Pressable>
-      </ScrollView>
-    </Sheet>
+      <Text className="text-secondary text-[13px] mx-1">
+        {document === 'message'
+          ? 'Saved to Account, then your message opens.'
+          : `Saved to Account, then your ${document} opens to send.`}
+      </Text>
+    </FormSheet>
   );
 }

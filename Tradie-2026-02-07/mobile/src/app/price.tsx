@@ -4,7 +4,7 @@
  * (add=parts opens straight to adding the job's parts). Nothing is saved until Save.
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { v4 as generateId } from 'uuid';
 import * as Haptics from 'expo-haptics';
@@ -41,6 +41,7 @@ import {
   LinkRow,
 } from '@/components/ui';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { FormSheet } from '@/components/FormSheet';
 import { UpgradePrompt, type LimitedFeature } from '@/components/UpgradePrompt';
 import { toast } from '@/components/Toast';
 
@@ -109,6 +110,9 @@ export default function PriceScreen() {
   const [arranging, setArranging] = useState(false);
   const [editing, setEditing] = useState<LineDraft | null>(null);
   const [discount, setDiscount] = useState<DiscountDraft | null>(null);
+  // The discount as it was when opened, so Cancel knows if anything changed.
+  const [discountStart, setDiscountStart] = useState<DiscountDraft | null>(null);
+  const openDiscount = (d: DiscountDraft) => (setDiscount(d), setDiscountStart(d));
   const [adding, setAdding] = useState(false);
   // Opened to add parts: Pro sees the parts, a free user the Pro prompt (once Pro is known).
   const [picking, setPicking] = useState<'list' | 'parts' | null>(add === 'parts' ? 'parts' : null);
@@ -141,7 +145,12 @@ export default function PriceScreen() {
   }
 
   const parts = job.parts ?? [];
-  const partsNotOnPrice = parts.filter((p) => !lines.some((l) => l.partId === p.id));
+  // Parts brought in are linked to their line. Prices from before 1.7 had one Materials figure
+  // instead, so there the parts count as on the price when Materials covers what they cost.
+  const linkedParts = lines.some((l) => l.partId);
+  const partsCost = parts.reduce((sum, p) => sum + p.quantity * p.unitCost, 0);
+  const partsNotOnPrice =
+    !linkedParts && priced.materials >= partsCost ? [] : parts.filter((p) => !lines.some((l) => l.partId === p.id));
   const dirty =
     JSON.stringify(lines) !== JSON.stringify(quote.lines) ||
     showItemPrices !== (quote.showItemPrices !== false) ||
@@ -156,7 +165,7 @@ export default function PriceScreen() {
 
   const openLine = (line: LineItem) => {
     if (line.kind === 'discount') {
-      setDiscount({
+      openDiscount({
         id: line.id,
         mode: line.percent ? 'percent' : 'amount',
         value: numText(line.percent ?? line.unitPrice),
@@ -164,8 +173,7 @@ export default function PriceScreen() {
       });
       return;
     }
-    const markup =
-      line.unitCost && line.unitCost > 0 ? String(Math.round((line.unitPrice / line.unitCost - 1) * 1000) / 10) : '';
+    const markup = line.unitCost && line.unitCost > 0 ? String(Math.round((line.unitPrice / line.unitCost - 1) * 1000) / 10) : '';
     setEditing({
       id: line.id,
       kind: line.kind,
@@ -197,7 +205,8 @@ export default function PriceScreen() {
       unitCost: editing.unitCost,
       partId: editing.partId,
       // Edited by hand: the labour line stops following the job type, unless only its order changed.
-      auto: before?.auto && before.unitPrice === unitPrice && before.description === editing.description.trim() ? true : undefined,
+      auto:
+        before?.auto && before.unitPrice === unitPrice && before.description === editing.description.trim() ? true : undefined,
     };
     setLines(before ? lines.map((l) => (l.id === line.id ? line : l)) : [...lines, line]);
     if (editing.saveToList && !before) {
@@ -238,7 +247,14 @@ export default function PriceScreen() {
   const addSaved = (item: SavedItem) => {
     setLines([
       ...lines,
-      { id: generateId(), kind: item.kind, description: item.description, quantity: 1, unit: item.unit, unitPrice: item.unitPrice },
+      {
+        id: generateId(),
+        kind: item.kind,
+        description: item.description,
+        quantity: 1,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+      },
     ]);
     touchPriceItem(item.id);
     track('price_list_item_used');
@@ -248,17 +264,15 @@ export default function PriceScreen() {
   const addParts = (chosen: Part[], markup: number) => {
     setLines([
       ...lines,
-      ...chosen.map(
-        (p): LineItem => ({
-          id: generateId(),
-          kind: 'materials',
-          description: p.name,
-          quantity: p.quantity,
-          unitPrice: withMarkup(p.unitCost, markup),
-          unitCost: p.unitCost,
-          partId: p.id,
-        }),
-      ),
+      ...chosen.map((p): LineItem => ({
+        id: generateId(),
+        kind: 'materials',
+        description: p.name,
+        quantity: p.quantity,
+        unitPrice: withMarkup(p.unitCost, markup),
+        unitCost: p.unitCost,
+        partId: p.id,
+      })),
     ]);
     track('parts_added_to_price');
     setPicking(null);
@@ -451,7 +465,7 @@ export default function PriceScreen() {
           <LinkRow
             icon={Percent}
             label="Discount"
-            onPress={() => (setAdding(false), setDiscount({ mode: 'amount', value: '', description: 'Discount' }))}
+            onPress={() => (setAdding(false), openDiscount({ mode: 'amount', value: '', description: 'Discount' }))}
           />
         </Group>
       </Sheet>
@@ -467,55 +481,59 @@ export default function PriceScreen() {
           vatApplies={rules.vatApplies}
           vatRate={settings.vatRate}
           isPro={isPro}
-          onLocked={(f) => (setEditing(null), setLocked(f))}
         />
       )}
 
       {/* A discount */}
       {discount && (
-        <Sheet visible onClose={() => setDiscount(null)}>
-          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 560 }}>
-            <Text className="text-fg text-[20px] font-semibold mb-4">Discount</Text>
-            <Segmented
-              className="mb-4 bg-bg"
-              options={[
-                { key: 'amount', label: `Amount (${currencySymbol()})` },
-                { key: 'percent', label: 'Percentage (%)' },
-              ]}
-              value={discount.mode}
-              onChange={(mode) => setDiscount({ ...discount, mode })}
-            />
-            <LabeledField
-              className="mb-4"
-              label={discount.mode === 'amount' ? 'Amount off' : 'Percentage off'}
-              value={discount.value}
-              onChangeText={(v) => {
-                const clean = cleanNumber(v);
-                if (clean !== null) setDiscount({ ...discount, value: clean });
-              }}
-              placeholder={discount.mode === 'amount' ? currencySymbol() : '%'}
-              keyboardType="decimal-pad"
-              autoFocus
-            />
-            <LabeledField
-              className="mb-5"
-              label="Shown as"
-              value={discount.description}
-              onChangeText={(v) => setDiscount({ ...discount, description: v })}
-              placeholder="Discount"
-            />
-            <PrimaryButton label={discount.id ? 'Done' : 'Add discount'} onPress={saveDiscount} disabled={!(num(discount.value) > 0)} />
-            {discount.id && (
+        <FormSheet
+          visible
+          title="Discount"
+          onCancel={() => setDiscount(null)}
+          actionLabel={discount.id ? 'Done' : 'Add'}
+          onAction={saveDiscount}
+          actionDisabled={!(num(discount.value) > 0)}
+          dirty={JSON.stringify(discount) !== JSON.stringify(discountStart)}
+        >
+          <Segmented
+            className="mb-4"
+            options={[
+              { key: 'amount', label: `Amount (${currencySymbol()})` },
+              { key: 'percent', label: 'Percentage (%)' },
+            ]}
+            value={discount.mode}
+            onChange={(mode) => setDiscount({ ...discount, mode })}
+          />
+          <LabeledField
+            className="mb-4"
+            label={discount.mode === 'amount' ? 'Amount off' : 'Percentage off'}
+            value={discount.value}
+            onChangeText={(v) => {
+              const clean = cleanNumber(v);
+              if (clean !== null) setDiscount({ ...discount, value: clean });
+            }}
+            placeholder={discount.mode === 'amount' ? currencySymbol() : '%'}
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+          <LabeledField
+            label="Shown as"
+            value={discount.description}
+            onChangeText={(v) => setDiscount({ ...discount, description: v })}
+            placeholder="Discount"
+          />
+          {discount.id && (
+            <Group className="mt-8">
               <Pressable
                 onPress={() => (remove(discount.id!), setDiscount(null))}
-                className="min-h-[48px] items-center justify-center mt-1"
+                className="min-h-[52px] items-center justify-center active:opacity-70"
                 accessibilityRole="button"
               >
                 <Text className="text-alert text-base font-semibold">Remove discount</Text>
               </Pressable>
-            )}
-          </ScrollView>
-        </Sheet>
+            </Group>
+          )}
+        </FormSheet>
       )}
 
       {/* Price list */}
@@ -554,8 +572,12 @@ export default function PriceScreen() {
 function TotalLine({ label, value, strong, muted }: { label: string; value: number; strong?: boolean; muted?: boolean }) {
   return (
     <View className="flex-row justify-between py-1">
-      <Text className={cn('flex-1 mr-3', strong ? 'text-fg text-base font-semibold' : 'text-secondary text-[15px]')}>{label}</Text>
-      <Text className={cn(strong ? 'text-fg text-[17px] font-bold' : muted ? 'text-secondary text-[15px]' : 'text-fg text-[15px]')}>
+      <Text className={cn('flex-1 mr-3', strong ? 'text-fg text-base font-semibold' : 'text-secondary text-[15px]')}>
+        {label}
+      </Text>
+      <Text
+        className={cn(strong ? 'text-fg text-[17px] font-bold' : muted ? 'text-secondary text-[15px]' : 'text-fg text-[15px]')}
+      >
         {formatAmount(value)}
       </Text>
     </View>
@@ -612,7 +634,13 @@ function LineRow({
       {arranging && (
         <View className="flex-row items-center pr-1">
           <IconButton icon={ChevronUp} label={`Move ${line.description} up`} onPress={onUp} disabled={first} color={t.link} />
-          <IconButton icon={ChevronDown} label={`Move ${line.description} down`} onPress={onDown} disabled={last} color={t.link} />
+          <IconButton
+            icon={ChevronDown}
+            label={`Move ${line.description} down`}
+            onPress={onDown}
+            disabled={last}
+            color={t.link}
+          />
           <IconButton icon={Trash2} label={`Remove ${line.description}`} onPress={onRemove} color={t.alert} />
         </View>
       )}
@@ -657,7 +685,6 @@ function LineSheet({
   vatApplies,
   vatRate,
   isPro,
-  onLocked,
 }: {
   draft: LineDraft;
   onChange: (d: LineDraft) => void;
@@ -667,8 +694,10 @@ function LineSheet({
   vatApplies: boolean;
   vatRate: number;
   isPro: boolean;
-  onLocked: (feature: LimitedFeature) => void;
 }) {
+  const [start] = useState(draft);
+  // Shown over the form, so nothing typed is lost.
+  const [locked, setLocked] = useState(false);
   const set = (changes: Partial<LineDraft>) => onChange({ ...draft, ...changes });
   const setNumber = (key: 'quantity' | 'unitPrice' | 'markup', v: string) => {
     const clean = cleanNumber(v);
@@ -681,105 +710,121 @@ function LineSheet({
   const rates = VAT_RATES.includes(vatRate) ? VAT_RATES : [vatRate, ...VAT_RATES];
 
   return (
-    <Sheet visible onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 640 }}>
-        <Text className="text-fg text-[20px] font-semibold mb-4">{draft.id ? 'Edit item' : 'New item'}</Text>
+    <FormSheet
+      visible
+      title={draft.id ? 'Edit item' : 'New item'}
+      onCancel={onClose}
+      actionLabel={draft.id ? 'Done' : 'Add'}
+      onAction={onSave}
+      actionDisabled={!draft.description.trim() || !(num(draft.unitPrice) >= 0) || draft.unitPrice === ''}
+      dirty={JSON.stringify(draft) !== JSON.stringify(start)}
+    >
+      <LabeledField
+        className="mb-4"
+        label="What is it?"
+        value={draft.description}
+        onChangeText={(v) => set({ description: v })}
+        placeholder="e.g. Fit new mixer tap"
+        autoFocus={!draft.id}
+      />
+      <Segmented
+        className="mb-4"
+        options={(['labour', 'materials', 'other'] as ItemKind[]).map((k) => ({
+          key: k,
+          label: lineKindLabels(getRegion().country)[k],
+        }))}
+        value={draft.kind}
+        onChange={(k) => set({ kind: k })}
+      />
+      <View className="flex-row gap-3 mb-3">
         <LabeledField
-          className="mb-4"
-          label="What is it?"
-          value={draft.description}
-          onChangeText={(v) => set({ description: v })}
-          placeholder="e.g. Fit new mixer tap"
-          autoFocus={!draft.id}
+          className="flex-1"
+          label="How many"
+          value={draft.quantity}
+          onChangeText={(v) => setNumber('quantity', v)}
+          placeholder="1"
+          keyboardType="decimal-pad"
         />
-        <Segmented
-          className="mb-4 bg-bg"
-          options={(['labour', 'materials', 'other'] as ItemKind[]).map((k) => ({ key: k, label: lineKindLabels(getRegion().country)[k] }))}
-          value={draft.kind}
-          onChange={(k) => set({ kind: k })}
+        <LabeledField
+          className="flex-1"
+          label={`Price each${unitLabel(draft.unit) ? ` (per${unitLabel(draft.unit)})` : ''}`}
+          value={draft.unitPrice}
+          onChangeText={(v) => setNumber('unitPrice', v)}
+          placeholder={currencySymbol()}
+          keyboardType="decimal-pad"
         />
-        <View className="flex-row gap-3 mb-3">
+      </View>
+
+      {/* Unit */}
+      <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">Unit</Text>
+      <View className="flex-row flex-wrap gap-2 mb-4">
+        {[undefined, ...LINE_UNITS].map((u) => (
+          <Chip key={u ?? 'each'} label={u ?? 'each'} selected={draft.unit === u} onPress={() => set({ unit: u })} />
+        ))}
+      </View>
+
+      {/* Part cost and markup */}
+      {draft.unitCost !== undefined && (
+        <View className="mb-4">
           <LabeledField
-            className="flex-1"
-            label="How many"
-            value={draft.quantity}
-            onChangeText={(v) => setNumber('quantity', v)}
-            placeholder="1"
+            label={`Markup on cost (${formatAmount(draft.unitCost)} each)`}
+            value={draft.markup}
+            onChangeText={(v) => setNumber('markup', v)}
+            placeholder="%"
             keyboardType="decimal-pad"
-          />
-          <LabeledField
-            className="flex-1"
-            label={`Price each${unitLabel(draft.unit) ? ` (per${unitLabel(draft.unit)})` : ''}`}
-            value={draft.unitPrice}
-            onChangeText={(v) => setNumber('unitPrice', v)}
-            placeholder={currencySymbol()}
-            keyboardType="decimal-pad"
+            hint="Changes the price each. Only you see the cost and markup."
           />
         </View>
+      )}
 
-        {/* Unit */}
-        <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">Unit</Text>
-        <View className="flex-row flex-wrap gap-2 mb-4">
-          {[undefined, ...LINE_UNITS].map((u) => (
-            <Chip key={u ?? 'each'} label={u ?? 'each'} selected={draft.unit === u} onPress={() => set({ unit: u })} />
-          ))}
-        </View>
-
-        {/* Part cost and markup */}
-        {draft.unitCost !== undefined && (
-          <View className="mb-4">
-            <LabeledField
-              label={`Markup on cost (${formatAmount(draft.unitCost)} each)`}
-              value={draft.markup}
-              onChangeText={(v) => setNumber('markup', v)}
-              placeholder="%"
-              keyboardType="decimal-pad"
-              hint="Changes the price each. Only you see the cost and markup."
-            />
+      {/* VAT rate (VAT-registered only) */}
+      {vatApplies && (
+        <>
+          <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">VAT rate</Text>
+          <View className="flex-row flex-wrap gap-2 mb-4">
+            {rates.map((r) => (
+              <Chip
+                key={r}
+                label={`${r}%`}
+                selected={(draft.vatRate ?? vatRate) === r}
+                onPress={() => set({ vatRate: r === vatRate ? undefined : r })}
+              />
+            ))}
           </View>
-        )}
+        </>
+      )}
 
-        {/* VAT rate (VAT-registered only) */}
-        {vatApplies && (
-          <>
-            <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">VAT rate</Text>
-            <View className="flex-row flex-wrap gap-2 mb-4">
-              {rates.map((r) => (
-                <Chip
-                  key={r}
-                  label={`${r}%`}
-                  selected={(draft.vatRate ?? vatRate) === r}
-                  onPress={() => set({ vatRate: r === vatRate ? undefined : r })}
-                />
-              ))}
-            </View>
-          </>
-        )}
+      {!draft.id && (
+        <Group className="mb-4">
+          <ToggleRow
+            label="Save to price list"
+            hint={isPro ? 'Add it to any quote later in a tap' : 'Pro'}
+            value={draft.saveToList}
+            onValueChange={(v) => {
+              if (isPro) set({ saveToList: v });
+              else {
+                track('pro_locked_tap_price_list');
+                setLocked(true);
+              }
+            }}
+          />
+        </Group>
+      )}
 
-        {!draft.id && (
-          <Group className="bg-bg mb-4">
-            <ToggleRow
-              label="Save to price list"
-              hint={isPro ? 'Add it to any quote later in a tap' : 'Pro'}
-              value={draft.saveToList}
-              onValueChange={(v) => (isPro ? set({ saveToList: v }) : onLocked('priceList'))}
-            />
-          </Group>
-        )}
-
-        <Text className="text-fg text-base font-semibold mx-1 mb-3">Line total {formatAmount(amount)}</Text>
-        <PrimaryButton
-          label={draft.id ? 'Done' : 'Add item'}
-          onPress={onSave}
-          disabled={!draft.description.trim() || !(num(draft.unitPrice) >= 0) || draft.unitPrice === ''}
-        />
-        {onRemove && (
-          <Pressable onPress={onRemove} className="min-h-[48px] items-center justify-center mt-1" accessibilityRole="button">
+      <Text className="text-fg text-base font-semibold mx-1">Line total {formatAmount(amount)}</Text>
+      {onRemove && (
+        <Group className="mt-8">
+          <Pressable
+            onPress={onRemove}
+            className="min-h-[52px] items-center justify-center active:opacity-70"
+            accessibilityRole="button"
+          >
             <Text className="text-alert text-base font-semibold">Remove item</Text>
           </Pressable>
-        )}
-      </ScrollView>
-    </Sheet>
+        </Group>
+      )}
+      <UpgradePrompt visible={locked} onClose={() => setLocked(false)} feature="priceList" />
+    </FormSheet>
   );
 }
 
@@ -787,7 +832,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
   return (
     <Pressable
       onPress={onPress}
-      className={cn('px-4 min-h-[40px] rounded-xl items-center justify-center', selected ? 'bg-divider' : 'bg-bg')}
+      className={cn('px-4 min-h-[40px] rounded-xl items-center justify-center', selected ? 'bg-divider' : 'bg-surface')}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
     >
@@ -813,10 +858,9 @@ function PriceListPicker({
     .filter((i) => i.description.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => (b.lastUsedAt ?? '').localeCompare(a.lastUsedAt ?? '') || a.description.localeCompare(b.description));
   return (
-    <Sheet visible={visible} onClose={onClose}>
-      <Text className="text-fg text-[20px] font-semibold mb-3">Your price list</Text>
+    <FormSheet visible={visible} title="Your price list" onCancel={onClose}>
       {items.length > 0 && (
-        <View className="flex-row items-center bg-bg rounded-xl px-3 mb-3 min-h-[44px]">
+        <View className="flex-row items-center bg-surface rounded-xl px-3 mb-4 min-h-[44px]">
           <Search size={16} color={t.secondary} strokeWidth={2} />
           <TextInput
             className="flex-1 text-fg text-base ml-2 py-2"
@@ -828,37 +872,35 @@ function PriceListPicker({
           />
         </View>
       )}
-      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 440 }}>
-        {items.length === 0 ? (
-          <Text className="text-secondary text-[15px] mx-1 mb-4">
-            Nothing saved yet. Turn on Save to price list when you add an item, or add items in Account → Price list.
-          </Text>
-        ) : (
-          <Group className="bg-bg mb-2">
-            {shown.map((item, i) => (
-              <View key={item.id}>
-                {i > 0 && <RowDivider />}
-                <Pressable
-                  onPress={() => (setQuery(''), onPick(item))}
-                  className="flex-row items-center px-4 py-2.5 min-h-[52px] active:opacity-70"
-                  accessibilityRole="button"
-                >
-                  <View className="flex-1 mr-3">
-                    <Text className="text-fg text-base">{item.description}</Text>
-                    <Text className="text-secondary text-sm">{lineKindLabels(getRegion().country)[item.kind]}</Text>
-                  </View>
-                  <Text className="text-fg text-base">
-                    {formatAmount(item.unitPrice)}
-                    {item.unit ? <Text className="text-secondary"> /{item.unit}</Text> : null}
-                  </Text>
-                </Pressable>
-              </View>
-            ))}
-            {shown.length === 0 && <Text className="text-secondary text-[15px] p-4">No items match.</Text>}
-          </Group>
-        )}
-      </ScrollView>
-    </Sheet>
+      {items.length === 0 ? (
+        <Text className="text-secondary text-[15px] mx-1 mb-4">
+          Nothing saved yet. Turn on Save to price list when you add an item, or add items in Account → Price list.
+        </Text>
+      ) : (
+        <Group className="mb-2">
+          {shown.map((item, i) => (
+            <View key={item.id}>
+              {i > 0 && <RowDivider />}
+              <Pressable
+                onPress={() => (setQuery(''), onPick(item))}
+                className="flex-row items-center px-4 py-2.5 min-h-[52px] active:opacity-70"
+                accessibilityRole="button"
+              >
+                <View className="flex-1 mr-3">
+                  <Text className="text-fg text-base">{item.description}</Text>
+                  <Text className="text-secondary text-sm">{lineKindLabels(getRegion().country)[item.kind]}</Text>
+                </View>
+                <Text className="text-fg text-base">
+                  {formatAmount(item.unitPrice)}
+                  {item.unit ? <Text className="text-secondary"> /{item.unit}</Text> : null}
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+          {shown.length === 0 && <Text className="text-secondary text-[15px] p-4">No items match.</Text>}
+        </Group>
+      )}
+    </FormSheet>
   );
 }
 
@@ -879,60 +921,64 @@ function PartsPicker({
   const picked = parts.filter((p) => chosen.includes(p.id));
   const total = roundPence(picked.reduce((s, p) => s + p.quantity * withMarkup(p.unitCost, m), 0));
   return (
-    <Sheet visible onClose={onClose}>
-      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 620 }}>
-        <Text className="text-fg text-[20px] font-semibold mb-4">Add parts to the price</Text>
-        {parts.length === 0 ? (
-          <Text className="text-secondary text-[15px] mx-1 mb-4">All this job’s parts are already on the price.</Text>
-        ) : (
-          <>
-            <Group className="bg-bg mb-4">
-              {parts.map((p, i) => {
-                const on = chosen.includes(p.id);
-                return (
-                  <View key={p.id}>
-                    {i > 0 && <RowDivider />}
-                    <Pressable
-                      onPress={() => setChosen(on ? chosen.filter((x) => x !== p.id) : [...chosen, p.id])}
-                      className="flex-row items-center px-4 py-2.5 min-h-[52px] active:opacity-70"
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
-                    >
-                      <View className="flex-1 mr-3">
-                        <Text className={cn('text-base', on ? 'text-fg' : 'text-secondary')}>{p.name}</Text>
-                        <Text className="text-secondary text-sm">
-                          {p.quantity} × {formatAmount(p.unitCost)} cost
-                          {m ? ` → ${formatAmount(withMarkup(p.unitCost, m))}` : ''}
-                        </Text>
-                      </View>
-                      <Text className={cn('text-[15px] font-semibold', on ? 'text-link' : 'text-secondary')}>
-                        {on ? 'Adding' : 'Skip'}
+    <FormSheet
+      visible
+      title="Add parts"
+      onCancel={onClose}
+      actionLabel="Add"
+      onAction={() => onAdd(picked, m)}
+      actionDisabled={!picked.length}
+    >
+      {parts.length === 0 ? (
+        <Text className="text-secondary text-[15px] mx-1 mb-4">All this job’s parts are already on the price.</Text>
+      ) : (
+        <>
+          <Group className="mb-4">
+            {parts.map((p, i) => {
+              const on = chosen.includes(p.id);
+              return (
+                <View key={p.id}>
+                  {i > 0 && <RowDivider />}
+                  <Pressable
+                    onPress={() => setChosen(on ? chosen.filter((x) => x !== p.id) : [...chosen, p.id])}
+                    className="flex-row items-center px-4 py-2.5 min-h-[52px] active:opacity-70"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                  >
+                    <View className="flex-1 mr-3">
+                      <Text className={cn('text-base', on ? 'text-fg' : 'text-secondary')}>{p.name}</Text>
+                      <Text className="text-secondary text-sm">
+                        {p.quantity} × {formatAmount(p.unitCost)} cost
+                        {m ? ` → ${formatAmount(withMarkup(p.unitCost, m))}` : ''}
                       </Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </Group>
-            <LabeledField
-              className="mb-5"
-              label="Markup"
-              value={markupText}
-              onChangeText={(v) => {
-                const clean = cleanNumber(v);
-                if (clean !== null) setMarkupText(clean);
-              }}
-              placeholder="0 %"
-              keyboardType="decimal-pad"
-              hint="Added to what you paid. Your usual markup is set in Account → Prices."
-            />
-            <PrimaryButton
-              label={picked.length ? `Add ${picked.length} for ${formatAmount(total)}` : 'Choose parts to add'}
-              onPress={() => onAdd(picked, m)}
-              disabled={!picked.length}
-            />
-          </>
-        )}
-      </ScrollView>
-    </Sheet>
+                    </View>
+                    <Text className={cn('text-[15px] font-semibold', on ? 'text-link' : 'text-secondary')}>
+                      {on ? 'Adding' : 'Skip'}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </Group>
+          <LabeledField
+            className="mb-5"
+            label="Markup"
+            value={markupText}
+            onChangeText={(v) => {
+              const clean = cleanNumber(v);
+              if (clean !== null) setMarkupText(clean);
+            }}
+            placeholder="0 %"
+            keyboardType="decimal-pad"
+            hint="Added to what you paid. Your usual markup is set in Account → Prices."
+          />
+          <Text className="text-fg text-base font-semibold mx-1">
+            {picked.length
+              ? `${picked.length === 1 ? '1 part' : `${picked.length} parts`} for ${formatAmount(total)}`
+              : 'Choose the parts to add'}
+          </Text>
+        </>
+      )}
+    </FormSheet>
   );
 }

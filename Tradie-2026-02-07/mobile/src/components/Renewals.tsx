@@ -3,7 +3,7 @@
  * 30 and 7 days before and on the day; anything due soon also shows on Home.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, TextInput, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, ShieldCheck, CircleAlert } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +12,8 @@ import { ensureNotificationPermission, cancelRenewalReminders } from '@/lib/noti
 import { parseDate, toDateKey } from '@/lib/dates';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
-import { Group, RowDivider, SectionHeader, PrimaryButton, Sheet, LinkRow } from '@/components/ui';
+import { Group, RowDivider, SectionHeader, LinkRow } from '@/components/ui';
+import { FormSheet } from '@/components/FormSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { toast } from '@/components/Toast';
 
@@ -43,6 +44,11 @@ export function RenewalsSection() {
   const { country } = useRegion();
   const t = useTheme();
   const [draft, setDraft] = useState<Draft | null>(null);
+  // The renewal as it was when opened, so Cancel knows if anything changed.
+  const [draftStart, setDraftStart] = useState<Draft | null>(null);
+  const openDraft = (d: Draft) => (setDraft(d), setDraftStart(d));
+  const sameDraft = (a: Draft | null, b: Draft | null) =>
+    !!a && !!b && a.name === b.name && a.reference === b.reference && toDateKey(a.expires) === toDateKey(b.expires);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const sorted = [...renewals].sort((a, b) => a.expires.localeCompare(b.expires));
@@ -50,7 +56,7 @@ export function RenewalsSection() {
   const openNew = () => {
     const nextYear = new Date();
     nextYear.setFullYear(nextYear.getFullYear() + 1);
-    setDraft({ name: '', reference: '', expires: nextYear });
+    openDraft({ name: '', reference: '', expires: nextYear });
   };
 
   const save = async () => {
@@ -75,7 +81,7 @@ export function RenewalsSection() {
             <View key={r.id}>
               {i > 0 && <RowDivider />}
               <Pressable
-                onPress={() => setDraft({ id: r.id, name: r.name, reference: r.reference ?? '', expires: parseDate(r.expires) })}
+                onPress={() => openDraft({ id: r.id, name: r.name, reference: r.reference ?? '', expires: parseDate(r.expires) })}
                 className="flex-row items-center px-4 py-3 active:opacity-70"
                 accessibilityRole="button"
               >
@@ -110,99 +116,89 @@ export function RenewalsSection() {
       <Text className="text-secondary text-[13px] mx-1 mb-8">Reminders 30 days and 7 days before each one expires.</Text>
 
       {draft && (
-        <Sheet visible onClose={() => setDraft(null)}>
-          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 620 }}>
-            <Text className="text-fg text-[20px] font-semibold mb-4">{draft.id ? 'Edit' : 'Add insurance or licence'}</Text>
-            {!draft.id && (
-              <View className="flex-row flex-wrap gap-2 mb-4">
-                {SUGGESTIONS[country].map((s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setDraft({ ...draft, name: s })}
-                    className={cn('px-3 h-9 rounded-full justify-center', draft.name === s ? 'bg-accent' : 'bg-bg')}
-                    accessibilityRole="button"
-                  >
-                    <Text className={cn('text-sm font-medium', draft.name === s ? 'text-on-accent' : 'text-fg')}>{s}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            <Group className="bg-bg mb-4">
-              <View className="px-4 pt-3 pb-1">
-                <Text className="text-secondary text-[13px]">Name</Text>
-                <TextInput
-                  className="text-fg text-base py-2"
-                  value={draft.name}
-                  onChangeText={(v) => setDraft({ ...draft, name: v })}
-                  placeholder="e.g. Public liability insurance"
-                  placeholderTextColor={t.secondary}
-                  accessibilityLabel="Name"
-                />
-              </View>
-              <RowDivider />
-              <View className="px-4 pt-3 pb-1">
-                <Text className="text-secondary text-[13px]">Policy or licence number (optional)</Text>
-                <TextInput
-                  className="text-fg text-base py-2"
-                  value={draft.reference}
-                  onChangeText={(v) => setDraft({ ...draft, reference: v })}
-                  placeholder="Number"
-                  placeholderTextColor={t.secondary}
-                  autoCapitalize="characters"
-                  accessibilityLabel="Policy or licence number"
-                />
-              </View>
+        <FormSheet
+          visible
+          title={draft.id ? 'Insurance or licence' : 'Add insurance or licence'}
+          onCancel={() => setDraft(null)}
+          actionLabel="Save"
+          onAction={save}
+          actionDisabled={!draft.name.trim()}
+          dirty={!sameDraft(draft, draftStart)}
+        >
+          {!draft.id && (
+            <View className="flex-row flex-wrap gap-2 mb-4">
+              {SUGGESTIONS[country].map((s) => (
+                <Pressable
+                  key={s}
+                  onPress={() => setDraft({ ...draft, name: s })}
+                  className={cn('px-3 h-9 rounded-full justify-center', draft.name === s ? 'bg-accent' : 'bg-surface')}
+                  accessibilityRole="button"
+                >
+                  <Text className={cn('text-sm font-medium', draft.name === s ? 'text-on-accent' : 'text-fg')}>{s}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Group className="mb-4">
+            <View className="px-4 pt-3 pb-1">
+              <Text className="text-secondary text-[13px]">Name</Text>
+              <TextInput
+                className="text-fg text-base py-2"
+                value={draft.name}
+                onChangeText={(v) => setDraft({ ...draft, name: v })}
+                placeholder="e.g. Public liability insurance"
+                placeholderTextColor={t.secondary}
+                accessibilityLabel="Name"
+              />
+            </View>
+            <RowDivider />
+            <View className="px-4 pt-3 pb-1">
+              <Text className="text-secondary text-[13px]">Policy or licence number (optional)</Text>
+              <TextInput
+                className="text-fg text-base py-2"
+                value={draft.reference}
+                onChangeText={(v) => setDraft({ ...draft, reference: v })}
+                placeholder="Number"
+                placeholderTextColor={t.secondary}
+                autoCapitalize="characters"
+                accessibilityLabel="Policy or licence number"
+              />
+            </View>
+          </Group>
+          <Text className="text-fg text-base font-semibold mb-1">Expires</Text>
+          <DateTimePicker
+            value={draft.expires}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            onChange={(_, d) => d && setDraft({ ...draft, expires: d })}
+            themeVariant={t.mode}
+            accentColor={t.link}
+          />
+          {draft.id && (
+            <Group className="mt-6">
+              <LinkRow label="Delete" destructive onPress={() => setPendingDelete({ id: draft.id!, name: draft.name })} />
             </Group>
-            <Text className="text-fg text-base font-semibold mb-1">Expires</Text>
-            <DateTimePicker
-              value={draft.expires}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={(_, d) => d && setDraft({ ...draft, expires: d })}
-              themeVariant={t.mode}
-              accentColor={t.link}
-            />
-            <PrimaryButton label="Save" onPress={save} disabled={!draft.name.trim()} className="mt-2" />
-            {draft.id ? (
-              <View className="mt-2">
-                <LinkRow
-                  label="Delete"
-                  destructive
-                  onPress={() => {
-                    setPendingDelete({ id: draft.id!, name: draft.name });
-                    setDraft(null);
-                  }}
-                />
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => setDraft(null)}
-                className="min-h-[48px] items-center justify-center mt-1"
-                accessibilityRole="button"
-              >
-                <Text className="text-secondary text-base font-semibold">Cancel</Text>
-              </Pressable>
-            )}
-          </ScrollView>
-        </Sheet>
+          )}
+          {/* On top of the form, which closes once it's deleted. */}
+          <ConfirmModal
+            visible={!!pendingDelete}
+            title={`Delete ${pendingDelete?.name || 'this'}?`}
+            message="Its reminders will stop too."
+            confirmText="Delete"
+            cancelText="Cancel"
+            variant="error"
+            onConfirm={async () => {
+              if (!pendingDelete) return;
+              await cancelRenewalReminders(pendingDelete.id);
+              deleteRenewal(pendingDelete.id);
+              setDraft(null);
+              toast('Deleted');
+            }}
+            onCancel={() => {}}
+            onDismiss={() => setPendingDelete(null)}
+          />
+        </FormSheet>
       )}
-
-      <ConfirmModal
-        visible={!!pendingDelete}
-        title={`Delete ${pendingDelete?.name || 'this'}?`}
-        message="Its reminders will stop too."
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="error"
-        onConfirm={async () => {
-          if (!pendingDelete) return;
-          await cancelRenewalReminders(pendingDelete.id);
-          deleteRenewal(pendingDelete.id);
-          toast('Deleted');
-        }}
-        onCancel={() => {}}
-        onDismiss={() => setPendingDelete(null)}
-      />
     </>
   );
 }
