@@ -44,14 +44,16 @@ const formatDate = (iso: string) =>
 /** All text black (decided for 1.7); only rules and card backgrounds are grey. */
 export const PDF_STYLE = `
   body { margin:0; padding:0; font-family:-apple-system,Helvetica,Arial,sans-serif; background:#FFFFFF; color:#000000; }
-  .header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; }
-  .brand { display:flex; align-items:center; gap:16px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:20px; }
+  .brand { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+  .brand .title-small { font-size:18px; font-weight:800; color:#000000; }
+  .header-right { text-align:right; white-space:nowrap; flex-shrink:0; }
   .logo { max-height:64px; max-width:180px; object-fit:contain; }
   .title { font-size:26px; font-weight:800; color:#000000; }
   .label { font-size:11px; color:#000000; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; font-weight:600; }
   .value { font-size:13px; color:#000000; line-height:1.5; }
   .muted { color:#000000; }
-  .card { background:#F3F5F7; border:1px solid #D9DDE2; border-radius:12px; padding:18px; margin-bottom:18px; break-inside:avoid; page-break-inside:avoid; }
+  .card { background:#F3F5F7; border:1px solid #D9DDE2; border-radius:12px; padding:14px 16px; margin-bottom:12px; break-inside:avoid; page-break-inside:avoid; }
   table { width:100%; border-collapse:collapse; }
   thead { display:table-header-group; }
   tr { break-inside:avoid; page-break-inside:avoid; }
@@ -62,7 +64,8 @@ export const PDF_STYLE = `
   .total-amount { color:#000000; text-align:right; }
   .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid #000000; color:#000000; }
   .note { font-size:12px; line-height:1.5; margin-top:12px; }
-  .powered { margin-top:28px; text-align:center; color:#000000; font-size:10px; }
+  .closing { break-inside:avoid; page-break-inside:avoid; }
+  .powered { margin-top:14px; text-align:center; color:#000000; font-size:9px; }
   .powered a { color:#000000; text-decoration:underline; }
 `;
 
@@ -162,21 +165,29 @@ const pricesBlock = (q: Quote, jobLabel: string, description?: string) => {
   </div>`;
 };
 
+/** The logo with the business name under it (or the name on its own), and the document details on the right. */
 const headerBlock = (logo: string | undefined, name: string, fallback: string, right: string) => `
   <div class="header">
     <div class="brand">
       ${logo ? `<img class="logo" src="${logo}" alt="">` : ''}
-      ${name || !logo ? `<div class="title">${esc(name) || fallback}</div>` : ''}
+      ${name || !logo ? `<div class="${logo ? 'title-small' : 'title'}">${esc(name) || fallback}</div>` : ''}
     </div>
-    <div style="text-align:right">${right}</div>
+    <div class="header-right">${right}</div>
   </div>`;
 
-const pdfPage = (body: string) => `<!DOCTYPE html>
+/**
+ * A whole PDF. The closing part (payment details, the tradie's note and "Powered by Tradie")
+ * stays together, so a line on its own never runs onto a page of its own.
+ */
+const pdfPage = (body: string, closing: string) => `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${PDF_STYLE}</style></head>
 <body>
 ${body}
+  <div class="closing">
+  ${closing}
   <div class="powered">${POWERED_BY_HTML}</div>
+  </div>
 </body>
 </html>`;
 
@@ -221,9 +232,10 @@ export const createQuotePdf = async ({ job, customer, settings }: QuotePdfContex
     <div class="card" style="flex:1">${fromBlock(settings)}</div>
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
-  ${pricesBlock(q, jobName(job, settings.trade), job.description)}
-  <div style="text-align:center;margin-top:8px"><span class="badge">Quote · reply to accept</span></div>
-  ${footer ? `<div class="value" style="margin-top:20px">${escLines(footer)}</div>` : ''}`),
+  ${pricesBlock(q, jobName(job, settings.trade), job.description)}`,
+      `<div style="text-align:center;margin-top:4px"><span class="badge">Quote · reply to accept</span></div>
+  ${footer ? `<div class="value" style="margin-top:14px">${escLines(footer)}</div>` : ''}`,
+    ),
     `Quote-${customer.name}`,
   );
 };
@@ -265,15 +277,16 @@ export const createInvoicePdf = async ({ invoice, job, customer, settings }: Pdf
     <div class="card" style="flex:1">${toBlock(customer)}</div>
   </div>
   ${pricesBlock(q, jobName(job, settings.trade), job.description)}
-  ${cis ? `<div class="card"><table><tr class="line"><td>Less CIS deduction</td><td class="num">−${formatMoney(cis)}</td></tr><tr class="total-row"><td>To pay</td><td class="total-amount">${formatMoney(q.total - cis)}</td></tr></table></div>` : ''}
-  ${
+  ${cis ? `<div class="card"><table><tr class="line"><td>Less CIS deduction</td><td class="num">−${formatMoney(cis)}</td></tr><tr class="total-row"><td>To pay</td><td class="total-amount">${formatMoney(q.total - cis)}</td></tr></table></div>` : ''}`,
+      `${
     invoice.paidAt
       ? `<div style="text-align:center;margin-top:8px"><span class="badge">Paid ${formatDate(invoice.paidAt)}</span></div>`
       : settings.paymentDetails.trim()
         ? `<div class="card"><div class="label">How to pay</div><div class="value">${escLines(settings.paymentDetails)}</div><div class="value" style="margin-top:8px">Please use ${invoiceNumberLabel(invoice)} as the reference.</div></div>`
         : ''
   }
-  <div class="value" style="text-align:center;margin-top:16px">${escLines(footer)}</div>`),
+  <div class="value" style="text-align:center;margin-top:12px">${escLines(footer)}</div>`,
+    ),
     invoiceNumberLabel(invoice),
   );
 };
