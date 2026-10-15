@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Image } from 'react-native';
+import { View, Text, Pressable, Image, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FileText,
@@ -74,6 +74,7 @@ function StepBars({ step }: { step: 1 | 2 }) {
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const t = useTheme();
   const refreshPro = useRefreshPro();
   const setTrade = useTradeStore((s) => s.setTrade);
@@ -147,10 +148,13 @@ export default function OnboardingScreen() {
 
   // ── Welcome ───────────────────────────────────────────────────────────────
   if (step === 0) {
+    // Short screens (iPhone SE, 667pt) get a tighter layout so all five points fit above the button.
+    const compact = windowHeight < 740;
     return (
       <ScrollScreen
+        fadeEdge
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 32, paddingHorizontal: 24, paddingBottom: 16 }}
+        contentContainerStyle={{ paddingTop: insets.top + (compact ? 12 : 32), paddingHorizontal: 24, paddingBottom: 16 }}
         footerClassName="px-6"
         footer={
           <>
@@ -171,24 +175,27 @@ export default function OnboardingScreen() {
       >
         <Image
           source={require('@/assets/app-icon-tile.png')}
-          style={{ width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
+          style={compact ? { width: 52, height: 52, borderRadius: 12, marginBottom: 10 } : { width: 72, height: 72, borderRadius: 16, marginBottom: 14 }}
           accessibilityIgnoresInvertColors
           accessible={false}
         />
         <Text
-          className="text-fg text-[17px] font-extrabold tracking-[2.4px] mb-4"
+          className={cn('text-fg text-[17px] font-extrabold tracking-[2.4px]', compact ? 'mb-2' : 'mb-4')}
           accessibilityRole="header"
           maxFontSizeMultiplier={1.3}
         >
           TRADIE
         </Text>
         {/* The big headline grows less than body text, so more of the list fits at large text sizes */}
-        <Text className="text-fg text-[34px] leading-[38px] font-bold tracking-tight" maxFontSizeMultiplier={1.3}>
+        <Text
+          className={cn('text-fg font-bold tracking-tight', compact ? 'text-[30px] leading-[34px]' : 'text-[34px] leading-[38px]')}
+          maxFontSizeMultiplier={1.3}
+        >
           {isUS ? 'Quotes, jobs and invoices. Handled.' : 'Quotes, jobs and invoices. Sorted.'}
         </Text>
-        <Text className="text-secondary text-[17px] leading-6 mt-3">Built for solo traders.</Text>
+        <Text className={cn('text-secondary text-[17px] leading-6', compact ? 'mt-2' : 'mt-3')}>Built for solo traders.</Text>
 
-        <View className="mt-7 gap-4">
+        <View className={compact ? 'mt-5 gap-3' : 'mt-7 gap-4'}>
           {benefits(isUS).map(({ icon: Icon, title, body }) => (
             <View key={title} className="flex-row" accessible accessibilityLabel={`${title}. ${body}`}>
               <Icon size={24} color={t.link} strokeWidth={2} />

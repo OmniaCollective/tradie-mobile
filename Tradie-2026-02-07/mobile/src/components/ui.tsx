@@ -394,6 +394,12 @@ export function CloseButton({ onPress, label = 'Close', plain }: { onPress: () =
   );
 }
 
+/** A colour token (#RRGGBB) at zero opacity, for fading to it. */
+const transparent = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0)`;
+};
+
 /**
  * Header for a screen opened on top: title in the middle, X on the right. On iPhone the screen
  * is a card below the status bar, until a swipe up expands it to full screen (iOS 26+); the
@@ -437,11 +443,19 @@ export function ScrollScreen({
   header,
   footer,
   footerClassName,
+  fadeEdge,
   // Left out: the keyboard-aware scroll view keeps the field being typed in above the keyboard itself.
   automaticallyAdjustKeyboardInsets: _ignored,
   ...scrollProps
-}: ScrollViewProps & { header?: React.ReactNode; footer?: React.ReactNode; footerClassName?: string }) {
+}: ScrollViewProps & {
+  header?: React.ReactNode;
+  footer?: React.ReactNode;
+  footerClassName?: string;
+  /** Content fades out above the footer while there's more to scroll to, so nothing looks cut off. */
+  fadeEdge?: boolean;
+}) {
   const insets = useSafeAreaInsets();
+  const t = useTheme();
   const [box, setBox] = useState(0);
   const [content, setContent] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -449,21 +463,36 @@ export function ScrollScreen({
   return (
     <View className="flex-1 bg-bg">
       {header}
-      <KeyboardAwareScrollView
-        style={{ flex: 1 }}
-        bottomOffset={KEYBOARD_CLEARANCE}
-        keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={32}
-        {...scrollProps}
-        onLayout={(e) => setBox(e.nativeEvent.layout.height)}
-        onContentSizeChange={(_, h) => setContent(h)}
-        onScroll={(e) => setOffset(e.nativeEvent.contentOffset.y)}
-      >
-        {children}
-      </KeyboardAwareScrollView>
+      <View style={{ flex: 1 }}>
+        <KeyboardAwareScrollView
+          style={{ flex: 1 }}
+          bottomOffset={KEYBOARD_CLEARANCE}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={32}
+          {...scrollProps}
+          onLayout={(e) => setBox(e.nativeEvent.layout.height)}
+          onContentSizeChange={(_, h) => setContent(h)}
+          onScroll={(e) => setOffset(e.nativeEvent.contentOffset.y)}
+        >
+          {children}
+        </KeyboardAwareScrollView>
+        {fadeEdge && more ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 48,
+              experimental_backgroundImage: `linear-gradient(to bottom, ${transparent(t.bg)}, ${t.bg})`,
+            }}
+          />
+        ) : null}
+      </View>
       {footer ? (
         <View
-          className={cn('bg-bg px-4 pt-3 border-t', more ? 'border-divider' : 'border-transparent', footerClassName)}
+          className={cn('bg-bg px-4 pt-3 border-t', more && !fadeEdge ? 'border-divider' : 'border-transparent', footerClassName)}
           style={{ paddingBottom: insets.bottom + 12 }}
         >
           {footer}
