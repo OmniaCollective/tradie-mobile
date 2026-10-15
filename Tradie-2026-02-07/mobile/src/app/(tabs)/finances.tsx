@@ -304,7 +304,8 @@ export default function MoneyScreen() {
   };
 
   const handleMarkPaid = async (invoice: Invoice) => {
-    if (settings.cisRegistered) {
+    // CIS is a UK scheme: ask about it only for UK tradies.
+    if (settings.cisRegistered && !isUS) {
       setCisModal({ invoiceId: invoice.id, total: invoice.quote.total });
       setCisToggle(false);
       setCisAmount(cisDeduction(invoice.quote, settings.cisRate).toFixed(2));

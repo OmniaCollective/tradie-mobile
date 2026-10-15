@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Circle, CircleCheck, Plus, Route, Car, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as SMS from 'expo-sms';
-import { useTradeStore, jobName, getRegion } from '@/lib/store';
+import { useTradeStore, jobName, getRegion, useRegion } from '@/lib/store';
 import { toast } from '@/components/Toast';
 import { buildSuggestions, formatSlot, offerMessage, toSlot, type SuggestResult, type TravelNote } from '@/lib/booking';
 import type { Suggestion } from '@/lib/scheduling';
@@ -19,16 +19,21 @@ import { AppleSignInButton } from '@/components/AppleSignInButton';
 
 const MAX_TIMES = 3;
 
-const TRAVEL_NOTE: Record<TravelNote, string> = {
-  apple: 'Drive times from Apple Maps.',
-  estimate: 'Drive times are estimates from distance.',
-  'signed-out': 'Sign in to include real drive times.',
-  'no-postcode': 'Add the customer’s postcode to include drive times.',
-  'postcode-not-found': 'We couldn’t find that postcode, so drive times are left out.',
-  offline: 'You’re offline, so drive times are left out.',
+/** The note under the times, with the country's word for a postcode. */
+const travelNote = (note: TravelNote, isUS: boolean): string => {
+  const code = isUS ? 'ZIP code' : 'postcode';
+  return {
+    apple: 'Drive times from Apple Maps.',
+    estimate: 'Drive times are estimates from distance.',
+    'signed-out': 'Sign in to include real drive times.',
+    'no-postcode': `Add the customer’s ${code} to include drive times.`,
+    'postcode-not-found': `We couldn’t find that ${code}, so drive times are left out.`,
+    offline: 'You’re offline, so drive times are left out.',
+  }[note];
 };
 
 export default function SuggestTimesScreen() {
+  const isUS = useRegion().country === 'US';
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const router = useRouter();
   // Opened from a link or notification there may be nothing to go back to; then go Home.
@@ -160,7 +165,7 @@ export default function SuggestTimesScreen() {
         {!customer.postcode?.trim() && (
           <Group className="mb-6">
             <FieldRow
-              label="Customer’s postcode"
+              label={isUS ? 'Customer’s ZIP code' : 'Customer’s postcode'}
               hint="So the drive is counted"
               value={postcode}
               onChangeText={setPostcode}
@@ -176,7 +181,7 @@ export default function SuggestTimesScreen() {
                   className="px-4 min-h-[48px] justify-center"
                   accessibilityRole="button"
                 >
-                  <Text className="text-link text-base font-semibold">Use this postcode</Text>
+                  <Text className="text-link text-base font-semibold">{isUS ? 'Use this ZIP code' : 'Use this postcode'}</Text>
                 </Pressable>
               </>
             )}
@@ -224,7 +229,9 @@ export default function SuggestTimesScreen() {
         ) : !result ? (
           <Group className="p-6 items-center">
             <ActivityIndicator color={t.link} />
-            <Text className="text-secondary text-sm mt-2">Checking your diary and drive times…</Text>
+            <Text className="text-secondary text-sm mt-2">
+              {isUS ? 'Checking your schedule and drive times…' : 'Checking your diary and drive times…'}
+            </Text>
           </Group>
         ) : result.suggestions.length === 0 ? (
           <Group className="p-4">
@@ -279,7 +286,7 @@ export default function SuggestTimesScreen() {
         )}
         {result && (
           <Text className="text-secondary text-[13px] mx-1 mt-2">
-            {TRAVEL_NOTE[result.travel]} Times only suggest — nothing is booked until you confirm.
+            {travelNote(result.travel, isUS)} Times only suggest — nothing is booked until you confirm.
           </Text>
         )}
         {result?.travel === 'signed-out' && (

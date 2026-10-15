@@ -618,7 +618,7 @@ export default function AddJobScreen() {
           )}
         </Group>
         <Text className="text-secondary text-[13px] mx-1 mb-8">
-          {hasDate ? 'You’ll get a reminder before the job.' : 'After saving, Tradie can suggest times that fit your diary.'}
+          {hasDate ? 'You’ll get a reminder before the job.' : `After saving, Tradie can suggest times that fit your ${getRegion().country === 'US' ? 'schedule' : 'diary'}.`}
         </Text>
 
         <Text className="text-secondary text-[13px] mx-1">

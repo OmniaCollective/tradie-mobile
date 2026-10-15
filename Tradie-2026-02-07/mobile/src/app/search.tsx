@@ -16,6 +16,7 @@ import {
   useSettings,
   jobName,
   invoiceNumberLabel,
+  getRegion,
   type Job,
   type Invoice,
 } from '@/lib/store';
@@ -83,7 +84,7 @@ export default function SearchScreen() {
               className="flex-1 text-fg text-base ml-2 py-2.5"
               value={query}
               onChangeText={setQuery}
-              placeholder="Name, INV number, job, postcode or amount"
+              placeholder={`Name, INV number, job, ${getRegion().country === 'US' ? 'ZIP code' : 'postcode'} or amount`}
               placeholderTextColor={t.secondary}
               autoFocus
               autoCorrect={false}
