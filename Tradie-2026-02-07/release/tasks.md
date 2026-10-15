@@ -31,10 +31,11 @@ minimum charge), and can be changed on each line.
 
 Quotes stay free and unlimited (decided 2026-10-15).
 
-### Profit box: free or Pro? (under review)
-On the job screen (`src/app/job/[id].tsx`, "Profit"). Free today. Either lock it for free
-users (locked version opens `UpgradePrompt`), or leave it free: it only counts parts for
-free users, and expenses (already Pro) fill it in. The parts list itself stays free.
+### Profit box stays free, with a Pro nudge
+On the job screen (`src/app/job/[id].tsx`, "Profit"). Stays free (decided 2026-10-15). For
+free users, it only counts parts. Add a line under it, such as "Add expenses to see your
+full profit (Pro)", that opens `UpgradePrompt`. Pro users, whose job expenses already
+count, don't see the line.
 
 ### Fix the invoice loopholes (free plan: 3 invoices a month)
 Found 2026-10-15. Free users can send more than 3 invoices a month in two ways:
