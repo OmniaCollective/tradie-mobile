@@ -22,6 +22,7 @@ const BENEFITS = [
   { title: 'Unlimited invoices', detail: `Free plan is ${FREE_LIMITS.invoicesPerMonth} a month` },
   { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
   { title: 'Expenses and receipts', detail: 'Tax-year exports for your accountant' },
+  { title: 'Price list and parts markup', detail: 'Build itemised quotes in seconds' },
   ...(VOICE_ENABLED ? [{ title: 'Add jobs by voice', detail: 'Unlimited voice jobs' }] : []),
 ];
 

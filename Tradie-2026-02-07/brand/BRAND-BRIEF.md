@@ -100,7 +100,7 @@ Section titles are sentence case ("Quotes waiting"), not uppercase labels.
 1. **Welcome + sign in** — three benefits (voice jobs, quote and invoice, tax worked out), "Continue with Apple" (Apple's black/white button style), "Not now".
 2. **Your trade** — step 2 of 3, list of trades with line icons, tick on the chosen one, Continue.
 3. **Home** — as section 8.
-4. **Tradie Pro** — four benefits with ticks, Yearly £99.99 ("£8.33 a month · 2 months free", preselected) or Monthly £9.99, "Start Pro", Restore purchase, Terms, Privacy, auto-renew line, "Free plan: 3 invoices a month".
+4. **Tradie Pro** — benefits with ticks (1.7 adds "Price list and parts markup"), Yearly £99.99 ("£8.33 a month · 2 months free", preselected) or Monthly £9.99, "Start Pro", Restore purchase, Terms, Privacy, auto-renew line, "Free plan: 3 invoices a month".
 
 ## 10. Voice and copy
 

@@ -1,10 +1,11 @@
 /**
  * Pro access and free-plan limits (offer agreed 2026-10-06, brand/BRAND-BRIEF.md).
  *
- * Free: unlimited jobs, customers, quotes and booking invites; 3 invoices a
- * calendar month; 3 voice jobs in total (counted on the server, see server/).
+ * Free: unlimited jobs, customers, quotes (itemised) and booking invites; 3 invoices
+ * a calendar month, counted the first time each one's PDF leaves the app; 3 voice jobs
+ * in total (counted on the server, see server/); logo, notes and the job profit box.
  * Pro: unlimited invoices, tax set-aside and VAT tracker, expenses and receipts,
- * tax-year exports, unlimited voice jobs.
+ * tax-year exports, unlimited voice jobs, price list and parts markup (1.7).
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';

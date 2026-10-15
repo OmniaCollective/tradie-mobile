@@ -2,6 +2,10 @@
 
 Next version: **1.7** (1.6.1 is live).
 
+Status: all tasks below are built on branch `v1.7-work` (not merged, not built). Release notes and the
+on-device checklist are in `v1.7.md`. One gap: "Page X of Y" isn't on the PDFs, because the iPhone's
+PDF maker doesn't support page numbers; column headings do repeat on each page.
+
 ## To do
 
 ### Logo on quotes and invoices (free)

@@ -170,6 +170,8 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
 
   // ── Spreadsheet ──
   const hasVat = paid.some((i) => i.quote.vat > 0);
+  const hasSalesTax = paid.some((i) => (i.quote.salesTax ?? 0) > 0);
+  const hasReverse = paid.some((i) => (i.quote.reverseChargeVat ?? 0) > 0);
   const hasCis = paid.some((i) => i.cisDeducted && (i.cisDeductionAmount ?? 0) > 0);
   const cis = (i: Invoice) => (i.cisDeducted ? (i.cisDeductionAmount ?? 0) : 0);
   const incomeCols: Sheet['columns'] = [
@@ -177,6 +179,12 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
     { title: 'Invoice', width: 11 },
     { title: 'Customer', width: 26 },
     { title: 'Job', width: 28 },
+    // What was charged for labour, materials and anything else (before VAT or sales tax).
+    { title: 'Labour', width: 12 },
+    { title: 'Materials', width: 12 },
+    { title: 'Other', width: 12 },
+    ...(hasReverse ? [{ title: 'Reverse charge VAT (not charged)', width: 16 }] : []),
+    ...(hasSalesTax ? [{ title: 'Sales tax', width: 11 }] : []),
     ...(hasVat
       ? [
           { title: 'Before VAT', width: 13 },
@@ -198,6 +206,11 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
       invoiceNumberLabel(i),
       input.getCustomer(i.customerId)?.name ?? '',
       job ? jobName(job, settings.trade) : '',
+      { money: i.quote.labour },
+      { money: i.quote.materials },
+      { money: i.quote.other ?? 0 },
+      ...(hasReverse ? [{ money: i.quote.reverseChargeVat ?? 0 }] : []),
+      ...(hasSalesTax ? [{ money: i.quote.salesTax ?? 0 }] : []),
       ...(hasVat
         ? [{ money: i.quote.total - i.quote.vat }, { money: i.quote.vat }, { money: i.quote.total }]
         : [{ money: i.quote.total }]),
