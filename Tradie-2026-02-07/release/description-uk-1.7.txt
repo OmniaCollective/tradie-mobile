@@ -1,0 +1,33 @@
+Tradie is the job app for solo traders. Quote from your own prices, turn finished jobs into invoices, and know what to set aside for tax, all from your phone.
+
+QUOTES AND INVOICES
+• Itemised quotes and invoices: labour, materials, a call-out fee or a discount, each with its own quantity and price
+• Your logo at the top of every quote and invoice
+• Your own notes or terms, and how long quotes are valid
+• VAT-registered? Set the VAT rate for each item, and use the reverse charge for CIS work
+• Professional A4 PDFs, sent from your phone
+• See what's waiting for payment and what's paid, with one-tap reminders
+
+JOBS AND SCHEDULING
+• Suggest times: Tradie checks your diary, your iPhone calendar and the drive between jobs, then texts the customer three times that work
+• Times stay pencilled in until the customer replies; book with one tap
+• Sync jobs to your iPhone calendar, with reminders
+• Notes, photos and parts on every job, and the profit on each one
+
+TAX, SORTED (PRO)
+• Income Tax and Class 4 NI worked out as you go
+• A monthly "set aside" figure so January isn't a shock
+• VAT threshold tracker, CIS deductions (on labour only), standard and flat rate VAT
+• Expenses with receipt photos, and a tax-year export for your accountant
+
+SAVE TIME (PRO)
+• A price list of the items you use most, added to any quote in a tap
+• Add the parts you've logged to a quote with your markup
+
+Built for plumbers, electricians, gardeners, cleaners, carpenters, window cleaners and more.
+
+Free: unlimited jobs, customers and itemised quotes, your logo on every PDF, and 3 invoices a month. Tradie Pro adds unlimited invoices, the tax tracker, expenses and receipts, tax-year exports, and the price list with parts markup.
+
+Tax figures are estimates to help you plan, not tax advice.
+
+Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
