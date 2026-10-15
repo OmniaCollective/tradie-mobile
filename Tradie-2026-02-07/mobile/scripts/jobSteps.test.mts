@@ -76,7 +76,7 @@ ok('legacy: paid → PAID', legacyStatus(jobFacts({}, { status: 'paid' }), 'INVO
 ok('legacy: lost keeps what it had', legacyStatus(jobFacts({ lostAt: daysAgo(1) }), 'QUOTED') === 'QUOTED');
 
 // ── Updating 1.5 data (version 8) to version 9
-ok('store version is 9', STORE_VERSION === 9);
+ok('store version is 10', STORE_VERSION === 10); // 1.7 added line items (see pricing.test.mts)
 const v8 = () => ({
   hasCompletedOnboarding: true,
   settings: { businessName: 'Smith Plumbing', taxTipSeen: true, paymentTermsDays: 14 },

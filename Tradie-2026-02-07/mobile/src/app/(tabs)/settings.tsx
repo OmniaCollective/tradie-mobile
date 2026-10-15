@@ -36,6 +36,7 @@ export default function AccountScreen() {
   const account = useAccount();
   const loadSampleData = useTradeStore((s) => s.loadSampleData);
   const clearAllData = useTradeStore((s) => s.clearAllData);
+  const priceListCount = useTradeStore((s) => s.priceList.length);
   const [confirmClear, setConfirmClear] = useState(false);
 
   const prefs = reminderPrefs(settings);
@@ -53,6 +54,11 @@ export default function AccountScreen() {
         value: settings.paymentDetails.trim() ? `Details added · ${settings.paymentTermsDays ?? 14} days` : NOT_ADDED,
       },
       {
+        page: 'documents',
+        label: 'Quotes and invoices',
+        value: settings.logoFile ? 'Logo added' : 'Logo, notes and terms',
+      },
+      {
         page: 'prices',
         label: 'Prices and tax',
         value: `${currencySymbol()}${settings.hourlyRate}/hour · ${pricingPresets.filter((p) => p.type !== 'emergency').length} job types`,
@@ -66,6 +72,13 @@ export default function AccountScreen() {
             ? `${nextRenewal.name.split(' ')[0]} runs out in ${Math.max(0, daysUntil(nextRenewal.expires))} days`
             : `${renewals.length} added`,
         alert: !!renewalSoon,
+      },
+    ],
+    [
+      {
+        page: 'pricelist',
+        label: 'Price list',
+        value: !isPro ? 'Pro' : priceListCount ? `${priceListCount} ${priceListCount === 1 ? 'item' : 'items'}` : 'None saved yet',
       },
     ],
     [

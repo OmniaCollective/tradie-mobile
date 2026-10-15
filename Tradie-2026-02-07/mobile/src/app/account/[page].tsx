@@ -4,7 +4,8 @@
  * go, and say so. Agreed design: release/ux-journey-review.md.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Linking, Pressable } from 'react-native';
+import { View, Text, ScrollView, Linking, Pressable, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
@@ -14,6 +15,7 @@ import {
   useJobs,
   useRegion,
   reminderPrefs,
+  QUOTE_VALID_DAYS,
   type USFilingStatus,
   jobName,
 } from '@/lib/store';
@@ -41,14 +43,29 @@ import {
   ModalFooter,
   PrimaryButton,
   LabeledField,
+  Sheet,
 } from '@/components/ui';
-import { currencySymbol } from '@/lib/money';
+import { currencySymbol, formatAmount } from '@/lib/money';
+import { LINE_KIND_LABELS, LINE_UNITS, type LineKind } from '@/lib/pricing';
+import { saveLogo, deleteLogo, logoFileUri } from '@/lib/logo';
+import { track } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
-import { Check } from 'lucide-react-native';
+import { Check, ImagePlus, ListPlus, Plus } from 'lucide-react-native';
 import { toast } from '@/components/Toast';
 
 export type AccountPage =
-  'business' | 'pay' | 'prices' | 'insurance' | 'diary' | 'reminders' | 'appearance' | 'plan' | 'signin' | 'help';
+  | 'business'
+  | 'pay'
+  | 'documents'
+  | 'prices'
+  | 'pricelist'
+  | 'insurance'
+  | 'diary'
+  | 'reminders'
+  | 'appearance'
+  | 'plan'
+  | 'signin'
+  | 'help';
 
 const SUPPORT_EMAIL = 'paul@builtbyomnia.com';
 
@@ -71,7 +88,9 @@ export default function AccountPageScreen() {
   const titles: Record<AccountPage, string> = {
     business: 'Your business',
     pay: 'Getting paid',
+    documents: 'Quotes and invoices',
     prices: 'Prices and tax',
+    pricelist: 'Price list',
     insurance: 'Insurance and licences',
     diary: isUS ? 'Schedule' : 'Diary',
     reminders: 'Reminders',
@@ -87,8 +106,12 @@ export default function AccountPageScreen() {
         return <BusinessPage onDone={close} />;
       case 'pay':
         return <PayPage onDone={close} />;
+      case 'documents':
+        return <DocumentsPage onDone={close} />;
       case 'prices':
         return <PricesPage />;
+      case 'pricelist':
+        return <PriceListPage />;
       case 'insurance':
         return (
           <ScrollView
@@ -287,6 +310,8 @@ function PayPage({ onDone }: { onDone: () => void }) {
 
 function PricesPage() {
   const settings = useSettings();
+  const router = useRouter();
+  const { isPro } = useProAccess();
   const isUS = useRegion().country === 'US';
   const pricingPresets = usePricingPresets();
   const set = useTradeStore((s) => s.updateSettings);
@@ -344,7 +369,56 @@ function PricesPage() {
           onChangeNumber={(n) => set({ travelRatePerMile: n })}
           width="w-14"
         />
+        <RowDivider />
+        {isPro ? (
+          <NumberFieldRow
+            label="Materials markup"
+            hint="Added to parts you bring into a price"
+            suffix="%"
+            value={settings.materialsMarkupPercent ?? 0}
+            onChangeNumber={(n) => set({ materialsMarkupPercent: n })}
+            width="w-14"
+          />
+        ) : (
+          <LinkRow label="Materials markup" value="Pro" onPress={() => router.push('/paywall')} />
+        )}
       </Group>
+
+      {isUS && (
+        <>
+          <SectionHeader title="Sales tax" />
+          <Group className="mb-2">
+            <NumberFieldRow
+              label="Sales tax rate"
+              hint="Your state and local rate. 0 for none."
+              suffix="%"
+              value={settings.salesTaxRate ?? 0}
+              onChangeNumber={(n) => set({ salesTaxRate: n })}
+              width="w-16"
+            />
+            {(settings.salesTaxRate ?? 0) > 0 && (
+              <>
+                <RowDivider />
+                <ChoiceRow
+                  label="On materials only"
+                  hint="Most states don’t tax labor"
+                  selected={(settings.salesTaxOn ?? 'materials') === 'materials'}
+                  onPress={() => set({ salesTaxOn: 'materials' })}
+                />
+                <RowDivider />
+                <ChoiceRow
+                  label="On everything"
+                  selected={settings.salesTaxOn === 'all'}
+                  onPress={() => set({ salesTaxOn: 'all' })}
+                />
+              </>
+            )}
+          </Group>
+          <Text className="text-secondary text-[13px] mx-1 mb-8">
+            Added to invoices as its own line. Check your state’s rules for what’s taxable.
+          </Text>
+        </>
+      )}
 
       <SectionHeader title="Job prices" />
       <Group className="mb-8">
@@ -856,6 +930,266 @@ function HelpPage() {
           }}
         />
       </Group>
+    </ScrollView>
+  );
+}
+
+// ── Quotes and invoices (Save; the logo saves straight away) ───────────────────
+
+function DocumentsPage({ onDone }: { onDone: () => void }) {
+  const settings = useSettings();
+  const isUS = useRegion().country === 'US';
+  const updateSettings = useTradeStore((s) => s.updateSettings);
+  const t = useTheme();
+  const start = {
+    quoteValidDays: String(settings.quoteValidDays ?? QUOTE_VALID_DAYS),
+    quoteFooter: settings.quoteFooter ?? '',
+    invoiceFooter: settings.invoiceFooter ?? '',
+    companyNumber: settings.companyNumber ?? '',
+    website: settings.website ?? '',
+  };
+  const [d, setD] = useState(start);
+  const [logoUri, setLogoUri] = useState<string | undefined>(settings.logoFile ? logoFileUri(settings.logoFile) : undefined);
+  const changed = (Object.keys(start) as (keyof typeof start)[]).some((k) => d[k] !== start[k]);
+  const days = parseInt(d.quoteValidDays, 10);
+
+  const pickLogo = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    const name = await saveLogo(result.assets[0].uri, settings.logoFile);
+    updateSettings({ logoFile: name });
+    setLogoUri(`${logoFileUri(name)}?${Date.now()}`);
+    track('logo_added');
+    toast('Logo added');
+  };
+  const removeLogo = async () => {
+    await deleteLogo(settings.logoFile);
+    updateSettings({ logoFile: undefined });
+    setLogoUri(undefined);
+    toast('Logo removed');
+  };
+
+  const save = async () => {
+    updateSettings({
+      quoteValidDays: days > 0 ? days : QUOTE_VALID_DAYS,
+      quoteFooter: d.quoteFooter.trim() || undefined,
+      invoiceFooter: d.invoiceFooter.trim() || undefined,
+      companyNumber: d.companyNumber.trim() || undefined,
+      website: d.website.trim() || undefined,
+    });
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    toast('Saved');
+    onDone();
+  };
+
+  return (
+    <>
+      <ScrollView
+        className="flex-1"
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+      >
+        <SectionHeader title="Logo" />
+        <Group className="mb-2">
+          {logoUri ? (
+            <>
+              <View className="items-center justify-center bg-white p-4" style={{ minHeight: 112 }}>
+                <Image source={{ uri: logoUri }} style={{ width: 200, height: 80 }} resizeMode="contain" accessibilityLabel="Your logo" />
+              </View>
+              <RowDivider />
+              <LinkRow icon={ImagePlus} label="Change logo" onPress={pickLogo} />
+              <RowDivider />
+              <LinkRow label="Remove logo" destructive onPress={removeLogo} />
+            </>
+          ) : (
+            <Pressable onPress={pickLogo} className="flex-row items-center px-4 min-h-[52px] active:opacity-70" accessibilityRole="button">
+              <ImagePlus size={20} color={t.link} strokeWidth={2} />
+              <Text className="text-link text-base font-semibold ml-2">Add your logo</Text>
+            </Pressable>
+          )}
+        </Group>
+        <Text className="text-secondary text-[13px] mx-1 mb-8">
+          Shown at the top of every quote and invoice. A square or wide image on a white background works best.
+        </Text>
+
+        <SectionHeader title="Quotes" />
+        <View className="gap-4 mb-8">
+          <LabeledField
+            label="Quotes are valid for (days)"
+            value={d.quoteValidDays}
+            onChangeText={(v) => /^\d{0,3}$/.test(v) && setD({ ...d, quoteValidDays: v })}
+            keyboardType="number-pad"
+            hint="Sets the “Valid until” date on new quotes."
+          />
+          <LabeledField
+            label="Note on quotes"
+            optional
+            value={d.quoteFooter}
+            onChangeText={(v) => setD({ ...d, quoteFooter: v })}
+            multiline
+            style={{ minHeight: 88, paddingTop: 12, textAlignVertical: 'top' }}
+            hint="For example: 50% deposit to book. Price includes all waste removal."
+          />
+        </View>
+
+        <SectionHeader title="Invoices" />
+        <View className="gap-4 mb-8">
+          <LabeledField
+            label="Note on invoices"
+            optional
+            value={d.invoiceFooter}
+            onChangeText={(v) => setD({ ...d, invoiceFooter: v })}
+            multiline
+            style={{ minHeight: 88, paddingTop: 12, textAlignVertical: 'top' }}
+            hint="Shown at the bottom. Leave empty for “Thank you for your business.”"
+          />
+        </View>
+
+        <SectionHeader title="Extra details" />
+        <View className="gap-4">
+          {!isUS && (
+            <LabeledField
+              label="Company number"
+              optional
+              value={d.companyNumber}
+              onChangeText={(v) => setD({ ...d, companyNumber: v })}
+              autoCapitalize="characters"
+              hint="Only if you’re a limited company."
+            />
+          )}
+          <LabeledField
+            label="Website"
+            optional
+            value={d.website}
+            onChangeText={(v) => setD({ ...d, website: v })}
+            keyboardType="url"
+            autoCapitalize="none"
+          />
+        </View>
+      </ScrollView>
+      <ModalFooter>
+        <PrimaryButton label="Save" onPress={save} disabled={!changed || !(days > 0)} />
+      </ModalFooter>
+    </>
+  );
+}
+
+// ── Price list (Pro; saves as you go) ──────────────────────────────────────────
+
+type PriceDraft = { id?: string; kind: Exclude<LineKind, 'discount'>; description: string; unit?: string; unitPrice: string };
+
+function PriceListPage() {
+  const router = useRouter();
+  const t = useTheme();
+  const { isPro } = useProAccess();
+  const items = useTradeStore((s) => s.priceList);
+  const addPriceItem = useTradeStore((s) => s.addPriceItem);
+  const updatePriceItem = useTradeStore((s) => s.updatePriceItem);
+  const removePriceItem = useTradeStore((s) => s.removePriceItem);
+  const [draft, setDraft] = useState<PriceDraft | null>(null);
+  const sorted = [...items].sort((a, b) => a.description.localeCompare(b.description));
+
+  if (!isPro) {
+    return (
+      <View className="flex-1 p-4">
+        <Group className="p-5 items-center">
+          <ListPlus size={24} color={t.link} strokeWidth={2} />
+          <Text className="text-fg text-[17px] font-semibold text-center mt-3 mb-1">Save your prices with Pro</Text>
+          <Text className="text-secondary text-[15px] text-center mb-5">
+            Keep the items you use most, like a call-out fee or a valve, and add them to any quote in a tap.
+          </Text>
+          <PrimaryButton label="See Tradie Pro" onPress={() => (track('pro_locked_tap_price_list'), router.push('/paywall'))} />
+        </Group>
+      </View>
+    );
+  }
+
+  const price = parseFloat(draft?.unitPrice.replace(',', '.') ?? '');
+  const save = () => {
+    if (!draft || !draft.description.trim() || !(price >= 0)) return;
+    const item = { kind: draft.kind, description: draft.description.trim(), unit: draft.unit, unitPrice: Math.round(price * 100) / 100 };
+    if (draft.id) updatePriceItem(draft.id, item);
+    else addPriceItem(item);
+    toast(draft.id ? 'Item updated' : 'Item saved');
+    setDraft(null);
+  };
+
+  return (
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+      <Group className="mb-2">
+        {sorted.map((item, i) => (
+          <View key={item.id}>
+            {i > 0 && <RowDivider />}
+            <LinkRow
+              label={item.description}
+              value={`${formatAmount(item.unitPrice)}${item.unit ? `/${item.unit}` : ''}`}
+              onPress={() =>
+                setDraft({ id: item.id, kind: item.kind, description: item.description, unit: item.unit, unitPrice: String(item.unitPrice) })
+              }
+            />
+          </View>
+        ))}
+        {sorted.length > 0 && <RowDivider />}
+        <Pressable
+          onPress={() => setDraft({ kind: 'materials', description: '', unitPrice: '' })}
+          className="flex-row items-center px-4 min-h-[52px] active:opacity-70"
+          accessibilityRole="button"
+        >
+          <Plus size={20} color={t.link} strokeWidth={2} />
+          <Text className="text-link text-base font-semibold ml-2">Add item</Text>
+        </Pressable>
+      </Group>
+      <Text className="text-secondary text-[13px] mx-1">
+        Add these to any quote from Edit price → Add item. Changing a price here doesn’t change quotes already made.
+      </Text>
+
+      {draft && (
+        <Sheet visible onClose={() => setDraft(null)}>
+          <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ maxHeight: 600 }}>
+            <Text className="text-fg text-[20px] font-semibold mb-4">{draft.id ? 'Edit item' : 'New item'}</Text>
+            <LabeledField
+              className="mb-4"
+              label="What is it?"
+              value={draft.description}
+              onChangeText={(v) => setDraft({ ...draft, description: v })}
+              placeholder="e.g. Call-out fee"
+              autoFocus={!draft.id}
+            />
+            <Segmented
+              className="mb-4 bg-bg"
+              options={(['labour', 'materials', 'other'] as const).map((k) => ({ key: k, label: LINE_KIND_LABELS[k] }))}
+              value={draft.kind}
+              onChange={(k) => setDraft({ ...draft, kind: k })}
+            />
+            <LabeledField
+              className="mb-4"
+              label="Price"
+              value={draft.unitPrice}
+              onChangeText={(v) => /^\d*[.,]?\d*$/.test(v) && setDraft({ ...draft, unitPrice: v })}
+              placeholder={currencySymbol()}
+              keyboardType="decimal-pad"
+            />
+            <Text className="text-secondary text-[13px] mx-0.5 mb-1.5">Unit</Text>
+            <Segmented
+              className="mb-5 bg-bg"
+              options={[{ key: 'each', label: 'each' }, ...LINE_UNITS.map((u) => ({ key: u as string, label: u as string }))]}
+              value={draft.unit ?? 'each'}
+              onChange={(u) => setDraft({ ...draft, unit: u === 'each' ? undefined : u })}
+            />
+            <PrimaryButton label={draft.id ? 'Save' : 'Add to price list'} onPress={save} disabled={!draft.description.trim() || !(price >= 0)} />
+            {draft.id && (
+              <Pressable
+                onPress={() => (removePriceItem(draft.id!), setDraft(null), toast('Item removed'))}
+                className="min-h-[48px] items-center justify-center mt-1"
+                accessibilityRole="button"
+              >
+                <Text className="text-alert text-base font-semibold">Remove from price list</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+        </Sheet>
+      )}
     </ScrollView>
   );
 }
