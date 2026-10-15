@@ -120,7 +120,7 @@ it's no longer `auto`.
   only, excluding materials and VAT. Today `createInvoice` and `updateInvoicePrices` take
   `total × cisRate`, which includes materials and VAT. That deducts too much, so the
   invoice's "To pay" figure is too low. With lines, the deduction becomes
-  `labourSubtotal × cisRate`. Also worth fixing in 1.6.x on its own:
+  `labourSubtotal × cisRate`. Fixed ahead of line items:
   `(total − VAT − materials) × cisRate`. Done 2026-10-15, see `src/lib/cis.ts`.
 - **Discounts** reduce the subtotal before VAT. A discount can't take the total below
   zero.
@@ -160,19 +160,16 @@ it's no longer `auto`.
   lines must be correct.
 - Gate (CLAUDE.md): `npx tsc --noEmit`, `npx expo-doctor`, `npx eslint . --quiet`.
 
-## 8. Phases and estimate
+## 8. Order of work
 
-| # | Work | Days |
-|---|------|------|
-| 1 | Model, `priceLines`, migration, tests | 1 |
-| 2 | `/price` editor (replaces both old sheets), job screen summary | 1.5 |
-| 3 | PDF table, multi-page, A4/Letter | 0.5–1 |
-| 4 | Price list, parts to materials with markup, profit | 1 |
-| 5 | CIS on labour, per-line VAT | 0.5 |
-| 6 | Device QA, upgrading from 1.6.1 data | 0.5–1 |
-|   | **Total** | **5–6** |
+1. Model, `priceLines`, migration, tests
+2. `/price` editor (replaces both old sheets), job screen summary
+3. PDF table, multi-page, A4/Letter
+4. Price list, parts to materials with markup, profit
+5. Per-line VAT
+6. Device QA, upgrading from 1.6.1 data
 
-This ships as the next version after 1.6.1.
+Ships in 1.7.
 
 ## Decisions (2026-10-15)
 

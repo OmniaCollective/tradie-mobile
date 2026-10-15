@@ -1,5 +1,7 @@
 # Tasks
 
+Next version: **1.7** (1.6.1 is live).
+
 ## To do
 
 ### Logo on quotes and invoices (free)
