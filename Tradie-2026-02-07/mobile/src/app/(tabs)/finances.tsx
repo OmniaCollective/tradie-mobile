@@ -56,6 +56,7 @@ import { toast } from '@/components/Toast';
 import { Tip } from '@/components/Tip';
 import { track } from '@/lib/analytics';
 import { cisDeduction } from '@/lib/cis';
+import { netOfTax } from '@/lib/pricing';
 
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
@@ -191,7 +192,7 @@ export default function MoneyScreen() {
     return calculateUSTax({
       grossIncome: invoices
         .filter((i) => i.status === 'paid' && inYear(i.paidAt))
-        .reduce((sum, i) => sum + i.quote.total - i.quote.vat, 0),
+        .reduce((sum, i) => sum + netOfTax(i.quote), 0),
       businessExpenses: expenses.filter((e) => inYear(e.date)).reduce((sum, e) => sum + e.amount, 0),
       filingStatus: settings.usFilingStatus ?? 'single',
       otherIncome: settings.onlyIncomeSource ? 0 : settings.otherAnnualIncome,

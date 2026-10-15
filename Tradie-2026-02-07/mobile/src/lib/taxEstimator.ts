@@ -1,6 +1,7 @@
 import type { Invoice, Expense, BusinessSettings } from './store';
 import { parseDate, toDateKey } from './dates';
 import { ukIncomeTaxOnProfit } from './ukIncomeTax';
+import { netOfTax } from './pricing';
 
 // Class 4 NI rates
 const CLASS4_LOWER_RATE = 0.06; // 6% on profits £12,570–£50,270
@@ -101,7 +102,7 @@ export function calculateTaxEstimate(
     }
     // Standard VAT or not registered: income = total minus VAT
     vatOwedToHMRC += inv.quote.vat;
-    return sum + (inv.quote.total - inv.quote.vat);
+    return sum + netOfTax(inv.quote);
   }, 0);
 
   // Total expenses in tax year
@@ -196,5 +197,5 @@ export function calculateRolling12MonthTurnover(invoices: Invoice[]): number {
       if (inv.status !== 'paid' || !inv.paidAt) return false;
       return new Date(inv.paidAt) >= twelveMonthsAgo;
     })
-    .reduce((sum, inv) => sum + (inv.quote.total - inv.quote.vat), 0);
+    .reduce((sum, inv) => sum + netOfTax(inv.quote), 0);
 }

@@ -10,6 +10,7 @@ import { migrateStore, STORE_VERSION } from './storeMigrations';
 import { jobFacts, legacyStatus } from './jobSteps';
 import { deleteReceipt, deleteAllReceipts } from './receipts';
 import { cisDeduction } from './cis';
+import { priceLines, type LineItem, type LineKind, type Priced, type PricingRules } from './pricing';
 import type { ReminderPrefs } from './reminders';
 
 // Selector hooks for performance — useShallow prevents re-renders when
@@ -43,18 +44,36 @@ export interface Customer {
   postcode: string;
 }
 
-export interface Quote {
+/**
+ * A price: the tradie's lines, and what they add up to (lib/pricing.ts). The totals are a
+ * snapshot, worked out again only when the lines are edited, so a saved invoice never
+ * changes on its own.
+ */
+export interface Quote extends Priced {
   id: string;
   jobId: string;
-  labour: number;
-  materials: number;
-  travel: number;
-  /** Only on quotes from before 1.6; new quotes put the emergency rate into labour. */
-  emergencySurcharge: number;
-  vat: number;
-  total: number;
+  lines: LineItem[];
+  /** False: the PDF lists the items but shows only the totals. Unset = show prices. */
+  showItemPrices?: boolean;
+  /** UK construction reverse charge: VAT shown, not charged; the customer pays it to HMRC. */
+  reverseCharge?: boolean;
   validUntil: string;
   createdAt: string;
+  /** Only on quotes from before 1.7, which had fixed rows (now lines). */
+  travel?: number;
+  /** Only on quotes from before 1.6. */
+  emergencySurcharge?: number;
+}
+
+/** An item saved for quick adding: the price list (Pro). */
+export interface SavedItem {
+  id: string;
+  kind: Exclude<LineKind, 'discount'>;
+  description: string;
+  unit?: string;
+  unitPrice: number;
+  /** Most recently used first when adding. */
+  lastUsedAt?: string;
 }
 
 export interface Part {
@@ -122,6 +141,8 @@ export interface Invoice {
   quote: Quote;
   status: 'pending' | 'sent' | 'paid';
   sentAt?: string;
+  /** First time the PDF left the app (send, share, chase). Counts toward the free plan's 3 a month. */
+  sharedAt?: string;
   paidAt?: string;
   cisDeducted?: boolean;
   cisDeductionAmount?: number;
@@ -238,6 +259,23 @@ export interface BusinessSettings {
   tipsSeen?: TipKey[];
   /** Which reminders the tradie wants. Unset = all on. */
   reminders?: Partial<ReminderPrefs>;
+  /** Pro: added to a part's cost when it's brought into a price, e.g. 20 = 20%. */
+  materialsMarkupPercent?: number;
+  /** US only: sales tax rate charged on invoices, e.g. 8.25. Unset = none. */
+  salesTaxRate?: number;
+  /** US only: sales tax on materials only (default), or on everything. */
+  salesTaxOn?: 'materials' | 'all';
+  /** Days a new quote stays valid. Unset = QUOTE_VALID_DAYS. */
+  quoteValidDays?: number;
+  /** Printed at the bottom of quotes, e.g. terms. */
+  quoteFooter?: string;
+  /** Printed at the bottom of invoices, e.g. "Thank you for your business". */
+  invoiceFooter?: string;
+  /** Company registration number, printed under the business details. */
+  companyNumber?: string;
+  website?: string;
+  /** File name of the business logo in the app's documents (lib/logo.ts). */
+  logoFile?: string;
 }
 
 export type Appearance = 'automatic' | 'light' | 'dark';
@@ -313,6 +351,8 @@ interface TradeStore {
   renewals: Renewal[];
   settings: BusinessSettings;
   pricingPresets: PricingPreset[];
+  /** Saved items for quick adding (Pro). */
+  priceList: SavedItem[];
 
   // Tax set-aside tracking
   taxSetAsideTotal: number; // Cumulative amount user has set aside this tax year
@@ -357,8 +397,10 @@ interface TradeStore {
   // Invoice actions
   createInvoice: (jobId: string) => string | null;
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
-  /** Corrects an unpaid invoice's amounts; VAT, total and any CIS deduction are worked out again. */
-  updateInvoicePrices: (id: string, prices: QuotePrices) => void;
+  /** Corrects an unpaid invoice's lines; VAT, total and any CIS deduction are worked out again. */
+  setInvoiceLines: (id: string, lines: LineItem[], options?: PriceOptions) => void;
+  /** The invoice PDF has left the app (sent, shared or chased). The first time counts toward the free plan. */
+  recordInvoiceShared: (id: string) => void;
   /** Removes an invoice made by mistake; its job goes back to Done so it can be invoiced again. */
   deleteInvoice: (id: string) => void;
   getInvoice: (id: string) => Invoice | undefined;
@@ -378,6 +420,13 @@ interface TradeStore {
   addRenewal: (renewal: Omit<Renewal, 'id' | 'createdAt'>) => string;
   updateRenewal: (id: string, updates: Partial<Omit<Renewal, 'id' | 'createdAt'>>) => void;
   deleteRenewal: (id: string) => void;
+
+  // Price list
+  addPriceItem: (item: Omit<SavedItem, 'id'>) => void;
+  updatePriceItem: (id: string, updates: Partial<Omit<SavedItem, 'id'>>) => void;
+  removePriceItem: (id: string) => void;
+  /** Moves an item to the top of the list when it's used. */
+  touchPriceItem: (id: string) => void;
 
   // Settings actions
   updateSettings: (updates: Partial<BusinessSettings>) => void;
@@ -402,8 +451,14 @@ interface TradeStore {
   calculateQuote: (jobType: JobType, urgency: Urgency) => Quote;
   /** A quote for "Something else" at the tradie's own price, at the urgency rate. */
   calculateCustomQuote: (price: number, urgency: Urgency) => Quote;
-  /** Changes a job's quote; VAT and total are worked out again. */
-  updateQuote: (jobId: string, prices: QuotePrices) => void;
+  /** Changes a job's quote lines; VAT and total are worked out again. */
+  setQuoteLines: (jobId: string, lines: LineItem[], options?: PriceOptions) => void;
+}
+
+/** Options on a price, alongside its lines. */
+export interface PriceOptions {
+  showItemPrices?: boolean;
+  reverseCharge?: boolean;
 }
 
 export const useTradeStore = create<TradeStore>()(
@@ -418,6 +473,7 @@ export const useTradeStore = create<TradeStore>()(
       renewals: [],
       settings: defaultSettings,
       pricingPresets: defaultPricingPresets,
+      priceList: [],
       hasCompletedOnboarding: false,
 
       // Tax set-aside tracking
@@ -602,20 +658,44 @@ export const useTradeStore = create<TradeStore>()(
         return id;
       },
 
-      updateInvoicePrices: (id, prices) => {
+      setInvoiceLines: (id, lines, options = {}) => {
         const { settings } = get();
         set((state) => ({
           invoices: state.invoices.map((inv) => {
             if (inv.id !== id) return inv;
-            const quote = { ...inv.quote, ...priceQuote(settings, prices, inv.quote.emergencySurcharge) };
+            const quote = repriced(settings, { ...inv.quote, ...options, lines });
             return {
               ...inv,
               quote,
-              cisDeductionAmount: inv.cisDeducted
-                ? cisDeduction(quote, settings.cisRate)
-                : inv.cisDeductionAmount,
+              cisDeductionAmount: inv.cisDeducted ? cisDeduction(quote, settings.cisRate) : inv.cisDeductionAmount,
             };
           }),
+        }));
+      },
+
+      recordInvoiceShared: (id) => {
+        set((state) => ({
+          invoices: state.invoices.map((inv) =>
+            inv.id === id && !inv.sharedAt ? { ...inv, sharedAt: new Date().toISOString() } : inv,
+          ),
+        }));
+      },
+
+      addPriceItem: (item) => {
+        set((state) => ({ priceList: [{ ...item, id: generateId() }, ...state.priceList] }));
+      },
+
+      updatePriceItem: (id, updates) => {
+        set((state) => ({ priceList: state.priceList.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
+      },
+
+      removePriceItem: (id) => {
+        set((state) => ({ priceList: state.priceList.filter((p) => p.id !== id) }));
+      },
+
+      touchPriceItem: (id) => {
+        set((state) => ({
+          priceList: state.priceList.map((p) => (p.id === id ? { ...p, lastUsedAt: new Date().toISOString() } : p)),
         }));
       },
 
@@ -813,49 +893,25 @@ export const useTradeStore = create<TradeStore>()(
       },
 
       // Quote calculation
-      // A new quote is the tradie's own price for the job type, at the urgency rate. Materials and
-      // travel start at nothing and are added by the tradie, never guessed.
+      // A new quote is one labour line: the tradie's own price for the job type, at the urgency
+      // rate. Materials and anything else are added by the tradie, never guessed.
       calculateQuote: (jobType, urgency) => {
         const { settings, pricingPresets } = get();
         const preset = pricingPresets.find((p) => p.type === jobType);
         if (!preset) throw new Error('Invalid job type');
-
-        let labour = Math.max(preset.basePrice, settings.minimumCharge);
-        if (urgency === 'urgent') labour *= settings.urgentMultiplier;
-        else if (urgency === 'emergency') labour *= settings.emergencyMultiplier;
-
-        const now = new Date();
-        return {
-          id: generateId(),
-          jobId: '',
-          ...priceQuote(settings, { labour, materials: 0, travel: 0 }),
-          validUntil: new Date(now.getTime() + QUOTE_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-          createdAt: now.toISOString(),
-        };
+        return newQuote(settings, [autoLabourLine(labourPrice(settings, preset.basePrice, urgency, true), urgency)]);
       },
 
       calculateCustomQuote: (price, urgency) => {
         const { settings } = get();
-        let labour = Math.max(0, price);
-        if (urgency === 'urgent') labour *= settings.urgentMultiplier;
-        else if (urgency === 'emergency') labour *= settings.emergencyMultiplier;
-        const now = new Date();
-        return {
-          id: generateId(),
-          jobId: '',
-          ...priceQuote(settings, { labour, materials: 0, travel: 0 }),
-          validUntil: new Date(now.getTime() + QUOTE_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-          createdAt: now.toISOString(),
-        };
+        return newQuote(settings, [autoLabourLine(labourPrice(settings, price, urgency, false), urgency)]);
       },
 
-      updateQuote: (jobId, prices) => {
+      setQuoteLines: (jobId, lines, options = {}) => {
         const { settings } = get();
         set((state) => ({
           jobs: state.jobs.map((j) =>
-            j.id === jobId && j.quote
-              ? { ...j, quote: { ...j.quote, ...priceQuote(settings, prices, j.quote.emergencySurcharge) } }
-              : j,
+            j.id === jobId && j.quote ? { ...j, quote: repriced(settings, { ...j.quote, ...options, lines }) } : j,
           ),
         }));
       },
@@ -960,34 +1016,68 @@ export function daysOverdue(
   return Math.max(0, -(daysUntilDue(invoice, settings, now) ?? 0));
 }
 
-/** How long a new quote stays valid. */
+/** How long a new quote stays valid, unless the tradie sets their own (settings.quoteValidDays). */
 export const QUOTE_VALID_DAYS = 30;
 
-export interface QuotePrices {
-  labour: number;
-  materials: number;
-  travel: number;
+/** What applies to this tradie's prices: VAT in the UK if registered, sales tax in the US if set. */
+export function pricingRules(
+  settings: Pick<BusinessSettings, 'vatRegistered' | 'vatRate' | 'country' | 'salesTaxRate' | 'salesTaxOn'>,
+): PricingRules {
+  const country = regionFor(settings.country).country;
+  return {
+    vatApplies: settings.vatRegistered && country === 'GB',
+    vatRate: settings.vatRate,
+    salesTaxRate: country === 'US' ? (settings.salesTaxRate ?? 0) : 0,
+    salesTaxOn: settings.salesTaxOn ?? 'materials',
+  };
 }
 
-const roundPence = (n: number) => Math.round(n * 100) / 100;
+/** A quote with its totals worked out again from its lines. */
+export function repriced<Q extends Pick<Quote, 'lines' | 'reverseCharge'>>(settings: BusinessSettings, quote: Q): Q & Priced {
+  const rules = pricingRules(settings);
+  const reverseCharge = rules.vatApplies ? quote.reverseCharge : undefined;
+  return { ...quote, reverseCharge, ...priceLines(rules, quote.lines, { reverseCharge }) };
+}
 
-/** Line amounts plus VAT (VAT-registered UK traders only) and total. */
-export function priceQuote(
-  settings: Pick<BusinessSettings, 'vatRegistered' | 'vatRate' | 'country'>,
-  { labour, materials, travel }: QuotePrices,
-  emergencySurcharge = 0,
-): Pick<Quote, 'labour' | 'materials' | 'travel' | 'emergencySurcharge' | 'vat' | 'total'> {
-  const subtotal = roundPence(labour) + roundPence(materials) + roundPence(travel) + roundPence(emergencySurcharge);
-  const vatApplies = settings.vatRegistered && regionFor(settings.country).country === 'GB';
-  const vat = vatApplies ? roundPence(subtotal * (settings.vatRate / 100)) : 0;
-  return {
-    labour: roundPence(labour),
-    materials: roundPence(materials),
-    travel: roundPence(travel),
-    emergencySurcharge: roundPence(emergencySurcharge),
-    vat,
-    total: roundPence(subtotal + vat),
-  };
+function newQuote(settings: BusinessSettings, lines: LineItem[]): Quote {
+  const now = new Date();
+  const days = settings.quoteValidDays ?? QUOTE_VALID_DAYS;
+  return repriced(settings, {
+    id: generateId(),
+    jobId: '',
+    lines,
+    validUntil: new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: now.toISOString(),
+  });
+}
+
+/** Labour for a job at its urgency rate. A job type's price is never below the minimum charge. */
+export function labourPrice(
+  settings: Pick<BusinessSettings, 'minimumCharge' | 'urgentMultiplier' | 'emergencyMultiplier'>,
+  base: number,
+  urgency: Urgency,
+  applyMinimum: boolean,
+): number {
+  let labour = applyMinimum ? Math.max(base, settings.minimumCharge) : Math.max(0, base);
+  if (urgency === 'urgent') labour *= settings.urgentMultiplier;
+  else if (urgency === 'emergency') labour *= settings.emergencyMultiplier;
+  return Math.round(labour * 100) / 100;
+}
+
+const labourDescription = (urgency: Urgency) => (urgency === 'standard' ? 'Labour' : `Labour (${urgency} rate)`);
+
+/** The labour line made from the job type and urgency. */
+export function autoLabourLine(price: number, urgency: Urgency): LineItem {
+  return { id: generateId(), kind: 'labour', description: labourDescription(urgency), quantity: 1, unitPrice: price, auto: true };
+}
+
+/**
+ * Lines after the job type or urgency changed: the automatic labour line follows (or is added
+ * back if there's none); everything the tradie added or edited stays as it is.
+ */
+export function withAutoLabour(lines: LineItem[], price: number, urgency: Urgency): LineItem[] {
+  if (!lines.some((l) => l.auto)) return [autoLabourLine(price, urgency), ...lines];
+  return lines.map((l) => (l.auto ? { ...l, unitPrice: price, quantity: 1, description: labourDescription(urgency) } : l));
 }
 
 /** The name customers see: the business name, or the tradie's own name if there isn't one. */

@@ -25,6 +25,7 @@ import {
 } from './store';
 import { regionFor, type Country } from './region';
 import { receiptFileUri } from './receipts';
+import { netOfTax } from './pricing';
 import { calculateTaxEstimate, getTaxYearBounds } from './taxEstimator';
 import { calculateUSTax } from './usTaxEstimator';
 import { US_TAX_YEAR } from './data/usTax2026';
@@ -252,7 +253,7 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
   );
 
   // ── Summary PDF ──
-  const income = paid.reduce((s, i) => s + i.quote.total - i.quote.vat, 0);
+  const income = paid.reduce((s, i) => s + netOfTax(i.quote), 0);
   const vatCharged = paid.reduce((s, i) => s + i.quote.vat, 0);
   const cisTotal = paid.reduce((s, i) => s + cis(i), 0);
   const expenseTotal = spent.reduce((s, e) => s + e.amount, 0);

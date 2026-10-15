@@ -1,5 +1,6 @@
 import { v4 as generateId } from 'uuid';
 import type { Job, Customer, Invoice, Expense, Quote, TodoItem } from './store';
+import { quoteWithLines } from './storeMigrations';
 
 // Helper to get dates relative to today
 const daysFromNow = (days: number): string => {
@@ -67,18 +68,22 @@ export function generateSampleData() {
     const validUntil = new Date(createdAt);
     validUntil.setDate(validUntil.getDate() + validDays);
     const subtotal = labour + materials + travel;
-    return {
-      id: generateId(),
-      jobId,
-      labour,
-      materials,
-      travel,
-      emergencySurcharge: 0,
-      vat: 0, // VAT handled separately when VAT-registered
-      total: subtotal,
-      validUntil: validUntil.toISOString(),
-      createdAt,
-    };
+    // Built the way a pre-1.7 quote was saved, then turned into lines like any upgraded quote.
+    return quoteWithLines(
+      {
+        id: generateId(),
+        jobId,
+        labour,
+        materials,
+        travel,
+        emergencySurcharge: 0,
+        vat: 0, // VAT handled separately when VAT-registered
+        total: subtotal,
+        validUntil: validUntil.toISOString(),
+        createdAt,
+      },
+      {},
+    );
   };
 
   // --- Jobs ---

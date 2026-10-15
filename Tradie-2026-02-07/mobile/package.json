@@ -16,7 +16,8 @@
     "test:search": "npx tsx scripts/search.test.mts",
     "test:nudges": "npx tsx scripts/nudges.test.mts",
     "test:xlsx": "npx tsx scripts/xlsx.test.mts",
-    "test:cis": "npx tsx scripts/cis.test.mts"
+    "test:cis": "npx tsx scripts/cis.test.mts",
+    "test:pricing": "npx tsx scripts/pricing.test.mts"
   },
   "dependencies": {
     "@aptabase/react-native": "0.6.0",

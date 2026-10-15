@@ -5,7 +5,7 @@
  */
 
 /** The saved-data version the store writes. Bump it with a new step below. */
-export const STORE_VERSION = 9;
+export const STORE_VERSION = 10;
 
 export function migrateStore(persisted: any, version: number): any {
   if (!persisted || typeof persisted !== 'object') return persisted;
@@ -129,5 +129,66 @@ export function migrateStore(persisted: any, version: number): any {
       }
     }
   }
+  if (version < 10) {
+    // 1.7: prices become line items. Each old fixed row becomes a line, and the saved VAT and
+    // total are kept exactly as they were (never worked out again), so no total changes.
+    const settings = persisted.settings ?? {};
+    const toLines = (quote: any) => quoteWithLines(quote, settings);
+    if (Array.isArray(persisted.jobs)) {
+      persisted.jobs = persisted.jobs.map((j: any) => (j.quote ? { ...j, quote: toLines(j.quote) } : j));
+    }
+    if (Array.isArray(persisted.invoices)) {
+      persisted.invoices = persisted.invoices.map((inv: any) => {
+        if (!inv.quote) return inv;
+        const next = { ...inv, quote: toLines(inv.quote) };
+        // CIS comes off labour only (not materials or VAT). Invoices the customer hasn't seen yet
+        // are corrected; sent and paid ones keep the amount on them.
+        if (next.cisDeducted && next.status === 'pending' && !next.sentAt) {
+          const labour = Math.max(0, next.quote.total - next.quote.vat - next.quote.materials);
+          next.cisDeductionAmount = Math.round(labour * ((settings.cisRate ?? 20) / 100) * 100) / 100;
+        }
+        return next;
+      });
+    }
+    if (!Array.isArray(persisted.priceList)) persisted.priceList = [];
+  }
   return persisted;
+}
+
+const pence = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+let lineCounter = 0;
+const lineId = (quoteId: string) => `${quoteId}-line-${++lineCounter}`;
+
+/** A quote from before 1.7 (fixed rows) as line items, with its saved VAT and total unchanged. */
+export function quoteWithLines(quote: any, settings: any): any {
+  if (Array.isArray(quote.lines)) return quote;
+  const labour = pence(quote.labour);
+  const materials = pence(quote.materials);
+  const travel = pence(quote.travel);
+  const emergency = pence(quote.emergencySurcharge);
+  const lines: any[] = [];
+  const add = (kind: string, description: string, amount: number, extra: object = {}) =>
+    lines.push({ id: lineId(quote.id ?? 'q'), kind, description, quantity: 1, unitPrice: amount, ...extra });
+  // On a job's quote, the labour line still follows its job type and urgency (an invoice's copy never changes).
+  if (labour > 0 || (materials === 0 && travel === 0 && emergency === 0)) add('labour', 'Labour', labour, { auto: true });
+  if (emergency > 0) add('labour', 'Emergency call-out', emergency);
+  if (materials > 0) add('materials', 'Materials', materials);
+  if (travel > 0) add('other', 'Travel', travel);
+  const subtotal = pence(labour + materials + travel + emergency);
+  const vat = pence(quote.vat);
+  const rate = subtotal > 0 && vat > 0 ? Math.round((vat / subtotal) * 1000) / 10 : (settings.vatRate ?? 20);
+  return {
+    ...quote,
+    lines,
+    labour: pence(labour + emergency),
+    materials,
+    other: travel,
+    discount: 0,
+    subtotal,
+    vatBands: vat > 0 ? [{ rate, net: subtotal, vat }] : [],
+    vat,
+    reverseChargeVat: 0,
+    salesTax: 0,
+    total: pence(quote.total),
+  };
 }
