@@ -9,13 +9,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { v4 as generateId } from 'uuid';
 import * as Haptics from 'expo-haptics';
 import { Plus, ChevronUp, ChevronDown, Trash2, ListPlus, Package, Percent, PenLine, Search, Lock } from 'lucide-react-native';
-import { useTradeStore, useSettings, pricingRules, type SavedItem, type Part } from '@/lib/store';
+import { useTradeStore, useSettings, useRegion, getRegion, pricingRules, type SavedItem, type Part } from '@/lib/store';
 import {
   priceLines,
   lineAmount,
   withMarkup,
   roundPence,
-  LINE_KIND_LABELS,
+  lineKindLabels,
   LINE_UNITS,
   type LineItem,
   type LineKind,
@@ -87,6 +87,7 @@ export default function PriceScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const t = useTheme();
   const settings = useSettings();
+  const country = useRegion().country;
   const { isPro, isLoading: proLoading } = useProAccess();
   const invoice = useTradeStore((s) => (kind === 'invoice' ? s.invoices.find((i) => i.id === id) : undefined));
   const job = useTradeStore((s) => s.jobs.find((j) => j.id === (kind === 'invoice' ? invoice?.jobId : id)));
@@ -175,7 +176,7 @@ export default function PriceScreen() {
     const line: LineItem = {
       id: editing.id ?? generateId(),
       kind: editing.kind,
-      description: editing.description.trim() || LINE_KIND_LABELS[editing.kind],
+      description: editing.description.trim() || lineKindLabels(country)[editing.kind],
       quantity,
       unit: editing.unit,
       unitPrice,
@@ -577,7 +578,7 @@ function LineRow({
     ? line.percent
       ? `${line.percent}% off`
       : 'Amount off'
-    : `${line.quantity}${unitLabel(line.unit)} × ${formatAmount(line.unitPrice)} · ${LINE_KIND_LABELS[line.kind as ItemKind]}`;
+    : `${line.quantity}${unitLabel(line.unit)} × ${formatAmount(line.unitPrice)} · ${lineKindLabels(getRegion().country)[line.kind as ItemKind]}`;
   return (
     <View className="flex-row items-center">
       <Pressable
@@ -680,7 +681,7 @@ function LineSheet({
         />
         <Segmented
           className="mb-4 bg-bg"
-          options={(['labour', 'materials', 'other'] as ItemKind[]).map((k) => ({ key: k, label: LINE_KIND_LABELS[k] }))}
+          options={(['labour', 'materials', 'other'] as ItemKind[]).map((k) => ({ key: k, label: lineKindLabels(getRegion().country)[k] }))}
           value={draft.kind}
           onChange={(k) => set({ kind: k })}
         />
@@ -831,7 +832,7 @@ function PriceListPicker({
                 >
                   <View className="flex-1 mr-3">
                     <Text className="text-fg text-base">{item.description}</Text>
-                    <Text className="text-secondary text-sm">{LINE_KIND_LABELS[item.kind]}</Text>
+                    <Text className="text-secondary text-sm">{lineKindLabels(getRegion().country)[item.kind]}</Text>
                   </View>
                   <Text className="text-fg text-base">
                     {formatAmount(item.unitPrice)}

@@ -170,7 +170,7 @@ export function quoteWithLines(quote: any, settings: any): any {
   const add = (kind: string, description: string, amount: number, extra: object = {}) =>
     lines.push({ id: lineId(quote.id ?? 'q'), kind, description, quantity: 1, unitPrice: amount, ...extra });
   // On a job's quote, the labour line still follows its job type and urgency (an invoice's copy never changes).
-  if (labour > 0 || (materials === 0 && travel === 0 && emergency === 0)) add('labour', 'Labour', labour, { auto: true });
+  if (labour > 0 || (materials === 0 && travel === 0 && emergency === 0)) add('labour', settings.country === 'US' ? 'Labor' : 'Labour', labour, { auto: true });
   if (emergency > 0) add('labour', 'Emergency call-out', emergency);
   if (materials > 0) add('materials', 'Materials', materials);
   if (travel > 0) add('other', 'Travel', travel);

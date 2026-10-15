@@ -46,7 +46,7 @@ import {
   Sheet,
 } from '@/components/ui';
 import { currencySymbol, formatAmount } from '@/lib/money';
-import { LINE_KIND_LABELS, LINE_UNITS, type LineKind } from '@/lib/pricing';
+import { lineKindLabels, LINE_UNITS, type LineKind } from '@/lib/pricing';
 import { saveLogo, deleteLogo, logoFileUri } from '@/lib/logo';
 import { track } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
@@ -1087,6 +1087,7 @@ function PriceListPage() {
   const addPriceItem = useTradeStore((s) => s.addPriceItem);
   const updatePriceItem = useTradeStore((s) => s.updatePriceItem);
   const removePriceItem = useTradeStore((s) => s.removePriceItem);
+  const country = useRegion().country;
   const [draft, setDraft] = useState<PriceDraft | null>(null);
   const sorted = [...items].sort((a, b) => a.description.localeCompare(b.description));
 
@@ -1158,7 +1159,7 @@ function PriceListPage() {
             />
             <Segmented
               className="mb-4 bg-bg"
-              options={(['labour', 'materials', 'other'] as const).map((k) => ({ key: k, label: LINE_KIND_LABELS[k] }))}
+              options={(['labour', 'materials', 'other'] as const).map((k) => ({ key: k, label: lineKindLabels(country)[k] }))}
               value={draft.kind}
               onChange={(k) => setDraft({ ...draft, kind: k })}
             />

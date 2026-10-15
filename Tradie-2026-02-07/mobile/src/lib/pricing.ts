@@ -8,11 +8,12 @@
 /** What a line is. Decides CIS (labour only), profit and the accountant pack split. */
 export type LineKind = 'labour' | 'materials' | 'other' | 'discount';
 
-export const LINE_KIND_LABELS: Record<Exclude<LineKind, 'discount'>, string> = {
-  labour: 'Labour',
+/** What each kind is called: "Labour" in the UK, "Labor" in the US. */
+export const lineKindLabels = (country: 'GB' | 'US'): Record<Exclude<LineKind, 'discount'>, string> => ({
+  labour: country === 'US' ? 'Labor' : 'Labour',
   materials: 'Materials',
   other: 'Other',
-};
+});
 
 export interface LineItem {
   id: string;

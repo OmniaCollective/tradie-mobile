@@ -1064,7 +1064,11 @@ export function labourPrice(
   return Math.round(labour * 100) / 100;
 }
 
-const labourDescription = (urgency: Urgency) => (urgency === 'standard' ? 'Labour' : `Labour (${urgency} rate)`);
+/** "Labour" in the UK, "Labor" in the US, with the rate when it isn't standard. */
+const labourDescription = (urgency: Urgency) => {
+  const word = regionFor(useTradeStore.getState().settings.country).country === 'US' ? 'Labor' : 'Labour';
+  return urgency === 'standard' ? word : `${word} (${urgency} rate)`;
+};
 
 /** The labour line made from the job type and urgency. */
 export function autoLabourLine(price: number, urgency: Urgency): LineItem {

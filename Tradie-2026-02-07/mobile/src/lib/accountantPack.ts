@@ -180,7 +180,7 @@ export async function shareAccountantPack(input: PackInput): Promise<void> {
     { title: 'Customer', width: 26 },
     { title: 'Job', width: 28 },
     // What was charged for labour, materials and anything else (before VAT or sales tax).
-    { title: 'Labour', width: 12 },
+    { title: isUS ? 'Labor' : 'Labour', width: 12 },
     { title: 'Materials', width: 12 },
     { title: 'Other', width: 12 },
     ...(hasReverse ? [{ title: 'Reverse charge VAT (not charged)', width: 16 }] : []),
