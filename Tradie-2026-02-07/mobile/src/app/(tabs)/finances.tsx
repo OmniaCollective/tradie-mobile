@@ -55,6 +55,7 @@ import { Group, RowDivider, SectionHeader, PrimaryButton, Segmented, ProgressBar
 import { toast } from '@/components/Toast';
 import { Tip } from '@/components/Tip';
 import { track } from '@/lib/analytics';
+import { cisDeduction } from '@/lib/cis';
 
 const VAT_THRESHOLD = 90000; // HMRC registration threshold from 1 April 2024
 
@@ -301,7 +302,7 @@ export default function MoneyScreen() {
     if (settings.cisRegistered) {
       setCisModal({ invoiceId: invoice.id, total: invoice.quote.total });
       setCisToggle(false);
-      setCisAmount((invoice.quote.total * (settings.cisRate / 100)).toFixed(2));
+      setCisAmount(cisDeduction(invoice.quote, settings.cisRate).toFixed(2));
       return;
     }
     await confirmMarkPaid(invoice.id, false, 0);

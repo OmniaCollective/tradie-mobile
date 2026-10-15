@@ -9,6 +9,7 @@ import { generateSampleData } from './sampleData';
 import { migrateStore, STORE_VERSION } from './storeMigrations';
 import { jobFacts, legacyStatus } from './jobSteps';
 import { deleteReceipt, deleteAllReceipts } from './receipts';
+import { cisDeduction } from './cis';
 import type { ReminderPrefs } from './reminders';
 
 // Selector hooks for performance — useShallow prevents re-renders when
@@ -589,7 +590,7 @@ export const useTradeStore = create<TradeStore>()(
           status: 'pending',
           // Auto-apply CIS deduction if CIS registered
           cisDeducted: cis || undefined,
-          cisDeductionAmount: cis ? Math.round(job.quote.total * (settings.cisRate / 100) * 100) / 100 : undefined,
+          cisDeductionAmount: cis ? cisDeduction(job.quote, settings.cisRate) : undefined,
           createdAt: new Date().toISOString(),
         };
 
@@ -611,7 +612,7 @@ export const useTradeStore = create<TradeStore>()(
               ...inv,
               quote,
               cisDeductionAmount: inv.cisDeducted
-                ? Math.round(quote.total * (settings.cisRate / 100) * 100) / 100
+                ? cisDeduction(quote, settings.cisRate)
                 : inv.cisDeductionAmount,
             };
           }),

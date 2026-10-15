@@ -119,7 +119,7 @@ it's no longer `auto`.
   `total × cisRate`, which includes materials and VAT. That deducts too much, so the
   invoice's "To pay" figure is too low. With lines, the deduction becomes
   `labourSubtotal × cisRate`. Also worth fixing in 1.6.x on its own:
-  `(labour + emergencySurcharge) × cisRate`.
+  `(total − VAT − materials) × cisRate`. Done 2026-10-15, see `src/lib/cis.ts`.
 - **Discounts** reduce the subtotal before VAT. A discount can't take the total below
   zero.
 - **Out of scope:** the domestic reverse charge (construction VAT) and US sales tax. Note
@@ -172,10 +172,12 @@ it's no longer `auto`.
 
 This ships as the next version after 1.6.1.
 
-## Decisions for Paul
+## Decisions (2026-10-15)
 
-1. **Parts:** keep them as the cost record and pull them into the price with a markup
-   (recommended), or merge them into lines completely?
-2. **Pro or free:** is the split in section 6 right?
-3. **Per-line VAT rates:** in the first release, or later?
-4. **CIS fix:** ship it now as a 1.6.2 patch, or wait for line items?
+1. Parts: keep as the cost record, pulled into the price with a markup. **Agreed.**
+2. Free / Pro: itemised lines are free on every quote and invoice (free users keep their
+   3 invoices a month). Price list and parts markup are Pro. **Proposed, to confirm.**
+3. Per-line VAT rates: in the first release, but only shown to VAT-registered UK traders,
+   inside a line's edit sheet (default = their usual rate). **Recommended.**
+4. CIS: fixed now, ahead of line items (`src/lib/cis.ts`, deduction on total less VAT and
+   materials). **Done.**
