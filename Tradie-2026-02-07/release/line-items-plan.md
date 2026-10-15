@@ -176,8 +176,8 @@ This ships as the next version after 1.6.1.
 
 1. Parts: keep as the cost record, pulled into the price with a markup. **Agreed.**
 2. Free / Pro: itemised lines are free on every quote and invoice (free users keep their
-   3 invoices a month). Price list and parts markup are Pro. **Proposed, to confirm.**
+   3 invoices a month). Price list and parts markup are Pro. **Agreed.**
 3. Per-line VAT rates: in the first release, but only shown to VAT-registered UK traders,
-   inside a line's edit sheet (default = their usual rate). **Recommended.**
+   inside a line's edit sheet (default = their usual rate). **Agreed.**
 4. CIS: fixed now, ahead of line items (`src/lib/cis.ts`, deduction on total less VAT and
    materials). **Done.**

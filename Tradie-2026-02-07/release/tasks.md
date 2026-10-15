@@ -2,6 +2,33 @@
 
 ## To do
 
+### Logo on quotes and invoices (free)
+First-user request. Upload, change or remove a logo in Account / Business details, using
+`expo-image-picker` (already used for receipts). Copy it into the app's own storage, like
+`src/lib/receipts.ts`. It shows top-left on both PDFs. Embed it in the HTML as base64,
+because `expo-print` can't load files from app storage. Free for everyone.
+
+### Invoice and quote extras (free)
+- No brand colour option: text stays black.
+- Footer note or terms, written separately for quotes and invoices.
+- Quote validity ("Valid for 30 days"), set by the tradie.
+- Extra business details, such as company number and website.
+- Files: `src/lib/invoiceExport.ts`, plus new fields in `BusinessSettings`.
+
+### PDF layout
+- Page margins on every page.
+- `break-inside: avoid` on rows, totals and the payment box.
+- Column headings repeated on each page, and "Page X of Y".
+- A4 for the UK and Letter for the US: `printToFileAsync` currently always uses Letter.
+
+### Line items
+Full plan: `line-items-plan.md`. Itemised lines are free. The price list and parts
+markup are Pro.
+
+### Profit box is Pro
+On the job screen (`src/app/job/[id].tsx`, "Profit"). Free users see a locked version
+that opens `UpgradePrompt`. The parts list itself stays free.
+
 ### Fix the invoice loopholes (free plan: 3 invoices a month)
 Found 2026-10-15. Free users can send more than 3 invoices a month in two ways:
 
