@@ -96,8 +96,8 @@ Once line items exist, split income into labour and materials in the accountant 
 - **Who it's for:** VAT-registered tradies invoicing another VAT-registered builder under
   CIS.
 - **How it works:** a switch on the invoice. The VAT amount is shown but not charged, and
-  the invoice carries HMRC's wording, e.g. "Reverse charge: customer to account to HMRC
-  for the VAT".
+  the invoice carries HMRC's wording, e.g. "Reverse charge: Customer to pay the VAT
+  to HMRC".
 - **What it affects:**
   - The VAT tracker and accountant pack don't count this VAT as charged.
   - The CIS deduction is unchanged.

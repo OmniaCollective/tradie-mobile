@@ -102,8 +102,8 @@ const toBlock = (customer: Customer) => `
 
 const qtyText = (l: LineItem) => `${Number.isInteger(l.quantity) ? l.quantity : l.quantity.toFixed(2).replace(/0$/, '')}${l.unit ? ` ${esc(l.unit)}` : ''}`;
 
-/** HMRC's wording for the domestic reverse charge. */
-export const REVERSE_CHARGE_NOTE = 'Reverse charge: customer to account to HMRC for the VAT.';
+/** HMRC's example wording for the domestic reverse charge (VAT reverse charge technical guide). */
+export const REVERSE_CHARGE_NOTE = 'Reverse charge: Customer to pay the VAT to HMRC.';
 
 /** The items and totals for a quote or invoice. */
 const pricesBlock = (q: Quote, jobLabel: string, description?: string) => {

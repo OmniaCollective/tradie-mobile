@@ -69,7 +69,6 @@ import {
   Segmented,
   LinkRow,
   Sheet,
-  NumberFieldRow,
   FieldRow,
   ChoiceRow,
   LabeledField,
@@ -119,7 +118,7 @@ export default function JobDetailScreen() {
   const setQuoteLines = useTradeStore((s) => s.setQuoteLines);
   const jobExpenses = useJobExpenses(id);
   const pricingPresets = usePricingPresets();
-  const { isPro, canCreateInvoice, invoicesLeft } = useProAccess();
+  const { isPro, canCreateInvoice, invoicesLeft, confirmPro } = useProAccess();
 
   const [modal, setModal] = useState<{
     title: string;
@@ -292,7 +291,7 @@ export default function JobDetailScreen() {
       router.push(`/preview?kind=invoice&id=${invoice.id}`);
       return;
     }
-    if (!canCreateInvoice) {
+    if (!canCreateInvoice && !(await confirmPro())) {
       setLimitPrompt(true);
       return;
     }

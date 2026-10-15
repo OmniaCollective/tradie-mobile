@@ -2,6 +2,7 @@ import type { Invoice, Expense, BusinessSettings } from './store';
 import { parseDate, toDateKey } from './dates';
 import { ukIncomeTaxOnProfit } from './ukIncomeTax';
 import { netOfTax } from './pricing';
+import { invoiceVatAndIncome } from './vatIncome';
 
 // Class 4 NI rates
 const CLASS4_LOWER_RATE = 0.06; // 6% on profits £12,570–£50,270
@@ -93,16 +94,9 @@ export function calculateTaxEstimate(
   // Under standard VAT, you owe HMRC: VAT collected minus input VAT on expenses.
   let vatOwedToHMRC = 0;
   const grossIncome = taxYearInvoices.reduce((sum, inv) => {
-    if (settings.vatRegistered && settings.vatScheme === 'flat_rate') {
-      // Flat rate: you owe HMRC flat_rate% of gross (VAT-inclusive) turnover
-      const flatRateVAT = inv.quote.total * (settings.vatFlatRatePercent / 100);
-      vatOwedToHMRC += flatRateVAT;
-      // Your taxable income = gross total minus what you pay HMRC
-      return sum + (inv.quote.total - flatRateVAT);
-    }
-    // Standard VAT or not registered: income = total minus VAT
-    vatOwedToHMRC += inv.quote.vat;
-    return sum + netOfTax(inv.quote);
+    const { vatOwed, income } = invoiceVatAndIncome(inv.quote, settings);
+    vatOwedToHMRC += vatOwed;
+    return sum + income;
   }, 0);
 
   // Total expenses in tax year

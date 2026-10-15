@@ -13,6 +13,7 @@ import { useTradeStore, useSettings, useRegion, getRegion, pricingRules, type Sa
 import {
   priceLines,
   lineAmount,
+  discountAmount,
   withMarkup,
   roundPence,
   lineKindLabels,
@@ -21,6 +22,7 @@ import {
   type LineKind,
 } from '@/lib/pricing';
 import { formatAmount, formatMoney, currencySymbol } from '@/lib/money';
+import { REVERSE_CHARGE_NOTE } from '@/lib/invoiceExport';
 import { useProAccess } from '@/lib/useProAccess';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
@@ -117,6 +119,17 @@ export default function PriceScreen() {
   const rules = pricingRules(settings);
   const priced = useMemo(() => priceLines(rules, lines, { reverseCharge }), [rules, lines, reverseCharge]);
   const markupDefault = settings.materialsMarkupPercent ?? 0;
+  // What each discount takes off, in order, as priceLines works it out (each one on what's left).
+  const discountOff = useMemo(() => {
+    const off = new Map<string, number>();
+    let left = roundPence(priced.subtotal + priced.discount);
+    for (const d of lines.filter((l) => l.kind === 'discount')) {
+      const amount = discountAmount(d, left);
+      off.set(d.id, amount);
+      left = roundPence(left - amount);
+    }
+    return off;
+  }, [lines, priced]);
 
   if (!job || !quote) {
     return (
@@ -307,7 +320,7 @@ export default function PriceScreen() {
               {i > 0 && <RowDivider />}
               <LineRow
                 line={line}
-                before={priced.subtotal + priced.discount}
+                discountOff={discountOff.get(line.id) ?? 0}
                 arranging={arranging}
                 first={i === 0}
                 last={i === lines.length - 1}
@@ -387,7 +400,7 @@ export default function PriceScreen() {
         </Group>
         <Text className="text-secondary text-[13px] mx-1 mb-6">
           {reverseCharge
-            ? 'The invoice will say: Reverse charge: customer to account to HMRC for the VAT.'
+            ? `The invoice will say: ${REVERSE_CHARGE_NOTE}`
             : 'Show item prices off is useful when you’d rather not show a breakdown.'}
         </Text>
 
@@ -551,7 +564,7 @@ function TotalLine({ label, value, strong, muted }: { label: string; value: numb
 
 function LineRow({
   line,
-  before,
+  discountOff,
   arranging,
   first,
   last,
@@ -561,8 +574,8 @@ function LineRow({
   onRemove,
 }: {
   line: LineItem;
-  /** Everything before discounts, for a percentage discount's amount. */
-  before: number;
+  /** On a discount: what it takes off, after any discounts above it. */
+  discountOff: number;
   arranging: boolean;
   first: boolean;
   last: boolean;
@@ -573,7 +586,7 @@ function LineRow({
 }) {
   const t = useTheme();
   const isDiscount = line.kind === 'discount';
-  const amount = isDiscount ? -(line.percent ? roundPence(before * (line.percent / 100)) : line.unitPrice) : lineAmount(line);
+  const amount = isDiscount ? -discountOff : lineAmount(line);
   const detail = isDiscount
     ? line.percent
       ? `${line.percent}% off`

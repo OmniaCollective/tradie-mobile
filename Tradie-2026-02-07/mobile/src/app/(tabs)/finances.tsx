@@ -89,7 +89,7 @@ export default function MoneyScreen() {
   const settings = useSettings();
   const { requireDetails, prompt: detailsPrompt } = useBusinessDetailsPrompt();
   const { isPro, invoicesLeft } = useProAccess();
-  const { canShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
+  const { checkShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
   const getCustomer = useTradeStore((s) => s.getCustomer);
   const getJob = useTradeStore((s) => s.getJob);
   const updateInvoice = useTradeStore((s) => s.updateInvoice);
@@ -250,10 +250,7 @@ export default function MoneyScreen() {
       return;
     }
     // Free plan first (so nobody fills in details for nothing), then any missing business details.
-    if (!canShare(invoice)) {
-      void shareInvoice(invoice, async () => {});
-      return;
-    }
+    if (!(await checkShare(invoice))) return;
     requireDetails('invoice', (current) => sendInvoicePdf(invoice, customer, current));
   };
 

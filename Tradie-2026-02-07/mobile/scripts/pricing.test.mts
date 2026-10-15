@@ -80,5 +80,17 @@ ok('store: unsent CIS corrected', store.invoices[0].cisDeductionAmount === 60, S
 ok('store: sent CIS kept', store.invoices[1].cisDeductionAmount === 120);
 ok('store: price list added', Array.isArray(store.priceList));
 
+// Flat Rate VAT: reverse charge invoices are outside the scheme (HMRC VATREVCON35100).
+// £1,000 + £200 VAT at 16.5% flat rate owes £198 and leaves £1,002 income; a £1,000 reverse
+// charge invoice owes no VAT and is £1,000 income.
+const { invoiceVatAndIncome } = await import('../src/lib/vatIncome.ts');
+const flat = { vatRegistered: true, vatScheme: 'flat_rate', vatFlatRatePercent: 16.5 } as const;
+const flatNormal = invoiceVatAndIncome(priceLines(VAT, [line('labour', 1, 1000)]), flat);
+ok('flat rate: normal invoice', flatNormal.vatOwed === 198 && flatNormal.income === 1002, JSON.stringify(flatNormal));
+const flatReverse = invoiceVatAndIncome(priceLines(VAT, [line('labour', 1, 1000)], { reverseCharge: true }), flat);
+ok('flat rate: reverse charge left out', flatReverse.vatOwed === 0 && flatReverse.income === 1000, JSON.stringify(flatReverse));
+const standard = invoiceVatAndIncome(priceLines(VAT, [line('labour', 1, 1000)]), { ...flat, vatScheme: 'standard' });
+ok('standard VAT: VAT owed, income before VAT', standard.vatOwed === 200 && standard.income === 1000, JSON.stringify(standard));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

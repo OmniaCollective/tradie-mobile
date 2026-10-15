@@ -36,15 +36,21 @@ export interface ProAccess {
   invoicesThisMonth: number;
   /** Invoices a free user can still create this month (Infinity for Pro). */
   invoicesLeft: number;
+  /** A free invoice is left this month, or Pro is known. False while Pro is still loading and none are left. */
   canCreateInvoice: boolean;
+  /**
+   * Whether this is a Pro user, waiting for RevenueCat if it hasn't answered yet. Use before
+   * blocking anyone, so a Pro user isn't stopped (or a free user let through) while it loads.
+   */
+  confirmPro: () => Promise<boolean>;
 }
 
+const PRO_QUERY = { queryKey: PRO_QUERY_KEY, queryFn: fetchIsPro, staleTime: 1000 * 60 * 5 };
+
 export function useProAccess(): ProAccess {
-  const { data: isPro = false, isLoading } = useQuery({
-    queryKey: PRO_QUERY_KEY,
-    queryFn: fetchIsPro,
-    staleTime: 1000 * 60 * 5,
-  });
+  const queryClient = useQueryClient();
+  const { data: isPro = false, isLoading } = useQuery(PRO_QUERY);
+  const confirmPro = useCallback(() => queryClient.fetchQuery(PRO_QUERY).catch(() => false), [queryClient]);
 
   const invoicesThisMonth = useTradeStore((s) => {
     const now = new Date();
@@ -62,11 +68,11 @@ export function useProAccess(): ProAccess {
 
   return {
     isPro,
-    // While RevenueCat answers, don't block anyone: limits apply once we know.
     isLoading,
     invoicesThisMonth,
     invoicesLeft,
-    canCreateInvoice: isLoading || invoicesLeft > 0,
+    canCreateInvoice: invoicesLeft > 0,
+    confirmPro,
   };
 }
 

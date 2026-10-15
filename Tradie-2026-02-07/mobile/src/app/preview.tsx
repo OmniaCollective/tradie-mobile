@@ -38,7 +38,7 @@ export default function PreviewScreen() {
   const { requireDetails, prompt } = useBusinessDetailsPrompt();
   const [askSent, setAskSent] = useState(false);
   const [sending, setSending] = useState(false);
-  const { canShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
+  const { checkShare, shareInvoice, limitPrompt } = useInvoiceShareGate();
 
   const quote = kind === 'invoice' ? invoice?.quote : job?.quote;
   // Paid invoices are final; a quote stops changing once it's on an invoice.
@@ -76,12 +76,9 @@ export default function PreviewScreen() {
         ? 'Send again'
         : 'Send quote';
 
-  const send = () => {
+  const send = async () => {
     // Free plan: checked before the business details are asked for, so nobody fills them in for nothing.
-    if (kind === 'invoice' && invoice && !canShare(invoice)) {
-      void shareInvoice(invoice, async () => {});
-      return;
-    }
+    if (kind === 'invoice' && invoice && !(await checkShare(invoice))) return;
     requireDetails(kind, async (current: BusinessSettings) => {
       setSending(true);
       try {

@@ -953,14 +953,23 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
   const changed = (Object.keys(start) as (keyof typeof start)[]).some((k) => d[k] !== start[k]);
   const days = parseInt(d.quoteValidDays, 10);
 
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  // No crop: iOS can only crop to a square, which would cut the sides off a wide logo.
+  // saveLogo scales it to print size instead.
   const pickLogo = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
-    if (result.canceled || !result.assets[0]) return;
-    const name = await saveLogo(result.assets[0].uri, settings.logoFile);
-    updateSettings({ logoFile: name });
-    setLogoUri(`${logoFileUri(name)}?${Date.now()}`);
-    track('logo_added');
-    toast('Logo added');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (result.canceled || !result.assets[0]) return;
+      const name = await saveLogo(result.assets[0].uri, settings.logoFile);
+      updateSettings({ logoFile: name });
+      setLogoUri(`${logoFileUri(name)}?${Date.now()}`);
+      track('logo_added');
+      toast('Logo added');
+    } catch (error) {
+      if (__DEV__) console.error('Logo failed:', error);
+      setLogoFailed(true);
+    }
   };
   const removeLogo = async () => {
     await deleteLogo(settings.logoFile);
@@ -1071,6 +1080,15 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
       <ModalFooter>
         <PrimaryButton label="Save" onPress={save} disabled={!changed || !(days > 0)} />
       </ModalFooter>
+      {logoFailed && (
+        <ConfirmModal
+          visible
+          title="Couldn’t add the logo"
+          message="That image couldn’t be used. Please try again, or choose a different image."
+          variant="warning"
+          onDismiss={() => setLogoFailed(false)}
+        />
+      )}
     </>
   );
 }
