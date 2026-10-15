@@ -138,7 +138,6 @@ it's no longer `auto`.
     already does)
   - `<thead>` repeated on each page
   - page margins passed to `printToFileAsync`
-  - "Page X of Y" in the footer
 - **Paper size:** A4 for UK and Letter for US (from `getRegion()`). At the moment it's
   always Letter.
 

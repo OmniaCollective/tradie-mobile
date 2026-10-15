@@ -2,9 +2,9 @@
 
 Next version: **1.7** (1.6.1 is live).
 
-Status: all tasks below are built on branch `v1.7-work` (not merged, not built). Release notes and the
-on-device checklist are in `v1.7.md`. One gap: "Page X of Y" isn't on the PDFs, because the iPhone's
-PDF maker doesn't support page numbers; column headings do repeat on each page.
+Status: all tasks below are built and merged into `main` (not built on EAS yet). Release notes and the
+on-device checklist are in `v1.7.md`. No "Page X of Y" on the PDFs (decided 2026-10-15): the iPhone's
+PDF maker doesn't support page numbers. Column headings do repeat on each page.
 
 ## To do
 
@@ -25,7 +25,7 @@ because `expo-print` can't load files from app storage. Free for everyone.
 ### PDF layout
 - Page margins on every page.
 - `break-inside: avoid` on rows, totals and the payment box.
-- Column headings repeated on each page, and "Page X of Y".
+- Column headings repeated on each page. No page numbers (decided 2026-10-15).
 - A4 for the UK and Letter for the US: `printToFileAsync` currently always uses Letter.
 
 ### Line items
