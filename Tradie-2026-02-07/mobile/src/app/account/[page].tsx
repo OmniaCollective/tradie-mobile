@@ -4,7 +4,9 @@
  * go, and say so. Agreed design: release/ux-journey-review.md.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Linking, Pressable, Image } from 'react-native';
+import { View, Text, Linking, Pressable, Image } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -114,13 +116,14 @@ export default function AccountPageScreen() {
         return <PriceListPage />;
       case 'insurance':
         return (
-          <ScrollView
-            className="flex-1"
+          <KeyboardAwareScrollView
+            bottomOffset={KEYBOARD_CLEARANCE}
+            style={{ flex: 1 }}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
           >
             <RenewalsSection />
-          </ScrollView>
+          </KeyboardAwareScrollView>
         );
       case 'diary':
         return <DiaryPage />;
@@ -183,10 +186,10 @@ function BusinessPage({ onDone }: { onDone: () => void }) {
   const usNow = d.country === 'US';
   return (
     <>
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         <View className="gap-4">
@@ -223,6 +226,7 @@ function BusinessPage({ onDone }: { onDone: () => void }) {
             value={d.address}
             onChangeText={(v) => setD({ ...d, address: v })}
             multiline
+            scrollEnabled={false}
             hint="Printed on quotes and invoices."
           />
           <LabeledField
@@ -240,7 +244,7 @@ function BusinessPage({ onDone }: { onDone: () => void }) {
             Changing country switches money, tax and wording to {usNow ? 'the US' : 'the UK'}. Prices you’ve set yourself stay.
           </Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <ModalFooter>
         <PrimaryButton label="Save" onPress={save} disabled={!changed} />
       </ModalFooter>
@@ -260,10 +264,10 @@ function PayPage({ onDone }: { onDone: () => void }) {
   const options = [7, 14, 30].includes(days) ? [7, 14, 30] : [7, 14, 30, days].sort((a, b) => a - b);
   return (
     <>
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         <LabeledField
@@ -271,6 +275,7 @@ function PayPage({ onDone }: { onDone: () => void }) {
           value={details}
           onChangeText={setDetails}
           multiline
+          scrollEnabled={false}
           style={{ minHeight: 120, paddingTop: 12, textAlignVertical: 'top' }}
           hint={
             isUS
@@ -289,7 +294,7 @@ function PayPage({ onDone }: { onDone: () => void }) {
             Invoices show the due date. Unpaid ones count as overdue after it.
           </Text>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <ModalFooter>
         <PrimaryButton
           label="Save"
@@ -317,10 +322,10 @@ function PricesPage() {
   const set = useTradeStore((s) => s.updateSettings);
   const updatePricingPreset = useTradeStore((s) => s.updatePricingPreset);
   return (
-    <ScrollView
-      className="flex-1"
+    <KeyboardAwareScrollView
+      bottomOffset={KEYBOARD_CLEARANCE}
+      style={{ flex: 1 }}
       keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
     >
       <SectionHeader title="Rates" />
@@ -560,7 +565,7 @@ function PricesPage() {
         </View>
       </Group>
       <Text className="text-secondary text-[13px] mx-1">Changes save as you type.</Text>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -604,7 +609,7 @@ function DiaryPage() {
   };
 
   return (
-    <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <SectionHeader title="Area and hours" />
       <Group className="mb-2">
         <NumberFieldRow
@@ -656,7 +661,7 @@ function DiaryPage() {
           onDismiss={() => setModal(null)}
         />
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -683,7 +688,7 @@ function RemindersPage() {
     { key: 'renewals', label: 'Insurance and licences', hint: '30 days and 7 days before they run out' },
   ];
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <Group className="mb-2">
         {rows.map((r, i) => (
           <View key={r.key}>
@@ -702,7 +707,7 @@ function RemindersPage() {
         variant="warning"
         onDismiss={() => setModal(false)}
       />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -713,7 +718,7 @@ function AppearancePage() {
   const set = useTradeStore((s) => s.updateSettings);
   const value = settings.appearance ?? 'automatic';
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <Group className="mb-2">
         {(
           [
@@ -731,7 +736,7 @@ function AppearancePage() {
       <Text className="text-secondary text-[13px] mx-1">
         Automatic follows your iPhone’s light or dark setting. Changes straight away.
       </Text>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -753,7 +758,7 @@ function PlanPage() {
     toast(result.data.entitlements.active.pro ? 'Pro restored' : 'No Tradie Pro on this Apple ID');
   };
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       {isPro ? (
         <>
           <Group className="p-4 mb-3">
@@ -803,7 +808,7 @@ function PlanPage() {
           </Pressable>
         </>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -817,7 +822,7 @@ function SignInPage({ onDone }: { onDone: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(false);
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       {account ? (
         <>
           <Group className="mb-6">
@@ -891,7 +896,7 @@ function SignInPage({ onDone }: { onDone: () => void }) {
         variant="error"
         onDismiss={() => setError(false)}
       />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -900,7 +905,7 @@ function SignInPage({ onDone }: { onDone: () => void }) {
 function HelpPage() {
   const set = useTradeStore((s) => s.updateSettings);
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <Group className="mb-6">
         <LinkRow
           label="Contact support"
@@ -930,7 +935,7 @@ function HelpPage() {
           }}
         />
       </Group>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -993,10 +998,10 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
 
   return (
     <>
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         <SectionHeader title="Logo" />
@@ -1046,6 +1051,7 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
             value={d.quoteFooter}
             onChangeText={(v) => setD({ ...d, quoteFooter: v })}
             multiline
+            scrollEnabled={false}
             style={{ minHeight: 88, paddingTop: 12, textAlignVertical: 'top' }}
             hint="For example: 50% deposit to book. Price includes all waste removal."
           />
@@ -1059,6 +1065,7 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
             value={d.invoiceFooter}
             onChangeText={(v) => setD({ ...d, invoiceFooter: v })}
             multiline
+            scrollEnabled={false}
             style={{ minHeight: 88, paddingTop: 12, textAlignVertical: 'top' }}
             hint="Shown at the bottom. Leave empty for “Thank you for your business.”"
           />
@@ -1085,7 +1092,7 @@ function DocumentsPage({ onDone }: { onDone: () => void }) {
             autoCapitalize="none"
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <ModalFooter>
         <PrimaryButton label="Save" onPress={save} disabled={!changed || !(days > 0)} />
       </ModalFooter>
@@ -1152,7 +1159,7 @@ function PriceListPage() {
   };
 
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <KeyboardAwareScrollView bottomOffset={KEYBOARD_CLEARANCE} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <Group className="mb-2">
         {sorted.map((item, i) => (
           <View key={item.id}>
@@ -1237,6 +1244,6 @@ function PriceListPage() {
           )}
         </FormSheet>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

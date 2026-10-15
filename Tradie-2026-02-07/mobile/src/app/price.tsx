@@ -428,6 +428,7 @@ export default function PriceScreen() {
             placeholder="Optional"
             placeholderTextColor={t.secondary}
             multiline
+            scrollEnabled={false}
             accessibilityLabel="Description of the work"
           />
         </Group>

@@ -5,7 +5,9 @@
  * release/ux-journey-review.md.
  */
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, Linking, Image, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, Linking, Image, Platform } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -461,10 +463,10 @@ export default function JobDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Job' }} />
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
         className="flex-1 bg-bg"
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 48 }}
       >
         {/* Where it is, what it is */}
@@ -856,6 +858,7 @@ export default function JobDetailScreen() {
               value={job.notes}
               onChangeText={(notes) => updateJob(job.id, { notes })}
               multiline
+              scrollEnabled={false}
               placeholder="Access, parking, what you found, what to bring"
               placeholderTextColor={t.secondary}
               className="text-fg text-base min-h-[88px]"
@@ -940,7 +943,7 @@ export default function JobDetailScreen() {
             <LinkRow icon={Trash2} label="Delete job" destructive onPress={() => setConfirmDelete(true)} />
           </Group>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Book, or change the booking */}
       <Sheet visible={showBook} onClose={() => setShowBook(false)}>
@@ -1087,6 +1090,7 @@ export default function JobDetailScreen() {
               placeholder="Optional"
               placeholderTextColor={t.secondary}
               multiline
+              scrollEnabled={false}
               accessibilityLabel="What needs doing"
             />
           </Group>

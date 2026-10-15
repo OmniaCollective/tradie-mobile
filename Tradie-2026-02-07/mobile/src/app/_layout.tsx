@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
+import '@/lib/styleInterop';
 import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import { palettes, themeVars, useColorMode, applyAppearance } from '@/lib/theme';
@@ -67,7 +69,15 @@ function RootLayoutNav() {
     <View style={[{ flex: 1, backgroundColor: p.bg }, themeVars[mode]]}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <ThemeProvider value={navigationTheme}>
-        <Stack>
+        {/* Every screen gets the Done bar above the keyboard (see KeyboardDoneBar). */}
+        <Stack
+          screenLayout={({ children }) => (
+            <View style={{ flex: 1 }}>
+              {children}
+              <KeyboardDoneBar />
+            </View>
+          )}
+        >
           <Stack.Protected guard={!hasCompletedOnboarding}>
             <Stack.Screen
               name="onboarding"

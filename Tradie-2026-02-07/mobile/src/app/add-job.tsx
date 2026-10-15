@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Plus, Mic, Square, Keyboard, Wrench, Calendar, Clock } from 'lucide-react-native';
@@ -396,10 +398,10 @@ export default function AddJobScreen() {
     <View className="flex-1 bg-bg">
       {header(transcription ? 'Check the job' : 'New job')}
 
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         {VOICE_ENABLED && !transcription && (
@@ -529,6 +531,7 @@ export default function AddJobScreen() {
             value={description}
             onChangeText={setDescription}
             multiline
+            scrollEnabled={false}
             accessibilityLabel="Description"
           />
           <RowDivider />
@@ -621,7 +624,7 @@ export default function AddJobScreen() {
         <Text className="text-secondary text-[13px] mx-1">
           After saving, open the job to send the quote, book it in, invoice and more.
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <ModalFooter>
         <View className="flex-row justify-between items-baseline mb-2.5 px-0.5">

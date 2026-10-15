@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Image, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, Image, Platform } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Check, Camera, ImageIcon, Calendar, Tag, Briefcase } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -197,10 +199,10 @@ export default function AddExpenseScreen() {
         }}
       />
 
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         {/* Amount */}
@@ -347,7 +349,7 @@ export default function AddExpenseScreen() {
             </>
           )}
         </Group>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <ModalFooter>
         <PrimaryButton label={editing ? 'Save changes' : 'Save expense'} onPress={handleSave} disabled={!canSave} loading={saving} />

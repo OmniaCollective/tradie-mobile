@@ -12,10 +12,11 @@ import {
   Switch,
   Modal,
   Platform,
-  ScrollView,
   type ScrollViewProps,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { ChevronRight, ExternalLink, Check, X, type LucideIcon } from 'lucide-react-native';
 import { cn } from '@/lib/cn';
 import { useTheme, themeVars } from '@/lib/theme';
@@ -393,20 +394,26 @@ export function CloseButton({ onPress, label = 'Close', plain }: { onPress: () =
   );
 }
 
-/** Header for a screen opened on top: title in the middle, X on the right. */
+/**
+ * Header for a screen opened on top: title in the middle, X on the right. On iPhone the screen
+ * is a card below the status bar, until a swipe up expands it to full screen (iOS 26+); the
+ * SafeAreaView measures how far this header actually sits under the status bar, so it clears
+ * it either way.
+ */
 export function ModalHeader({ title, onClose, left }: { title: string; onClose: () => void; left?: React.ReactNode }) {
-  const insets = useSafeAreaInsets();
   return (
-    <View
-      className="flex-row items-center justify-between px-4 pb-2"
-      style={{ paddingTop: Platform.OS === 'ios' ? 12 : insets.top + 8 }}
-    >
-      <View className="min-w-[44px]">{left}</View>
-      <Text className="text-fg text-[17px] font-semibold flex-1 text-center" numberOfLines={1} accessibilityRole="header">
-        {title}
-      </Text>
-      <CloseButton onPress={onClose} />
-    </View>
+    <SafeAreaView edges={['top']}>
+      <View
+        className="flex-row items-center justify-between px-4 pb-2"
+        style={{ paddingTop: Platform.OS === 'ios' ? 12 : 8 }}
+      >
+        <View className="min-w-[44px]">{left}</View>
+        <Text className="text-fg text-[17px] font-semibold flex-1 text-center" numberOfLines={1} accessibilityRole="header">
+          {title}
+        </Text>
+        <CloseButton onPress={onClose} />
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -430,6 +437,8 @@ export function ScrollScreen({
   header,
   footer,
   footerClassName,
+  // Left out: the keyboard-aware scroll view keeps the field being typed in above the keyboard itself.
+  automaticallyAdjustKeyboardInsets: _ignored,
   ...scrollProps
 }: ScrollViewProps & { header?: React.ReactNode; footer?: React.ReactNode; footerClassName?: string }) {
   const insets = useSafeAreaInsets();
@@ -440,8 +449,10 @@ export function ScrollScreen({
   return (
     <View className="flex-1 bg-bg">
       {header}
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        bottomOffset={KEYBOARD_CLEARANCE}
+        keyboardShouldPersistTaps="handled"
         scrollEventThrottle={32}
         {...scrollProps}
         onLayout={(e) => setBox(e.nativeEvent.layout.height)}
@@ -449,7 +460,7 @@ export function ScrollScreen({
         onScroll={(e) => setOffset(e.nativeEvent.contentOffset.y)}
       >
         {children}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {footer ? (
         <View
           className={cn('bg-bg px-4 pt-3 border-t', more ? 'border-divider' : 'border-transparent', footerClassName)}

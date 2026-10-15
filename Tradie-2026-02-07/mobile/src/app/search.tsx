@@ -3,9 +3,11 @@
  * magnifier on Home and Money; closes with the X.
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search as SearchIcon, ChevronRight } from 'lucide-react-native';
 import {
   useCustomers,
@@ -29,7 +31,6 @@ import { Group, RowDivider, SectionHeader, CloseButton } from '@/components/ui';
 
 export default function SearchScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const t = useTheme();
   const customers = useCustomers();
   const jobs = useJobs();
@@ -73,27 +74,31 @@ export default function SearchScreen() {
 
   return (
     <View className="flex-1 bg-bg">
-      <View className="flex-row items-center px-4 pb-2" style={{ paddingTop: Platform.OS === 'ios' ? 14 : insets.top + 8 }}>
-        <View className="flex-1 flex-row items-center bg-surface rounded-xl px-3 min-h-[48px] mr-3">
-          <SearchIcon size={18} color={t.secondary} strokeWidth={2} />
-          <TextInput
-            className="flex-1 text-fg text-base ml-2 py-2.5"
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Name, INV number, job, postcode or amount"
-            placeholderTextColor={t.secondary}
-            autoFocus
-            autoCorrect={false}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            accessibilityLabel="Search customers, jobs and invoices"
-          />
+      {/* Clears the status bar whether the screen is a card or expanded to full screen (see ModalHeader). */}
+      <SafeAreaView edges={['top']}>
+        <View className="flex-row items-center px-4 pb-2" style={{ paddingTop: Platform.OS === 'ios' ? 14 : 8 }}>
+          <View className="flex-1 flex-row items-center bg-surface rounded-xl px-3 min-h-[48px] mr-3">
+            <SearchIcon size={18} color={t.secondary} strokeWidth={2} />
+            <TextInput
+              className="flex-1 text-fg text-base ml-2 py-2.5"
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Name, INV number, job, postcode or amount"
+              placeholderTextColor={t.secondary}
+              autoFocus
+              autoCorrect={false}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              accessibilityLabel="Search customers, jobs and invoices"
+            />
+          </View>
+          <CloseButton onPress={close} />
         </View>
-        <CloseButton onPress={close} />
-      </View>
+      </SafeAreaView>
 
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
@@ -199,7 +204,7 @@ export default function SearchScreen() {
         {!searching && recent.length === 0 && (
           <Text className="text-secondary text-[15px] mx-1">Your customers, jobs and invoices will be searchable here.</Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

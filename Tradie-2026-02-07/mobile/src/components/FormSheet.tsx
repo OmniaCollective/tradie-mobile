@@ -17,12 +17,13 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView, KeyboardToolbar } from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme, themeVars } from '@/lib/theme';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { KeyboardDoneBar, KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 
 /** How far down (or how fast) a drag must go to close the card. */
 const CLOSE_DISTANCE = 120;
@@ -130,20 +131,14 @@ export function FormSheet({
             )}
           </View>
           <KeyboardAwareScrollView
-            bottomOffset={24}
+            bottomOffset={KEYBOARD_CLEARANCE}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
           >
             {children}
           </KeyboardAwareScrollView>
         </Animated.View>
-        <KeyboardToolbar
-          doneText="Done"
-          theme={{
-            light: { primary: t.link, disabled: t.divider, background: t.surface, ripple: t.divider },
-            dark: { primary: t.link, disabled: t.divider, background: t.surface, ripple: t.divider },
-          }}
-        />
+        <KeyboardDoneBar />
         <ConfirmModal
           visible={confirmDiscard}
           title="Discard changes?"

@@ -4,7 +4,9 @@
  * No statuses or money here; Home and Money hold those.
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, Pressable, TextInput } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, Circle, CircleCheck, Trash2, Mic } from 'lucide-react-native';
@@ -144,7 +146,8 @@ export default function DiaryScreen() {
   };
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
+      bottomOffset={KEYBOARD_CLEARANCE}
       className="flex-1 bg-bg"
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, paddingHorizontal: 16 }}
@@ -365,6 +368,6 @@ export default function DiaryScreen() {
         )}
       </Group>
       <Text className="text-secondary text-[13px] mx-1 mt-2">Tip: tap the microphone key on the keyboard to speak it.</Text>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

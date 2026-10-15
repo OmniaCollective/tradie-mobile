@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Switch } from 'react-native';
+import { View, Text, Pressable, TextInput, Switch } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KEYBOARD_CLEARANCE } from '@/components/KeyboardDoneBar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -490,7 +492,8 @@ export default function MoneyScreen() {
 
   return (
     <>
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={KEYBOARD_CLEARANCE}
         className="flex-1 bg-bg"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, paddingHorizontal: 16 }}
@@ -858,7 +861,7 @@ export default function MoneyScreen() {
             </>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Mark paid with CIS */}
       {/* Everything you can do with one invoice */}
