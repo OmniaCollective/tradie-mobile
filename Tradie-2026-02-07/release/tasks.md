@@ -31,9 +31,10 @@ minimum charge), and can be changed on each line.
 
 Quotes stay free and unlimited (decided 2026-10-15).
 
-### Profit box is Pro
-On the job screen (`src/app/job/[id].tsx`, "Profit"). Free users see a locked version
-that opens `UpgradePrompt`. The parts list itself stays free.
+### Profit box: free or Pro? (under review)
+On the job screen (`src/app/job/[id].tsx`, "Profit"). Free today. Either lock it for free
+users (locked version opens `UpgradePrompt`), or leave it free: it only counts parts for
+free users, and expenses (already Pro) fill it in. The parts list itself stays free.
 
 ### Fix the invoice loopholes (free plan: 3 invoices a month)
 Found 2026-10-15. Free users can send more than 3 invoices a month in two ways:
@@ -59,3 +60,33 @@ Found 2026-10-15. Free users can send more than 3 invoices a month in two ways:
   helper, not repeated on each screen.
 - "Did you send it?" then only sets the due date and status, not the free count.
 - Receipts from Mark paid (`recordedOnly`, the PDF says "Paid") stay free.
+
+### Paywall and listing wording for 1.7
+- Add the new Pro features (price list, materials markup) to the paywall feature list
+  (`src/app/paywall.tsx`), What's New, and the App Store description.
+- Update the free/Pro summary at the top of `src/lib/useProAccess.ts` and the offer in
+  `../brand/BRAND-BRIEF.md`.
+- "Powered by Tradie" stays on every PDF, Pro included (decided 2026-10-15).
+
+### CIS on invoices made before 1.7
+The fix only applies going forward (done, `src/lib/cis.ts`). Invoices that haven't been sent
+yet could be recalculated when the app updates, since the customer hasn't seen them. Sent
+and paid invoices keep their amounts.
+
+### Analytics
+Add `track()` events for:
+- line items added
+- price list used
+- markup used
+- logo added
+- taps on anything locked behind Pro
+
+These show what free users want and what leads to upgrades.
+
+### Accountant pack: labour and materials
+Once line items exist, split income into labour and materials in the accountant pack
+(`src/lib/accountantPack.ts`).
+
+### Later (out of scope for now)
+- UK construction VAT reverse charge.
+- US sales tax.
