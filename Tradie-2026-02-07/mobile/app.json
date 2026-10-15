@@ -3,7 +3,7 @@
     "name": "Tradie",
     "slug": "tradie",
     "scheme": "tradie",
-    "version": "1.6.1",
+    "version": "1.7",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./src/assets/Tradie_App_Store_1024x1024_1.png",
