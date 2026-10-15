@@ -10,6 +10,7 @@ import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } 
 import { FREE_LIMITS, useRefreshPro } from '@/lib/useProAccess';
 import { VOICE_ENABLED } from '@/lib/features';
 import { useTheme } from '@/lib/theme';
+import { useRegion } from '@/lib/store';
 import { cn } from '@/lib/cn';
 import { PrimaryButton } from '@/components/ui';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -18,11 +19,14 @@ import { track } from '@/lib/analytics';
 type Plan = 'yearly' | 'monthly';
 
 // Only what Pro actually unlocks today (App Store guideline 2.3.1).
-const BENEFITS = [
+/** What Pro adds, in the tradie's own country's terms (HMRC and VAT in the UK, the IRS in the US). */
+const benefits = (isUS: boolean) => [
   { title: 'Unlimited invoices', detail: `Free plan is ${FREE_LIMITS.invoicesPerMonth} a month` },
-  { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
+  isUS
+    ? { title: 'Tax set-aside tracker', detail: 'Know what to set aside for the IRS each quarter' }
+    : { title: 'Tax set-aside and VAT tracker', detail: 'Know what to put away for HMRC' },
   { title: 'Expenses and receipts', detail: 'Tax-year exports for your accountant' },
-  { title: 'Price list and parts markup', detail: 'Build itemised quotes in seconds' },
+  { title: 'Price list and parts markup', detail: isUS ? 'Build itemized quotes in seconds' : 'Build itemised quotes in seconds' },
   ...(VOICE_ENABLED ? [{ title: 'Add jobs by voice', detail: 'Unlimited voice jobs' }] : []),
 ];
 
@@ -54,6 +58,7 @@ export default function PaywallScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
   const insets = useSafeAreaInsets();
   const t = useTheme();
+  const isUS = useRegion().country === 'US';
   const refreshPro = useRefreshPro();
   const [plan, setPlan] = useState<Plan>('yearly');
   const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
@@ -189,7 +194,7 @@ export default function PaywallScreen() {
         </View>
 
         <View className="mx-1 gap-3.5 mb-8">
-          {BENEFITS.map((b) => (
+          {benefits(isUS).map((b) => (
             <View key={b.title} className="flex-row">
               <Check size={20} color={t.link} strokeWidth={2.25} style={{ marginTop: 1 }} />
               <View className="ml-3">
