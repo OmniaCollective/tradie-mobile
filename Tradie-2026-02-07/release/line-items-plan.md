@@ -100,7 +100,9 @@ The "doesn't include £X of parts" prompt changes to "3 parts aren't on the pric
 The job's "Parts and materials" list stays the record of what was bought, at cost.
 "Add from parts" turns each part into a materials line with
 `unitPrice = unitCost × (1 + markup)`, keeping `partId` and `unitCost`.
-- A new `materialsMarkupPercent` setting, default 0, with the markup editable per line.
+- A new `materialsMarkupPercent` setting, default 0, edited in Account → Prices
+  (`src/app/account/[page].tsx`, next to hourly rate). It's Pro, and the markup can also be
+  changed on each line.
 - Profit uses each line's `unitCost`, so the profit box stays right even with a markup.
 
 ### Job type and urgency

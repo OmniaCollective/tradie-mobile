@@ -9,7 +9,8 @@ First-user request. Upload, change or remove a logo in Account / Business detail
 because `expo-print` can't load files from app storage. Free for everyone.
 
 ### Invoice and quote extras (free)
-- No brand colour option: text stays black.
+- No brand colour option. All PDF text is black, including the business name and
+  total, which are teal today (`PDF_STYLE` in `invoiceExport.ts`).
 - Footer note or terms, written separately for quotes and invoices.
 - Quote validity ("Valid for 30 days"), set by the tradie.
 - Extra business details, such as company number and website.
@@ -23,7 +24,10 @@ because `expo-print` can't load files from app storage. Free for everyone.
 
 ### Line items
 Full plan: `line-items-plan.md`. Itemised lines are free. The price list and parts
-markup are Pro.
+markup are Pro. The markup is edited in Account → Prices (next to hourly rate and
+minimum charge), and can be changed on each line.
+
+Quotes stay free and unlimited (decided 2026-10-15).
 
 ### Profit box is Pro
 On the job screen (`src/app/job/[id].tsx`, "Profit"). Free users see a locked version
